@@ -1424,6 +1424,13 @@ pub struct TableCell {
     /// plus those; a centred or right-aligned cell, and any cell whose neighbour
     /// is occupied, gets its own column width alone and is clipped at its edge.
     pub spill_width: Option<f64>,
+    /// How far left of this cell's own gridline, in points, the unwrapped line
+    /// it continues began. Set only on the first cell of a page-column that
+    /// carries the tail of a spill started on an earlier page-column: Excel
+    /// prints the whole line again there, shifted left by the width already
+    /// printed, and clips it at the page-column's edge (issue #1381). `None`
+    /// on every cell that paints its own line.
+    pub spill_continuation_offset_pt: Option<f64>,
     /// Vertical alignment of cell content.
     pub vertical_align: Option<CellVerticalAlign>,
     /// Optional cell padding override in points.
@@ -1445,6 +1452,7 @@ impl Default for TableCell {
             icon_color: None,
             icon_shading: None,
             spill_width: None,
+            spill_continuation_offset_pt: None,
             vertical_align: None,
             padding: None,
         }

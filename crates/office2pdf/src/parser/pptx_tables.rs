@@ -535,6 +535,7 @@ impl<'a> PptxTableParser<'a> {
             icon_color: None,
             icon_shading: None,
             spill_width: None,
+            spill_continuation_offset_pt: None,
             vertical_align: self.cell_vertical_align.take(),
             padding: self.cell_padding.take(),
         });

@@ -27,6 +27,7 @@ fn cell(text: &str) -> TableCell {
         icon_color: None,
         icon_shading: None,
         spill_width: None,
+        spill_continuation_offset_pt: None,
         vertical_align: None,
         padding: None,
     }
@@ -259,6 +260,125 @@ fn test_unmerged_spill_width_is_clamped_to_the_remaining_group_width() {
 
     // The cell sits at the group's left edge, so 300pt of the group remain.
     assert_eq!(pages[0].table.rows[0].cells[0].spill_width, Some(300.0));
+}
+
+#[test]
+fn test_spill_crossing_the_group_boundary_continues_on_the_next_page_column() {
+    // Printable width 400pt: columns 0-1 print on page 1, columns 2-3 on
+    // page 2. The cell in column 1 spills 400pt rightwards across its empty
+    // neighbours, so 250pt of its line lie past the boundary. Excel prints
+    // that tail on the next page-column, shifted left by the 150pt already
+    // printed and clipped at the page-column's edge (issue #1381).
+    let spilling = TableCell {
+        spill_width: Some(400.0),
+        ..cell("Corporate Security Supervisor")
+    };
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("A"), spilling, cell(""), cell("")],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+
+    let first_page_cell = &pages[0].table.rows[0].cells[1];
+    assert_eq!(first_page_cell.spill_width, Some(150.0));
+    assert_eq!(first_page_cell.spill_continuation_offset_pt, None);
+
+    let continuation = &pages[1].table.rows[0].cells[0];
+    assert_eq!(cell_text(continuation), "Corporate Security Supervisor");
+    assert_eq!(continuation.spill_continuation_offset_pt, Some(150.0));
+    assert_eq!(continuation.spill_width, Some(250.0));
+    assert_eq!(
+        cell_text(&pages[1].table.rows[0].cells[1]),
+        "",
+        "the continuation occupies only the page-column's first cell"
+    );
+}
+
+#[test]
+fn test_spill_ending_before_the_group_boundary_leaves_the_next_page_column_blank() {
+    // The same grid, but the line stops 50pt short of the boundary: nothing
+    // reaches page 2, so its first cell stays empty and carries no offset.
+    let spilling = TableCell {
+        spill_width: Some(100.0),
+        ..cell("Short")
+    };
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("A"), spilling, cell(""), cell("")],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+    let next_page_cell = &pages[1].table.rows[0].cells[0];
+    assert_eq!(cell_text(next_page_cell), "");
+    assert_eq!(next_page_cell.spill_continuation_offset_pt, None);
+    assert_eq!(next_page_cell.spill_width, None);
+}
+
+#[test]
+fn test_spill_spanning_three_page_columns_continues_on_each() {
+    // Printable width 400pt over six 150pt columns: three page-columns of
+    // two. An 800pt line from column 0 crosses both boundaries, so each later
+    // page-column redraws it from its own offset — 300pt in, then 600pt in —
+    // and the middle one clamps the remainder to the width it carries.
+    let spilling = TableCell {
+        spill_width: Some(800.0),
+        ..cell("A very long unwrapped line")
+    };
+    let page = make_page(
+        vec![150.0; 6],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![spilling, cell(""), cell(""), cell(""), cell(""), cell("")],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 3);
+
+    assert_eq!(pages[0].table.rows[0].cells[0].spill_width, Some(300.0));
+
+    let second = &pages[1].table.rows[0].cells[0];
+    assert_eq!(cell_text(second), "A very long unwrapped line");
+    assert_eq!(second.spill_continuation_offset_pt, Some(300.0));
+    assert_eq!(second.spill_width, Some(300.0));
+
+    let third = &pages[2].table.rows[0].cells[0];
+    assert_eq!(cell_text(third), "A very long unwrapped line");
+    assert_eq!(third.spill_continuation_offset_pt, Some(600.0));
+    assert_eq!(third.spill_width, Some(200.0));
+}
+
+#[test]
+fn test_a_populated_cell_on_the_next_page_column_is_never_overwritten_by_a_continuation() {
+    // A spill width that claims more than the empty run to its right cannot
+    // paint over a cell that holds its own value: the next page-column keeps
+    // that cell as it is.
+    let spilling = TableCell {
+        spill_width: Some(600.0),
+        ..cell("LONG")
+    };
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![spilling, cell(""), cell("C"), cell("")],
+            height: None,
+        }],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+    let kept = &pages[1].table.rows[0].cells[0];
+    assert_eq!(cell_text(kept), "C");
+    assert_eq!(kept.spill_continuation_offset_pt, None);
 }
 
 #[test]

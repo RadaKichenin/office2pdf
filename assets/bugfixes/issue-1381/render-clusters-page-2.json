@@ -1,0 +1,39 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 53.76,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Every cluster sits on glyph bodies inside a long string; the native export paces each glyph on a whole-point advance where the output uses the font's fractional advance (#1659). Inspected in the 5% diff and the 400%/600% row crops."
+      },
+      "id": "p2-32e8354c0f0a",
+      "region": "left"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 1,
+    "duplicate": 0,
+    "total": 1,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

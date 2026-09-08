@@ -1706,6 +1706,91 @@ fn structure_merged_row_overflow_clamps_spill_to_its_page_column() {
     }
 }
 
+/// The plain text a sheet cell's paragraphs carry, concatenated.
+fn cell_text(cell: &TableCell) -> String {
+    cell.content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(
+                paragraph
+                    .runs
+                    .iter()
+                    .map(|run| run.text.as_str())
+                    .collect::<String>(),
+            ),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn smoke_customers_overflow_strip() {
+    assert_produces_valid_pdf("customers_overflow_strip.xlsx");
+}
+
+/// `customers_overflow_strip.xlsx` is the first twenty rows of
+/// `100-customers.xlsx` with its five columns and the sheet default declared
+/// at the 75pt Excel for Mac prints for that workbook's absent
+/// `sheetFormatPr` (10.714 chars of the 7pt Malgun Gothic unit; #1656 tracks
+/// the undeclared case, which this fixture sidesteps so the strip boundary
+/// does not depend on it). The occupation column's unwrapped values reach two
+/// columns past the used range, so the printed range is A:G and A:F fill the
+/// 487pt A4 printable width. The native export prints two pages: A:F, then a
+/// strip whose only ink is the tails of those lines, each redrawn 450pt to
+/// the left of where it started and clipped at the strip's edge (issue
+/// #1381).
+#[test]
+fn structure_overflow_strip_carries_the_spilled_tails() {
+    let pages = sheet_pages("customers_overflow_strip.xlsx");
+    assert_eq!(
+        pages.len(),
+        2,
+        "A:F fill the first page-column and the overflow reach forms a second"
+    );
+    assert_eq!(pages[0].table.column_widths.len(), 6);
+
+    let first_group_width: f64 = pages[0].table.column_widths.iter().sum();
+    assert!(
+        (first_group_width - 450.0).abs() < 0.01,
+        "six 75pt columns print on page 1; got {first_group_width}pt"
+    );
+
+    // Row 2 (Martine Gleichner) reads `Corporate Security Supervisor` in
+    // column E, whose left edge sits 300pt into the grid: its tail continues
+    // 150pt past its own gridline on the strip.
+    let strip_row = &pages[1].table.rows[1];
+    let continuation = strip_row
+        .cells
+        .first()
+        .expect("the strip's first column carries the continuation");
+    assert_eq!(cell_text(continuation), "Corporate Security Supervisor");
+    let offset: f64 = continuation
+        .spill_continuation_offset_pt
+        .expect("a continued line records how far left it began");
+    assert!(
+        (offset - 150.0).abs() < 0.01,
+        "the tail starts 150pt left of the strip's gridline; got {offset}pt"
+    );
+    let remaining: f64 = continuation
+        .spill_width
+        .expect("a continued line keeps the width it still reaches");
+    assert!(
+        remaining > 0.0 && remaining <= pages[1].table.column_widths.iter().sum::<f64>() + 0.001,
+        "the remaining reach is positive and within the strip; got {remaining}pt"
+    );
+
+    // A value that fits its own column leaves its strip cell empty: the
+    // `Occupation` heading in E1 never spills, so nothing of it continues.
+    let fitting_cell = pages[1].table.rows[0].cells.first().unwrap();
+    assert_eq!(
+        cell_text(fitting_cell),
+        "",
+        "a line that ends before the boundary has no continuation"
+    );
+    assert_eq!(fitting_cell.spill_continuation_offset_pt, None);
+    assert_eq!(fitting_cell.spill_width, None);
+}
+
 #[test]
 fn smoke_spill_reach_print_range() {
     assert_produces_valid_pdf("spill_reach_print_range.xlsx");

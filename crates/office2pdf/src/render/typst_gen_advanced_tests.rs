@@ -951,6 +951,64 @@ fn test_generate_regular_paragraph_no_heading() {
 }
 
 #[test]
+fn test_spill_continuation_redraws_the_line_shifted_left_and_clipped_at_the_gridline() {
+    // The first cell of an overflow page-column carries the tail of a line
+    // that began 150pt to its left. The clip box opens on the cell's own
+    // gridline — the page-column edge Excel clips at — and runs the 40pt the
+    // tail still reaches, while the line inside is moved left by the offset
+    // less the inset the content box already sits behind. The placement is
+    // gated on the laid-out line actually reaching that gridline, since the
+    // spill width that put the continuation here is an estimate (issue
+    // #1381).
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Corporate Security Supervisor".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        })],
+        spill_width: Some(40.0),
+        spill_continuation_offset_pt: Some(150.0),
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![60.0],
+        ..Table::default()
+    };
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize::default(),
+        margins: Margins::default(),
+        table,
+        header: None,
+        footer: None,
+        charts: vec![],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+    });
+    let doc = make_doc(vec![page]);
+    let output = generate_typst(&doc).unwrap();
+    assert!(
+        output.source.contains(
+            "if measure(o2p-spill).width > 145pt {place(left + horizon, dx: -5pt, dy: 0pt, \
+             box(width: 40pt, height: 1.3em, clip: true)\
+             [#move(dx: -145pt)[#box(width: measure(o2p-spill).width)[#o2p-spill]]])}}"
+        ),
+        "a continuation must open its clip on the gridline and shift the line back by \
+         the width already printed. Got: {}",
+        output.source
+    );
+}
+
+#[test]
 fn test_spill_width_codegen() {
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
