@@ -4649,6 +4649,81 @@ fn only_a_powerpoint_column_right_legend_takes_the_column_block_correction() {
 }
 
 #[test]
+fn a_powerpoint_column_right_legend_right_fits_the_chart_frame_like_a_bar_chart() {
+    // Native PowerPoint 16.112 exports of `tests/fixtures/pptx/bar-chart.pptx`
+    // repackaged as a column chart, one `<c:defRPr sz>` at a time, through
+    // `scripts/probes/issue-1435-column-legend-center.json`. Each value is the
+    // legend key's left edge inside the 480 x 320pt chart frame, read off
+    // `mutool draw -F trace`. Every one of them lands on the unpatched bar
+    // control's x to the last emitted digit, so PowerPoint right-fits the
+    // stack against the chart area rather than against the plot: the plot's
+    // own right inset must not move the legend (#1436).
+    let measurements = [
+        (10.0, 441.4465),
+        (12.0, 435.6760),
+        (18.0, 418.4018),
+        (24.0, 401.1207),
+        (36.0, 366.5520),
+    ];
+
+    for (size_pt, expected_x) in measurements {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.chart_type = ChartType::Column;
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Sales".to_string());
+        chart.has_legend = true;
+        chart.legend_position = LegendPosition::Right;
+        chart.host = crate::ir::ChartHost::Presentation;
+        chart.text_font_family = Some("Calibri".to_string());
+
+        let column_x = legend_entry_x(&framed_chart_source(&chart, 480.0, 320.0), "Sales");
+        assert!(
+            (column_x - expected_x).abs() <= 0.1,
+            "{size_pt}pt PowerPoint column legend key starts at {column_x}pt, expected the native {expected_x}pt"
+        );
+
+        // The same export measured the two families onto one x, so the
+        // calibrated bar path is the second, independent statement of the rule.
+        chart.chart_type = ChartType::Bar;
+        let bar_x = legend_entry_x(&framed_chart_source(&chart, 480.0, 320.0), "Sales");
+        assert!(
+            (column_x - bar_x).abs() <= 0.01,
+            "{size_pt}pt column legend sits at {column_x}pt against the bar family's {bar_x}pt, but PowerPoint puts both on one x"
+        );
+    }
+}
+
+#[test]
+fn a_powerpoint_right_legend_follows_the_chart_frames_right_edge() {
+    // The anchor the native exports name is the chart area's right edge, so
+    // widening the frame has to carry the legend the whole way with it — for
+    // both families, and whatever the plot reserves inside that edge. This
+    // guards the anchor itself, which no single-frame measurement pins (#1436).
+    let key_x = |chart_type: ChartType, frame_w: f64| -> f64 {
+        let mut chart = bar_chart_at(Some(11.97), &["Year 1", "Year 2", "Year 3"]);
+        chart.chart_type = chart_type;
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Total Sales".to_string());
+        chart.has_legend = true;
+        chart.legend_position = LegendPosition::Right;
+        chart.host = crate::ir::ChartHost::Presentation;
+        chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+        legend_entry_x(&framed_chart_source(&chart, frame_w, 220.8), "Total Sales")
+    };
+
+    for chart_type in [ChartType::Column, ChartType::Bar] {
+        for (narrow, wide) in [(480.0_f64, 617.0_f64), (617.0, 690.0)] {
+            let moved = key_x(chart_type.clone(), wide) - key_x(chart_type.clone(), narrow);
+            assert!(
+                (moved - (wide - narrow)).abs() <= 0.01,
+                "{chart_type:?} legend moved {moved}pt when the frame grew {}pt",
+                wide - narrow
+            );
+        }
+    }
+}
+
+#[test]
 fn a_powerpoint_horizontal_value_axis_keeps_native_label_gap_at_multiple_sizes() {
     // Native PowerPoint 16.112 exports of the same 480 x 320pt chart frame.
     // Each value is the required Typst box-top gap after translating the
