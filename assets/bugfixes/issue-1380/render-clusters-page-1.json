@@ -1,0 +1,3799 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 66.5856,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 15.84,
+        "x": 383.52,
+        "y": 688.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ce5906e20875",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 63.5904,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 13.44,
+        "x": 418.56,
+        "y": 438.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8196955c2b69",
+      "region": "right"
+    },
+    {
+      "area_pt2": 63.36,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 14.4,
+        "x": 409.92,
+        "y": 544.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4ad7fa5c3e68",
+      "region": "right"
+    },
+    {
+      "area_pt2": 60.8256,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 10.08,
+        "x": 406.56,
+        "y": 346.08
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a96002c75da2",
+      "region": "right"
+    },
+    {
+      "area_pt2": 57.6,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 12.0,
+        "x": 127.2,
+        "y": 743.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-32d507fc9272",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 56.6784,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 15.36,
+        "x": 452.16,
+        "y": 637.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-fbe72ebfc296",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 55.296,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 11.04,
+        "x": 391.68,
+        "y": 437.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0746c348812d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 52.5312,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 11.04,
+        "x": 212.64,
+        "y": 187.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-40e5af945890",
+      "region": "top"
+    },
+    {
+      "area_pt2": 51.84,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 12.0,
+        "x": 365.76,
+        "y": 637.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-887c8c952d71",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 51.6096,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 11.52,
+        "x": 429.6,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5809ea71f0bd",
+      "region": "right"
+    },
+    {
+      "area_pt2": 50.4576,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 9.12,
+        "x": 384.48,
+        "y": 508.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2dba89135e78",
+      "region": "center"
+    },
+    {
+      "area_pt2": 49.536,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 9.6,
+        "x": 415.68,
+        "y": 96.0
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-78215ddc3dd4",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 48.6144,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 9.12,
+        "x": 365.76,
+        "y": 222.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e963a132ea5d",
+      "region": "top"
+    },
+    {
+      "area_pt2": 47.9232,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 10.08,
+        "x": 191.52,
+        "y": 130.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-289d37952022",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 46.08,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.16,
+        "x": 202.08,
+        "y": 221.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5443dbb3b586",
+      "region": "top"
+    },
+    {
+      "area_pt2": 45.8496,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.72,
+        "x": 437.28,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e6a75b39ea30",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 45.1584,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 10.08,
+        "x": 422.4,
+        "y": 583.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-28e1b339b956",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 43.3152,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.2,
+        "x": 127.68,
+        "y": 562.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6e61fff553f1",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 42.624,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 10.56,
+        "x": 221.76,
+        "y": 619.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2016ed833d2e",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 42.1632,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 9.12,
+        "x": 220.32,
+        "y": 79.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ec5262a4096c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 41.2416,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 7.68,
+        "x": 446.88,
+        "y": 222.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-09ddb5750e17",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 40.7808,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 10.56,
+        "x": 407.52,
+        "y": 760.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-54cad7212007",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 40.32,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 8.64,
+        "x": 429.6,
+        "y": 186.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0cc372051361",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 40.32,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.2,
+        "x": 429.6,
+        "y": 493.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-cb4111ea9f7b",
+      "region": "right"
+    },
+    {
+      "area_pt2": 39.3984,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 11.52,
+        "x": 398.88,
+        "y": 709.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-f8553ccda856",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 38.9376,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 10.56,
+        "x": 468.48,
+        "y": 600.96
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-148d81598c8d",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 37.7856,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 9.12,
+        "x": 382.56,
+        "y": 220.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9fa0b7f1a46e",
+      "region": "top"
+    },
+    {
+      "area_pt2": 37.0944,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.2,
+        "x": 401.76,
+        "y": 508.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-33b0807293cc",
+      "region": "right"
+    },
+    {
+      "area_pt2": 36.864,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 10.56,
+        "x": 376.32,
+        "y": 187.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-695aa75fa383",
+      "region": "top"
+    },
+    {
+      "area_pt2": 36.864,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 11.04,
+        "x": 142.08,
+        "y": 601.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2e7c890e65b9",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 36.864,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 417.12,
+        "y": 349.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-25ab548d5b6d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 36.6336,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 424.32,
+        "y": 205.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4a94bdc18925",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 36.1728,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 9.12,
+        "x": 371.52,
+        "y": 383.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7d15b5f4b5cb",
+      "region": "center"
+    },
+    {
+      "area_pt2": 36.1728,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.2,
+        "x": 423.84,
+        "y": 349.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ee99e3a9fb63",
+      "region": "right"
+    },
+    {
+      "area_pt2": 36.1728,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 8.64,
+        "x": 410.4,
+        "y": 382.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-35e395d8f2d5",
+      "region": "right"
+    },
+    {
+      "area_pt2": 35.712,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 9.12,
+        "x": 226.08,
+        "y": 167.52
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8def99e45127",
+      "region": "top"
+    },
+    {
+      "area_pt2": 35.712,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.2,
+        "x": 352.32,
+        "y": 167.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-75720620df4e",
+      "region": "top"
+    },
+    {
+      "area_pt2": 35.4816,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 204.0,
+        "y": 95.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-49a5abe6b710",
+      "region": "top"
+    },
+    {
+      "area_pt2": 35.4816,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.6,
+        "x": 393.12,
+        "y": 349.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8a8e9d735734",
+      "region": "right"
+    },
+    {
+      "area_pt2": 35.2512,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.16,
+        "x": 220.32,
+        "y": 275.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e5ceabc35da3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 35.0208,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 11.52,
+        "x": 417.6,
+        "y": 187.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-62bf6438faa3",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 35.0208,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 8.16,
+        "x": 213.6,
+        "y": 457.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-198069face7d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.7904,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.64,
+        "x": 478.08,
+        "y": 598.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-59c2566c6c97",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 34.56,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 414.72,
+        "y": 403.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6cb3982680d6",
+      "region": "right"
+    },
+    {
+      "area_pt2": 34.0992,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.16,
+        "x": 206.4,
+        "y": 653.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7ef9cb00399d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 34.0992,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 9.6,
+        "x": 382.08,
+        "y": 654.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0e6a4baeb8a0",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 33.6384,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.72,
+        "x": 340.32,
+        "y": 94.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-23f0380fbe44",
+      "region": "top"
+    },
+    {
+      "area_pt2": 33.408,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 10.56,
+        "x": 214.56,
+        "y": 439.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2b989a4bda03",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.16,
+        "x": 452.16,
+        "y": 511.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-3c57d2c18ec5",
+      "region": "right"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 432.0,
+        "y": 583.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2b96db377a77",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 32.7168,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 333.6,
+        "y": 455.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-dd074cfcd136",
+      "region": "center"
+    },
+    {
+      "area_pt2": 32.7168,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 8.64,
+        "x": 129.6,
+        "y": 132.0
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7946eead91a4",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.4864,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 418.56,
+        "y": 454.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-77ede0b33296",
+      "region": "right"
+    },
+    {
+      "area_pt2": 32.4864,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.32,
+        "x": 352.32,
+        "y": 418.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8d4fbec61bba",
+      "region": "center"
+    },
+    {
+      "area_pt2": 32.256,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 8.64,
+        "x": 134.4,
+        "y": 402.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-bef8f26689f8",
+      "region": "left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 137.76,
+        "y": 725.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c124398a8c09",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 137.76,
+        "y": 347.52
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-240da2d4c5be",
+      "region": "left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 139.2,
+        "y": 691.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-abc290cf2767",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 364.32,
+        "y": 437.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-97c62ded801f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.7952,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 8.16,
+        "x": 351.84,
+        "y": 292.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8f531c72278e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.5648,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 151.68,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-44764f463816",
+      "region": "left"
+    },
+    {
+      "area_pt2": 31.5648,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 10.08,
+        "x": 209.28,
+        "y": 584.16
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-31c26cd6cbd2",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 31.3344,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 9.12,
+        "x": 363.36,
+        "y": 655.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-194ff360a5ef",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 31.3344,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 138.72,
+        "y": 169.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-69ac5f3b4c8d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 31.104,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.2,
+        "x": 399.36,
+        "y": 601.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e6b3c03e88bd",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 31.104,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 227.04,
+        "y": 689.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a265f948b1df",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 30.8736,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 373.44,
+        "y": 241.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-dcd3baf7aad3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.8736,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 364.32,
+        "y": 583.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e633553ff992",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 8.64,
+        "x": 203.52,
+        "y": 384.0
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a7c2ec2a9bb0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 9.6,
+        "x": 404.16,
+        "y": 742.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-bc9dc36e2d6f",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 30.4128,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 369.12,
+        "y": 204.0
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-62147c4aa247",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.4128,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.2,
+        "x": 352.8,
+        "y": 509.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-aed00171f865",
+      "region": "center"
+    },
+    {
+      "area_pt2": 30.4128,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.2,
+        "x": 227.52,
+        "y": 131.52
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-84bf4ac5f250",
+      "region": "top"
+    },
+    {
+      "area_pt2": 30.1824,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 9.12,
+        "x": 129.6,
+        "y": 277.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5c44f7ba7daa",
+      "region": "left"
+    },
+    {
+      "area_pt2": 29.952,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 363.84,
+        "y": 509.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2de6e0c18c04",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.952,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 385.44,
+        "y": 725.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-f08cb31c45e6",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 29.2608,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 408.96,
+        "y": 491.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1fc385d40c26",
+      "region": "right"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 133.92,
+        "y": 529.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1053d5ce8fd2",
+      "region": "left"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 381.6,
+        "y": 583.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-77dd7afbc011",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 454.56,
+        "y": 599.52
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1c76b07c2794",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 371.52,
+        "y": 457.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9143dc2c96c6",
+      "region": "center"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.2,
+        "x": 432.96,
+        "y": 79.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-23f79f5e305d",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 9.6,
+        "x": 378.72,
+        "y": 439.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4cb005ec43e0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.8,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 422.88,
+        "y": 475.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-f9baa2045b96",
+      "region": "right"
+    },
+    {
+      "area_pt2": 28.8,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 182.4,
+        "y": 655.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-840f0a47a838",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 4.8,
+        "x": 216.48,
+        "y": 400.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-3f7370015617",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 334.56,
+        "y": 634.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-655d7b77803d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.68,
+        "x": 412.8,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2ea07b37bfe5",
+      "region": "right"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 376.32,
+        "y": 205.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-283247a2c4ea",
+      "region": "top"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 394.56,
+        "y": 761.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-44c42dd7e3f1",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 420.96,
+        "y": 277.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-47f7519ae7de",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 28.1088,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 406.08,
+        "y": 635.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8d211a7d08e2",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 28.1088,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 404.16,
+        "y": 418.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-795f14a44a2e",
+      "region": "right"
+    },
+    {
+      "area_pt2": 28.1088,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 11.04,
+        "x": 222.24,
+        "y": 638.88
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-30b81625f7c6",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 28.1088,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 474.72,
+        "y": 349.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-993de93ce992",
+      "region": "right"
+    },
+    {
+      "area_pt2": 28.1088,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 414.24,
+        "y": 598.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-fa1685db89be",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 27.8784,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 127.68,
+        "y": 292.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c64d9d61af75",
+      "region": "left"
+    },
+    {
+      "area_pt2": 27.648,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.28,
+        "x": 333.12,
+        "y": 402.72
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-faec808e4f5c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 27.648,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 396.48,
+        "y": 509.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a63ccfb4e366",
+      "region": "right"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 8.64,
+        "x": 458.88,
+        "y": 385.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7884156893f0",
+      "region": "right"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.16,
+        "x": 131.04,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a4e20a2cd6b8",
+      "region": "left"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 5.28,
+        "x": 127.2,
+        "y": 328.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-df6fc30302fe",
+      "region": "left"
+    },
+    {
+      "area_pt2": 27.1872,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 215.52,
+        "y": 655.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5e3d496338af",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 27.1872,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 4.8,
+        "x": 226.56,
+        "y": 529.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2592d8bc3cd0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.72,
+        "x": 383.52,
+        "y": 332.16
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-cf5dd7bb7c74",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 8.64,
+        "x": 215.04,
+        "y": 133.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-52ec5181af59",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 174.72,
+        "y": 203.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-fe55e59765fa",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.7264,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.28,
+        "x": 224.16,
+        "y": 760.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1b44a4b9d351",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 26.7264,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 430.56,
+        "y": 653.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-aade5251cc45",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 209.28,
+        "y": 113.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5e2151270b0f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.24,
+        "x": 375.36,
+        "y": 493.92
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-82c609214024",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 179.52,
+        "y": 598.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-f1b099c814cb",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 334.56,
+        "y": 347.52
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-400f4e822318",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.2656,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.28,
+        "x": 412.32,
+        "y": 581.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-858325815865",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 26.0352,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.8,
+        "x": 353.28,
+        "y": 617.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6af5e18d7ebf",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 26.0352,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 386.4,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-553dac31e0c9",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.72,
+        "x": 155.52,
+        "y": 131.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-78c6e1ec1dcb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 206.88,
+        "y": 79.2
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c03cd85b87d7",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 5.76,
+        "x": 224.64,
+        "y": 382.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7495c592dd71",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.2,
+        "x": 395.04,
+        "y": 130.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4ba385524b86",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.68,
+        "x": 373.92,
+        "y": 656.64
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-df4428b6ace3",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.2,
+        "x": 202.08,
+        "y": 76.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-221e02e8b236",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.24,
+        "x": 390.24,
+        "y": 132.48
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c95c610c076f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.32,
+        "x": 378.24,
+        "y": 472.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e535af94fcc2",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.8,
+        "x": 128.16,
+        "y": 688.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-d7c7c27a7945",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 128.16,
+        "y": 491.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-403dbf372cd3",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 210.72,
+        "y": 221.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-acbf3b92dd63",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.1136,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 365.28,
+        "y": 295.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9aa4d8d19d44",
+      "region": "center"
+    },
+    {
+      "area_pt2": 25.1136,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.72,
+        "x": 403.68,
+        "y": 455.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6e18c7d315d6",
+      "region": "right"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 357.12,
+        "y": 726.72
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9a7d0fc1304c",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 24.6528,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.8,
+        "x": 342.24,
+        "y": 347.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5c378a337682",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.6528,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 3.36,
+        "x": 216.0,
+        "y": 707.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-96f2c92f4647",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 24.6528,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 379.68,
+        "y": 763.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e1fc6c39e7a1",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 24.6528,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.24,
+        "x": 377.28,
+        "y": 80.16
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0c54d01bc4f9",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.28,
+        "x": 334.56,
+        "y": 382.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a72da43ef9b7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.36,
+        "x": 150.72,
+        "y": 202.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7e8694e3bc81",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.32,
+        "x": 153.6,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0e5817cceecb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 409.92,
+        "y": 653.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0e489a8fe03c",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 221.76,
+        "y": 331.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c1e1009abfd4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 7.2,
+        "x": 247.68,
+        "y": 581.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-f1a68e715207",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 336.0,
+        "y": 239.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5dd5a1b1e39b",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 209.76,
+        "y": 329.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1d846a0400bd",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 203.04,
+        "y": 275.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-b63f0705ee4b",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.72,
+        "x": 404.64,
+        "y": 296.16
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-03654d97ad34",
+      "region": "right"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.72,
+        "x": 423.84,
+        "y": 421.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-594f7ed64ee2",
+      "region": "right"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 3.84,
+        "x": 358.08,
+        "y": 257.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ab7a041111f3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 419.04,
+        "y": 619.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-688c6a26383c",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.16,
+        "x": 380.16,
+        "y": 709.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-b58861ba3bb2",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 137.28,
+        "y": 475.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-51a72fde2fd4",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.76,
+        "x": 334.56,
+        "y": 438.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-3a8eb4473c03",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 415.68,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-49e4bd58d465",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 8.16,
+        "x": 226.08,
+        "y": 601.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6e47a0704b39",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 175.68,
+        "y": 548.16
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-a94a170dedf0",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 214.08,
+        "y": 670.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1508d80defd7",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 175.68,
+        "y": 383.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2261553ccfab",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 221.28,
+        "y": 223.2
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5f08fc6de4a0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 2.88,
+        "x": 390.24,
+        "y": 761.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7bdcd36101c7",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.36,
+        "x": 351.84,
+        "y": 113.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-577d79d43c28",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.28,
+        "x": 218.4,
+        "y": 149.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8f90840b8b23",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.2,
+        "x": 415.68,
+        "y": 493.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7640a2a1dab7",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.76,
+        "x": 212.64,
+        "y": 526.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-768bd33e2c68",
+      "region": "center"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 7.68,
+        "x": 389.76,
+        "y": 239.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0328c4874f9a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.72,
+        "x": 333.12,
+        "y": 293.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-fd6c2d97aec3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 396.96,
+        "y": 455.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-02efcf2064ff",
+      "region": "right"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.76,
+        "x": 353.76,
+        "y": 188.16
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e5a822a18667",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 4.8,
+        "x": 444.48,
+        "y": 277.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-291097235e55",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.32,
+        "x": 393.6,
+        "y": 94.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-96401242aa61",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.28,
+        "x": 126.72,
+        "y": 364.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ac3d5c41aef3",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 174.72,
+        "y": 77.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-cb65f0a73e2c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 128.16,
+        "y": 149.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c8d69e71409a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.5792,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.8,
+        "x": 222.24,
+        "y": 544.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-b634b1f8efaa",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 6.24,
+        "x": 153.6,
+        "y": 601.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-aaef53a4507c",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 385.92,
+        "y": 619.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-da0bc4e03fa8",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.32,
+        "x": 224.16,
+        "y": 581.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-deb858caa698",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.16,
+        "x": 395.52,
+        "y": 260.64
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0bc50b1ce56d",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 22.3488,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.8,
+        "x": 345.12,
+        "y": 635.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-97b46dab88a5",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.36,
+        "x": 351.84,
+        "y": 527.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-def6848f5028",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.36,
+        "x": 402.24,
+        "y": 95.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e67ec90e3bb1",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 2.88,
+        "x": 427.2,
+        "y": 617.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-449f056df853",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.36,
+        "x": 367.68,
+        "y": 457.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ff21d5e6860f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 204.0,
+        "y": 257.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0823dee96d51",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 185.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4c3d8bd84221",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.36,
+        "x": 154.56,
+        "y": 652.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e8682444e456",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 275.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e9992a733a12",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 113.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4356ea7db11f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 329.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-045cc7005bed",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 455.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-75b1684205c7",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 6.72,
+        "x": 173.28,
+        "y": 131.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9dc5a14e4bea",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 131.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-12c7e87bc5f3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 252.96,
+        "y": 635.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-4eb8ba8b4c00",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 352.32,
+        "y": 383.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0784f2c23a60",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 293.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-df095043740a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 277.92,
+        "y": 167.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c0175ce8c94c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 149.28,
+        "y": 670.56
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-fdd287f7261f",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 366.72,
+        "y": 241.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-fbfbdef5e99b",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 335.52,
+        "y": 492.0
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c82bff8902d6",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 362.4,
+        "y": 169.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7a69908dc8af",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 216.48,
+        "y": 725.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-18032e08f111",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.28,
+        "x": 228.48,
+        "y": 673.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-feb6032444a3",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.76,
+        "x": 239.04,
+        "y": 221.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-1e65fd1657dd",
+      "region": "top"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.36,
+        "x": 401.76,
+        "y": 491.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0cd916f5edc5",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 3.84,
+        "x": 406.56,
+        "y": 310.08
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0786e9c30aa7",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 127.2,
+        "y": 95.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-d525689b56ff",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.36,
+        "x": 136.8,
+        "y": 112.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8d00f2732c48",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 3.36,
+        "x": 426.72,
+        "y": 655.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8cde4dfc8c86",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 4.32,
+        "x": 427.2,
+        "y": 544.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-798447bb423e",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 5.76,
+        "x": 203.52,
+        "y": 329.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-864bfefbd474",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 3.84,
+        "x": 385.44,
+        "y": 386.4
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-b6c0e45a566c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 4.32,
+        "x": 461.76,
+        "y": 565.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e0064e192ad6",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 21.1968,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.36,
+        "x": 126.72,
+        "y": 419.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-5c20cf197232",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 4.32,
+        "x": 209.28,
+        "y": 184.8
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-af12e0f1f890",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.24,
+        "x": 141.12,
+        "y": 440.64
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9b816b68a517",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 7.68,
+        "x": 466.56,
+        "y": 351.36
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-24ce22397a13",
+      "region": "right"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.28,
+        "x": 427.68,
+        "y": 637.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6f2a66ff37ae",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.2,
+        "x": 158.4,
+        "y": 385.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-d51c198fb284",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 6.24,
+        "x": 203.52,
+        "y": 621.12
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9b5bb2b48ebd",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 2.88,
+        "x": 392.64,
+        "y": 113.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-9712d3e43d25",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.36,
+        "x": 407.52,
+        "y": 401.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-ed897878147c",
+      "region": "right"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.84,
+        "x": 352.8,
+        "y": 257.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-24efdedc3595",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 3.36,
+        "x": 216.96,
+        "y": 77.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-225810ad72e2",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.84,
+        "x": 372.96,
+        "y": 150.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e39df09188a8",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 2.88,
+        "x": 367.68,
+        "y": 365.76
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-6177bfc4a4c5",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.8,
+        "x": 405.12,
+        "y": 167.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-2c37bc65a2f2",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 20.2752,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.32,
+        "x": 422.88,
+        "y": 366.24
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-3725efa1b625",
+      "region": "right"
+    },
+    {
+      "area_pt2": 20.2752,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.68,
+        "x": 209.28,
+        "y": 260.64
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-e28f68275ee0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.2752,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 426.72,
+        "y": 673.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-14d771b81f7d",
+      "region": "bottom-right"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.32,
+        "x": 202.08,
+        "y": 563.52
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-f76acebba44e",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.2,
+        "x": 361.44,
+        "y": 548.64
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-601836274f49",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 175.68,
+        "y": 275.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-477b8b941ac9",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 175.68,
+        "y": 329.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-7a1104d26168",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 114.72,
+        "y": 563.04
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8d01d4302f4f",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.24,
+        "x": 362.88,
+        "y": 97.44
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-c9cfb78c7b2a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 5.28,
+        "x": 114.72,
+        "y": 149.28
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-8da74d0da629",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 5.28,
+        "x": 351.84,
+        "y": 710.4
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-b75f400bfa18",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.28,
+        "x": 139.2,
+        "y": 276.0
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-0ed316f33df1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.76,
+        "x": 209.28,
+        "y": 367.68
+      },
+      "disposition": {
+        "issue": "#1656",
+        "kind": "issue",
+        "note": "Columns B-E sit 14/28/42/56pt left of the native grid: the sheet has no sheetFormatPr and Excel for Mac prices its default column at base 10, not 8."
+      },
+      "id": "p1-82cc75dd5e56",
+      "region": "center"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 236,
+    "duplicate": 0,
+    "total": 236,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

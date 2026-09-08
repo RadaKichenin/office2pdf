@@ -955,6 +955,245 @@ fn test_unstyled_cell_keeps_a_calibri_normal_font() {
     assert_eq!(style.font_size, Some(11.0));
 }
 
+/// A Normal font that defers to the theme's font scheme paints and prices
+/// columns in the face the theme names for the reference machine's UI
+/// script, not in the `<name>` it declares (issue #1380).
+///
+/// Native Excel-for-Mac export of `100-customers.xlsx` (Calibri 12,
+/// `<scheme val="minor"/>`, an Office theme naming `맑은 고딕` for `Hang`):
+/// `pdffonts` lists only `MalgunGothic`, and the one-factor probe naming
+/// Malgun Gothic 12 outright prints the same column grid, while naming
+/// Calibri 12 outright narrows every default column by 10pt — a 6pt column
+/// unit where the resolved face prices a 7pt one.
+#[test]
+fn a_theme_scheme_normal_font_paints_and_prices_columns_in_the_ui_script_face() {
+    let data: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/fixtures/xlsx/100-customers.xlsx"
+    ));
+    let book = umya_spreadsheet::reader::xlsx::read_reader(Cursor::new(data), true)
+        .expect("the customer fixture should load");
+    let normal_font: NormalFont =
+        extract_normal_font(data, Some(book.get_theme())).expect("a Normal font");
+
+    assert_eq!(normal_font.family, "Calibri", "the declared name is kept");
+    assert_eq!(normal_font.size_pt, 12.0);
+    assert_eq!(normal_font.resolved_family(), "맑은 고딕");
+    assert_eq!(
+        resolve_column_unit_pt(book.get_sheet(&0).unwrap(), Some(&normal_font)),
+        7.0,
+        "Malgun Gothic 12 prices a column unit at 7pt; Calibri 12 would price 6pt"
+    );
+    assert_eq!(
+        first_cell_text_style(data).font_family.as_deref(),
+        Some("맑은 고딕"),
+        "an unstyled cell paints in the resolved face"
+    );
+}
+
+/// Triangulation across sizes and themes: the face follows the theme, so
+/// the same declared Calibri prices its unit as Malgun Gothic over an Office
+/// theme and as Calibri over a theme that lists no script faces — the bare
+/// theme LibreOffice writes, which issue #1141 measured keeping Calibri.
+#[test]
+fn a_theme_scheme_normal_font_resolves_through_the_theme_it_ships_with() {
+    for (size_pt, ui_face_unit_pt, declared_face_unit_pt) in [
+        (11.0, 6.0, 6.0),
+        (12.0, 7.0, 6.0),
+        (14.0, 8.0, 7.0),
+        (16.0, 9.0, 8.0),
+    ] {
+        let office_theme: Vec<u8> = build_xlsx_with_theme_scheme_normal_font("Calibri", size_pt);
+        let bare_theme: Vec<u8> = strip_theme_minor_font_script_faces(&office_theme);
+        for (data, expected_face, expected_unit_pt) in [
+            (&office_theme, "맑은 고딕", ui_face_unit_pt),
+            (&bare_theme, "Calibri", declared_face_unit_pt),
+        ] {
+            let book =
+                umya_spreadsheet::reader::xlsx::read_reader(Cursor::new(data.as_slice()), true)
+                    .expect("the built workbook should load");
+            let normal_font: NormalFont =
+                extract_normal_font(data, Some(book.get_theme())).expect("a Normal font");
+            assert_eq!(normal_font.family, "Calibri", "Calibri {size_pt}");
+            assert_eq!(
+                normal_font.resolved_family(),
+                expected_face,
+                "Calibri {size_pt}"
+            );
+            assert_eq!(
+                resolve_column_unit_pt(book.get_sheet(&0).unwrap(), Some(&normal_font)),
+                expected_unit_pt,
+                "Calibri {size_pt} resolved to {expected_face}"
+            );
+            assert_eq!(
+                first_cell_text_style(data).font_family.as_deref(),
+                Some(expected_face),
+                "Calibri {size_pt} resolved to {expected_face}"
+            );
+        }
+    }
+}
+
+/// A cell font that itself defers to the theme — `<scheme val="major"/>` on
+/// a heading style, `minor` on body text — resolves through the same list,
+/// slot by slot; a cell font naming its face outright keeps it (issue #1380).
+#[test]
+fn a_cell_font_with_its_own_theme_scheme_resolves_through_its_slot() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        let heading = sheet.get_cell_mut("A1");
+        heading.set_value("Title");
+        heading
+            .get_style_mut()
+            .get_font_mut()
+            .set_name_with_scheme("Calibri Light", "major");
+        let body = sheet.get_cell_mut("A2");
+        body.set_value("body");
+        body.get_style_mut()
+            .get_font_mut()
+            .set_name_with_scheme("Calibri", "minor");
+        let named = sheet.get_cell_mut("A3");
+        named.set_value("named");
+        named.get_style_mut().get_font_mut().set_name("Georgia");
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    // Give the major slot a face of its own so the two slots are told apart.
+    let data: Vec<u8> = rewrite_theme_major_font_hang_face(&cursor.into_inner(), "Batang");
+
+    assert_eq!(
+        cell_run_font_families(&data),
+        vec![
+            Some("Batang".to_string()),
+            Some("맑은 고딕".to_string()),
+            Some("Georgia".to_string()),
+        ]
+    );
+}
+
+/// A rich-text run's `<rPr>` carries the same `<scheme>` as a cell font and
+/// resolves the same way; a run naming its face outright keeps it.
+#[test]
+fn a_rich_text_run_font_with_a_theme_scheme_resolves_through_the_theme() {
+    let normal_font: NormalFont = theme_scheme_normal_font(11.0);
+    let base = TextStyle::default();
+
+    let mut scheme_run = umya_spreadsheet::Font::default();
+    scheme_run.set_name_with_scheme("Calibri", "minor");
+    assert_eq!(
+        xlsx_style::apply_rich_run_font(&base, &scheme_run, None, Some(&normal_font))
+            .font_family
+            .as_deref(),
+        Some("맑은 고딕")
+    );
+
+    let mut named_run = umya_spreadsheet::Font::default();
+    named_run.set_name("Georgia");
+    assert_eq!(
+        xlsx_style::apply_rich_run_font(&base, &named_run, None, Some(&normal_font))
+            .font_family
+            .as_deref(),
+        Some("Georgia")
+    );
+}
+
+/// The first cell run's font family of every cell, in sheet order.
+fn cell_run_font_families(data: &[u8]) -> Vec<Option<String>> {
+    let (doc, _warnings) = XlsxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("workbook should parse");
+    let Page::Sheet(sheet) = &doc.pages[0] else {
+        panic!("expected a sheet page");
+    };
+    sheet
+        .table
+        .rows
+        .iter()
+        .flat_map(|row| row.cells.iter())
+        .filter_map(|cell| {
+            cell.content.iter().find_map(|block| match block {
+                Block::Paragraph(paragraph) => paragraph
+                    .runs
+                    .first()
+                    .map(|run| run.style.font_family.clone()),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+/// A one-cell workbook whose Normal font is `family` at `size_pt` with
+/// `<scheme val="minor"/>`, as every Excel-authored stylesheet writes it,
+/// over the Office theme umya ships.
+fn build_xlsx_with_theme_scheme_normal_font(family: &str, size_pt: f64) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        sheet.get_cell_mut("A1").set_value("title");
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    rewrite_first_styles_font_element(
+        &cursor.into_inner(),
+        &format!(
+            "<font><sz val=\"{size_pt}\"/><name val=\"{family}\"/><family val=\"2\"/><scheme val=\"minor\"/></font>"
+        ),
+    )
+}
+
+/// Point the theme's major font scheme at `face` for the `Hang` script.
+fn rewrite_theme_major_font_hang_face(data: &[u8], face: &str) -> Vec<u8> {
+    rewrite_zip_parts(
+        data,
+        |name| name.starts_with("xl/theme/") && name.ends_with(".xml"),
+        |xml| {
+            let start: usize = xml.find("<a:majorFont>").expect("theme has a major font");
+            let end: usize = xml[start..]
+                .find("</a:majorFont>")
+                .expect("major font is closed")
+                + start;
+            let block: &str = &xml[start..end];
+            let hang: usize = block
+                .find("<a:font script=\"Hang\"")
+                .expect("major font names a Hang face");
+            let hang_end: usize = block[hang..].find("/>").expect("Hang face is closed") + hang + 2;
+            format!(
+                "{}{}<a:font script=\"Hang\" typeface=\"{face}\"/>{}{}",
+                &xml[..start],
+                &block[..hang],
+                &block[hang_end..],
+                &xml[end..]
+            )
+        },
+    )
+}
+
+/// Rewrite every XML part whose name `selects` through `rewrite`, copying
+/// the rest of the package as is.
+fn rewrite_zip_parts(
+    data: &[u8],
+    selects: impl Fn(&str) -> bool,
+    rewrite: impl Fn(&str) -> String,
+) -> Vec<u8> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("readable entry");
+        let name = entry.name().to_string();
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("readable entry body");
+        if selects(&name) {
+            let xml = String::from_utf8(bytes).expect("part is utf-8");
+            bytes = rewrite(&xml).into_bytes();
+        }
+        out.start_file(name, zip::write::FileOptions::default())
+            .expect("writable entry");
+        std::io::Write::write_all(&mut out, &bytes).expect("writable entry body");
+    }
+    out.finish().expect("finished zip").into_inner()
+}
+
 #[test]
 fn test_explicit_cell_font_overrides_the_workbook_normal_font() {
     let mut book = umya_spreadsheet::new_file();
@@ -1000,32 +1239,28 @@ fn rewrite_first_styles_font_with_color(
     size_pt: f64,
     color_xml: &str,
 ) -> Vec<u8> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(data)).expect("readable zip");
-    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    for index in 0..archive.len() {
-        let mut entry = archive.by_index(index).expect("readable entry");
-        let name = entry.name().to_string();
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("readable entry body");
-        if name == "xl/styles.xml" {
-            let xml = String::from_utf8(bytes).expect("styles.xml is utf-8");
+    rewrite_first_styles_font_element(
+        data,
+        &format!("<font><sz val=\"{size_pt}\"/>{color_xml}<name val=\"{family}\"/></font>"),
+    )
+}
+
+/// Replace the first `<font>` element of `xl/styles.xml` with `font_xml`.
+fn rewrite_first_styles_font_element(data: &[u8], font_xml: &str) -> Vec<u8> {
+    rewrite_zip_parts(
+        data,
+        |name| name == "xl/styles.xml",
+        |xml| {
             let start = xml.find("<font>").expect("styles.xml has a font");
             let end = xml[start..].find("</font>").expect("font is closed") + start;
-            let replacement =
-                format!("<font><sz val=\"{size_pt}\"/>{color_xml}<name val=\"{family}\"/></font>");
-            bytes = format!(
+            format!(
                 "{}{}{}",
                 &xml[..start],
-                replacement,
+                font_xml,
                 &xml[end + "</font>".len()..]
             )
-            .into_bytes();
-        }
-        out.start_file(name, zip::write::FileOptions::default())
-            .expect("writable entry");
-        std::io::Write::write_all(&mut out, &bytes).expect("writable entry body");
-    }
-    out.finish().expect("finished zip").into_inner()
+        },
+    )
 }
 
 /// Replace every worksheet's `<sheetFormatPr .../>` with `replacement`. umya
@@ -1271,8 +1506,8 @@ fn overrun_sweep_picture_width_pt(
         family: "Calibri".to_string(),
         size_pt: 11.0,
         color: None,
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
     let ctx: SheetContext = empty_sheet_context(sheet, Some(&normal_font), None, None);
     let placed: crate::ir::SheetImage = anchored_image(
@@ -1372,8 +1607,8 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         family: "Calibri".to_string(),
         size_pt: 11.0,
         color: None,
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
     let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None);
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
@@ -1387,8 +1622,8 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         family: "Calibri".to_string(),
         size_pt: 8.0,
         color: None,
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
@@ -1582,8 +1817,8 @@ fn test_empty_sheet_context_reads_declared_column_widths() {
         family: "Calibri".to_string(),
         size_pt: 11.0,
         color: None,
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
 
     let ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None);
@@ -1623,8 +1858,17 @@ fn theme_scheme_normal_font(size_pt: f64) -> NormalFont {
         family: "Calibri".to_string(),
         size_pt,
         color: None,
-        uses_theme_scheme: true,
-        theme_declares_script_faces: true,
+        theme_scheme: Some(ThemeFontSlot::Minor),
+        theme_ui_script_faces: office_theme_ui_script_faces(),
+    }
+}
+
+/// The `Hang` faces of the standard Office theme, major and minor alike —
+/// the list the reference machine resolves a scheme font through.
+fn office_theme_ui_script_faces() -> ThemeUiScriptFaces {
+    ThemeUiScriptFaces {
+        minor: Some("맑은 고딕".to_string()),
+        major: Some("맑은 고딕".to_string()),
     }
 }
 
@@ -1718,8 +1962,8 @@ fn substituted_face_normal_font(family: &str, size_pt: f64) -> NormalFont {
         family: family.to_string(),
         size_pt,
         color: None,
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     }
 }
 
@@ -2478,8 +2722,8 @@ fn named_face_printed_grid_measurements_are_not_extrapolated() {
         family: "Arial".to_string(),
         size_pt: 12.0,
         color: None,
-        uses_theme_scheme: true,
-        theme_declares_script_faces: false,
+        theme_scheme: Some(ThemeFontSlot::Minor),
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
     assert_eq!(
         xlsx_cells::native_excel_pdf_row_height(16.0, Some(&scheme_font)),

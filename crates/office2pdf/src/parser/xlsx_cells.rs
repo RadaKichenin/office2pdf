@@ -157,7 +157,7 @@ fn excel_numeric_text_width_pt(
     let family: &str = style
         .font_family
         .as_deref()
-        .or_else(|| normal_font.map(|font| font.family.as_str()))
+        .or_else(|| normal_font.map(NormalFont::resolved_family))
         .unwrap_or("Calibri");
     let size_pt: f64 = style
         .font_size
@@ -358,7 +358,7 @@ pub(super) fn extract_normal_font(
     use std::io::Read;
 
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(data)).ok()?;
-    let theme_declares_script_faces: bool = theme_minor_font_declares_script_faces(&mut archive);
+    let theme_ui_script_faces: ThemeUiScriptFaces = read_theme_ui_script_faces(&mut archive);
     let mut file = archive.by_name("xl/styles.xml").ok()?;
     let mut xml = String::new();
     file.read_to_string(&mut xml).ok()?;
@@ -368,7 +368,7 @@ pub(super) fn extract_normal_font(
     let mut name: Option<String> = None;
     let mut size: Option<f64> = None;
     let mut font_color: Option<umya_spreadsheet::Color> = None;
-    let mut uses_theme_scheme = false;
+    let mut theme_scheme: Option<ThemeFontSlot> = None;
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"font" => {
@@ -420,7 +420,7 @@ pub(super) fn extract_normal_font(
                             font_color = Some(color);
                         }
                     }
-                    b"scheme" => uses_theme_scheme = true,
+                    b"scheme" => theme_scheme = val.as_deref().and_then(ThemeFontSlot::parse),
                     _ => {}
                 }
             }
@@ -434,21 +434,69 @@ pub(super) fn extract_normal_font(
         color: font_color
             .as_ref()
             .and_then(|color| resolve_style_color(color, theme)),
-        uses_theme_scheme,
-        theme_declares_script_faces,
+        theme_scheme,
+        theme_ui_script_faces,
     })
 }
 
-/// Whether the workbook's theme gives its minor font scheme per-script faces
-/// — the `<a:font script="Hang" .../>` list every Office theme carries, and
-/// which a theme written by LibreOffice or by hand leaves out entirely.
+/// The script whose theme face Excel resolves a scheme font to on the
+/// reference machine. Excel resolves a `<scheme>` font through the theme's
+/// per-script face list by the *UI* script, not by the text's own script:
+/// the reference Mac runs a Korean UI, so even ASCII cells of a scheme font
+/// paint and lay out in the `Hang` face (issues #1047, #1094, #1380). Every
+/// native ground truth in this repository was exported there.
+const UI_SCRIPT: &str = "Hang";
+
+/// Which of the theme's two font schemes a `<scheme val="..."/>` defers to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ThemeFontSlot {
+    /// `<a:majorFont>`, the headings scheme.
+    Major,
+    /// `<a:minorFont>`, the body scheme every Normal font defers to.
+    Minor,
+}
+
+impl ThemeFontSlot {
+    /// The slot a stylesheet or rich-run `scheme` value names; `none` and
+    /// anything unknown name no slot.
+    pub(super) fn parse(scheme_value: &str) -> Option<Self> {
+        match scheme_value {
+            "major" => Some(Self::Major),
+            "minor" => Some(Self::Minor),
+            _ => None,
+        }
+    }
+}
+
+/// The faces the workbook's theme names for the UI script in each of its
+/// two font schemes — the `<a:font script="Hang" .../>` entries every Office
+/// theme carries, and which a theme written by LibreOffice or by hand leaves
+/// out entirely.
 ///
 /// Excel resolves a `<scheme>` font's face through that list rather than
 /// through the scheme's `<a:latin>` typeface, which is what makes the same
-/// declared Calibri 11 lay out against two different faces in two workbooks.
-fn theme_minor_font_declares_script_faces(
+/// declared Calibri lay out, paint and price its columns against two
+/// different faces in two workbooks (issues #1094, #1380).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(super) struct ThemeUiScriptFaces {
+    pub(super) major: Option<String>,
+    pub(super) minor: Option<String>,
+}
+
+impl ThemeUiScriptFaces {
+    /// The UI-script face of `slot`, when the theme names one.
+    pub(super) fn face(&self, slot: ThemeFontSlot) -> Option<&str> {
+        match slot {
+            ThemeFontSlot::Major => self.major.as_deref(),
+            ThemeFontSlot::Minor => self.minor.as_deref(),
+        }
+    }
+}
+
+/// Read the theme's UI-script faces out of the archive's theme part.
+fn read_theme_ui_script_faces(
     archive: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>,
-) -> bool {
+) -> ThemeUiScriptFaces {
     use quick_xml::events::Event;
     use std::io::Read;
 
@@ -459,7 +507,7 @@ fn theme_minor_font_declares_script_faces(
         .find(|name| name.starts_with("xl/theme/") && name.ends_with(".xml"))
         .map(str::to_string)
     else {
-        return false;
+        return ThemeUiScriptFaces::default();
     };
     let mut xml = String::new();
     if archive
@@ -468,31 +516,55 @@ fn theme_minor_font_declares_script_faces(
         .and_then(|mut file| file.read_to_string(&mut xml).ok())
         .is_none()
     {
-        return false;
+        return ThemeUiScriptFaces::default();
     }
 
+    let mut faces = ThemeUiScriptFaces::default();
     let mut reader = quick_xml::Reader::from_str(&xml);
-    let mut in_minor_font: bool = false;
+    let mut open_slot: Option<ThemeFontSlot> = None;
     loop {
         match reader.read_event() {
-            Ok(Event::Start(ref e)) if e.local_name().as_ref() == b"minorFont" => {
-                in_minor_font = true;
-            }
-            Ok(Event::End(ref e)) if e.local_name().as_ref() == b"minorFont" => {
-                in_minor_font = false;
-            }
-            Ok(Event::Empty(ref e)) | Ok(Event::Start(ref e))
-                if in_minor_font && e.local_name().as_ref() == b"font" =>
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"majorFont" => open_slot = Some(ThemeFontSlot::Major),
+                b"minorFont" => open_slot = Some(ThemeFontSlot::Minor),
+                _ => {}
+            },
+            Ok(Event::End(ref e))
+                if matches!(e.local_name().as_ref(), b"majorFont" | b"minorFont") =>
             {
-                if e.try_get_attribute("script").ok().flatten().is_some() {
-                    return true;
+                open_slot = None;
+            }
+            Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"font" => {
+                let Some(slot) = open_slot else {
+                    continue;
+                };
+                let names_ui_script: bool = e
+                    .try_get_attribute("script")
+                    .ok()
+                    .flatten()
+                    .is_some_and(|script| script.value.as_ref() == UI_SCRIPT.as_bytes());
+                if !names_ui_script {
+                    continue;
+                }
+                // The face name is stored unescaped: a probe theme writes
+                // `맑은 고딕` as numeric character references.
+                let typeface: Option<String> = e
+                    .try_get_attribute("typeface")
+                    .ok()
+                    .flatten()
+                    .and_then(|attribute| attribute.unescape_value().ok())
+                    .map(|face| face.trim().to_string())
+                    .filter(|face| !face.is_empty());
+                match slot {
+                    ThemeFontSlot::Major => faces.major = typeface,
+                    ThemeFontSlot::Minor => faces.minor = typeface,
                 }
             }
             Ok(Event::Eof) | Err(_) => break,
             _ => {}
         }
     }
-    false
+    faces
 }
 
 /// The workbook's Normal font: the `xl/styles.xml` font that cells and
@@ -503,19 +575,49 @@ pub(super) struct NormalFont {
     pub(super) family: String,
     pub(super) size_pt: f64,
     pub(super) color: Option<Color>,
-    /// Whether the font defers its face to the theme's font scheme
-    /// (`<scheme val="minor"/>`), rather than naming it outright.
+    /// The theme font scheme the font defers its face to
+    /// (`<scheme val="minor"/>`), or `None` when it names the face outright.
     ///
-    /// Excel then lays rows out against whatever the scheme resolves to,
-    /// which is not necessarily `family`: on the reference machine the minor
-    /// scheme of the standard Office theme resolves to the locale UI face
-    /// (Malgun Gothic), and the same declared Calibri 11 gives a 17pt
-    /// default row against a scheme-less 15pt (issue #1047).
-    pub(super) uses_theme_scheme: bool,
-    /// Whether the workbook's theme gives its minor font scheme per-script
-    /// faces. Only bears on a font that `uses_theme_scheme`: that is the
-    /// list Excel resolves such a font through (issue #1094).
-    pub(super) theme_declares_script_faces: bool,
+    /// Excel then lays rows out, paints cells and prices columns against
+    /// whatever the scheme resolves to, which is not necessarily `family`:
+    /// on the reference machine the minor scheme of the standard Office
+    /// theme resolves to the locale UI face (Malgun Gothic), so the same
+    /// declared Calibri 11 gives a 17pt default row against a scheme-less
+    /// 15pt (issue #1047), and a declared Calibri 12 embeds Malgun Gothic and
+    /// prices a 7pt column unit against Calibri's 6pt (issue #1380).
+    pub(super) theme_scheme: Option<ThemeFontSlot>,
+    /// The faces the workbook's theme names for the UI script. Only bears on
+    /// a font with a `theme_scheme`: that is the list Excel resolves such a
+    /// font through (issue #1094), and the list every cell font carrying a
+    /// `<scheme>` of its own resolves through as well.
+    pub(super) theme_ui_script_faces: ThemeUiScriptFaces,
+}
+
+impl NormalFont {
+    /// Whether the font defers its face to a theme font scheme at all.
+    pub(super) fn uses_theme_scheme(&self) -> bool {
+        self.theme_scheme.is_some()
+    }
+
+    /// The face Excel resolves this font to on the reference machine: the
+    /// theme's UI-script face of the scheme it defers to, else the family it
+    /// declares. A scheme font over a theme that lists no script faces stays
+    /// on its declared family, exactly as issue #1141 measured it (a bare
+    /// theme compacts like a font naming Calibri outright).
+    pub(super) fn resolved_family(&self) -> &str {
+        self.theme_scheme
+            .and_then(|slot| self.theme_ui_script_faces.face(slot))
+            .unwrap_or(&self.family)
+    }
+
+    /// Whether the face is the theme's UI-script face rather than the
+    /// declared family — the fonts Excel does not remap or compact on the
+    /// printed grid (issue #1094).
+    pub(super) fn resolves_through_theme_script_faces(&self) -> bool {
+        self.theme_scheme
+            .and_then(|slot| self.theme_ui_script_faces.face(slot))
+            .is_some()
+    }
 }
 
 /// Max digit advance of Calibri (and metrically identical Carlito), Excel's
@@ -639,7 +741,7 @@ fn styled_cell_padding(style: &TextStyle, normal_font: Option<&NormalFont>) -> I
     let family: &str = style
         .font_family
         .as_deref()
-        .or_else(|| normal_font.map(|font| font.family.as_str()))
+        .or_else(|| normal_font.map(NormalFont::resolved_family))
         .unwrap_or("Calibri");
     let size_pt: f64 = style
         .font_size
@@ -727,7 +829,8 @@ pub(super) fn indent_unit_pt(family: &str, size_pt: f64) -> f64 {
     SPACES_PER_INDENT_LEVEL * round_half_up_pt(space_advance_em(family) * size_pt)
 }
 
-/// The indent unit for a sheet whose Normal font is `normal_font`.
+/// The indent unit for a sheet whose Normal font is `normal_font`, priced
+/// on the face that font resolves to.
 ///
 /// The fallback is Excel's own default Normal font rather than the dominant
 /// cell font `resolve_column_unit_pt` falls back to: a workbook with no
@@ -735,7 +838,7 @@ pub(super) fn indent_unit_pt(family: &str, size_pt: f64) -> f64 {
 /// nothing reaches this with a level to scale.
 pub(super) fn resolve_indent_unit_pt(normal_font: Option<&NormalFont>) -> f64 {
     match normal_font {
-        Some(font) => indent_unit_pt(&font.family, font.size_pt),
+        Some(font) => indent_unit_pt(font.resolved_family(), font.size_pt),
         None => indent_unit_pt("Calibri", 11.0),
     }
 }
@@ -1501,7 +1604,7 @@ pub(super) fn recomputed_default_row_height_pt(
 /// the very face its theme scheme resolves to (issue #1140). A row whose
 /// cells name some *other* face has no series of its own here.
 fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
-    if font.uses_theme_scheme {
+    if font.uses_theme_scheme() {
         return measured_series_row_height_pt(&UI_SCRIPT_FACE_ROW_HEIGHTS, size_pt);
     }
     measured_family_row_height_pt(&font.family, size_pt)
@@ -1937,7 +2040,7 @@ fn measured_named_face_printed_grid_row_height(
     height: f64,
     normal_font: &NormalFont,
 ) -> Option<f64> {
-    if normal_font.uses_theme_scheme || (normal_font.size_pt - 12.0).abs() >= 0.01 {
+    if normal_font.uses_theme_scheme() || (normal_font.size_pt - 12.0).abs() >= 0.01 {
         return None;
     }
     let measured: &[(f64, f64)] = if normal_font.family.eq_ignore_ascii_case("Arial") {
@@ -2016,7 +2119,7 @@ fn measured_printed_grid_row_height(height: f64, normal_font: Option<&NormalFont
         // read a stylesheet from is laid out against it.
         None => return Some((height * 0.92).round()),
         // Resolved by script to the UI face, which is not one Excel remaps.
-        Some(font) if font.uses_theme_scheme && font.theme_declares_script_faces => return None,
+        Some(font) if font.resolves_through_theme_script_faces() => return None,
         Some(font) => font,
     };
 
@@ -2079,7 +2182,7 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
 fn uses_compacted_bottom_aligned_descent_floor(normal_font: Option<&NormalFont>) -> bool {
     match normal_font {
         None => true,
-        Some(font) if font.uses_theme_scheme && font.theme_declares_script_faces => false,
+        Some(font) if font.resolves_through_theme_script_faces() => false,
         Some(font) => {
             font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT && names_a_substituted_family(font)
         }
@@ -2717,7 +2820,14 @@ pub(super) fn build_rows_for_range(
                         text: element.get_text().to_string(),
                         style: element
                             .get_run_properties()
-                            .map(|font| apply_rich_run_font(&text_style, font, ctx.theme.as_ref()))
+                            .map(|font| {
+                                apply_rich_run_font(
+                                    &text_style,
+                                    font,
+                                    ctx.theme.as_ref(),
+                                    ctx.normal_font.as_ref(),
+                                )
+                            })
                             .unwrap_or_else(|| text_style.clone()),
                         href: None,
                         footnote: None,
@@ -2873,7 +2983,9 @@ pub(super) fn build_rows_for_range(
 }
 
 /// The point metric every column width is scaled by. Excel derives it from
-/// the workbook Normal font; cell fonts do not participate (issue #366).
+/// the workbook Normal font — the face it resolves to, so a theme-scheme
+/// font prices its unit as the theme's UI-script face (issue #1380); cell
+/// fonts do not participate (issue #366).
 /// When `xl/styles.xml` was unreadable, fall back to the dominant cell font
 /// — which on a sheet with no cells lands on the legacy 5.25pt default.
 /// Shared by populated and drawing-only sheets so both scale from the same
@@ -2884,7 +2996,7 @@ pub(super) fn resolve_column_unit_pt(
     normal_font: Option<&NormalFont>,
 ) -> f64 {
     normal_font
-        .map(|font| column_unit_pt(&font.family, font.size_pt))
+        .map(|font| column_unit_pt(font.resolved_family(), font.size_pt))
         .unwrap_or_else(|| sheet_column_unit_pt(sheet))
 }
 

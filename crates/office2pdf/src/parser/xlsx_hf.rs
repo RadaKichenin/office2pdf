@@ -155,11 +155,12 @@ pub(super) fn parse_hf_format_string(
     // segments rather than one string, because `&"Font,Style"` and `&<n>`
     // change the face and size partway through a section and every run after
     // the code takes the new values (issue #633).
-    // Seeded with the Normal font so a run ahead of the first `&"Font"` code
-    // carries it; `open_segment` clones the open segment's style, so a later
-    // code overrides it from that point on and nothing else has to thread it.
+    // Seeded with the Normal font — the face it resolves to (issue #1380) —
+    // so a run ahead of the first `&"Font"` code carries it; `open_segment`
+    // clones the open segment's style, so a later code overrides it from that
+    // point on and nothing else has to thread it.
     let opening_segment = || HfSegment {
-        family: normal_font.map(|font| font.family.clone()),
+        family: normal_font.map(|font| font.resolved_family().to_string()),
         size_pt: normal_font.map(|font| font.size_pt),
         color: normal_font.and_then(|font| font.color),
         ..HfSegment::default()

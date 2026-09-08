@@ -1,0 +1,1121 @@
+{
+ "pages": [
+  {
+   "lines": {
+    "gt": 40,
+    "out": 40,
+    "matched": 4,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 0,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.0,
+    "worst_dy": 0.0,
+    "worst_dy_signed": 0.0,
+    "worst_line": "FirstName"
+   },
+   "dx0": {
+    "mean_abs": 25.529475294117645,
+    "worst": -56.00036
+   },
+   "width": {
+    "mean_abs_pct": 0.018172990694932972,
+    "worst_pct": 0.04439160117668207
+   },
+   "instances": {
+    "compared": 17,
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 13,
+    "large_shifts": [
+     {
+      "label": "LastName",
+      "gt_x": 128.0,
+      "gt_y": 68.0,
+      "out_x": 114.0,
+      "out_y": 68.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.011854754440977208
+     },
+     {
+      "label": "Email",
+      "gt_x": 203.0,
+      "gt_y": 68.0,
+      "out_x": 175.0,
+      "out_y": 68.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.017371183865191934
+     },
+     {
+      "label": "Age",
+      "gt_x": 278.0,
+      "gt_y": 68.0,
+      "out_x": 236.0,
+      "out_y": 68.0,
+      "dx": -42.0,
+      "dy": 0.0,
+      "width_pct": -0.036616444494113304
+     },
+     {
+      "label": "Occupation",
+      "gt_x": 353.0,
+      "gt_y": 68.0,
+      "out_x": 297.0,
+      "out_y": 68.0,
+      "dx": -56.0,
+      "dy": 0.0,
+      "width_pct": 0.03703165374681973
+     },
+     {
+      "label": "Gleichner",
+      "gt_x": 128.0,
+      "gt_y": 86.0,
+      "out_x": 114.0,
+      "out_y": 86.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.028165257408559012
+     },
+     {
+      "label": "Reta6@hotmail.com",
+      "gt_x": 203.0,
+      "gt_y": 86.0,
+      "out_x": 175.0,
+      "out_y": 86.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.010021756303959307
+     },
+     {
+      "label": "56CorporateSecuritySupervisor",
+      "gt_x": 334.0,
+      "gt_y": 86.0,
+      "out_x": 277.99964,
+      "out_y": 86.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.0007696975646229617
+     },
+     {
+      "label": "Koepp",
+      "gt_x": 128.0,
+      "gt_y": 176.0,
+      "out_x": 114.0,
+      "out_y": 176.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": -0.013888884829509895
+     },
+     {
+      "label": "Twila8@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 176.0,
+      "out_x": 175.0,
+      "out_y": 176.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.005850691467688059
+     },
+     {
+      "label": "46ProductQualityEngineer",
+      "gt_x": 334.0,
+      "gt_y": 176.0,
+      "out_x": 277.99964,
+      "out_y": 176.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.01266972836543949
+     },
+     {
+      "label": "MacGyver",
+      "gt_x": 128.0,
+      "gt_y": 392.0,
+      "out_x": 114.0,
+      "out_y": 392.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.04439160117668207
+     },
+     {
+      "label": "Jakob86@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 392.0,
+      "out_x": 175.0,
+      "out_y": 392.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.0103480496818604
+     },
+     {
+      "label": "34InternationalResponseEngineer",
+      "gt_x": 334.0,
+      "gt_y": 392.0,
+      "out_x": 277.99964,
+      "out_y": 392.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.02956485144538318
+     }
+    ],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 13,
+    "fine_shifts": [
+     {
+      "label": "LastName",
+      "gt_x": 128.0,
+      "gt_y": 68.0,
+      "out_x": 114.0,
+      "out_y": 68.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.011854754440977208
+     },
+     {
+      "label": "Email",
+      "gt_x": 203.0,
+      "gt_y": 68.0,
+      "out_x": 175.0,
+      "out_y": 68.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.017371183865191934
+     },
+     {
+      "label": "Age",
+      "gt_x": 278.0,
+      "gt_y": 68.0,
+      "out_x": 236.0,
+      "out_y": 68.0,
+      "dx": -42.0,
+      "dy": 0.0,
+      "width_pct": -0.036616444494113304
+     },
+     {
+      "label": "Occupation",
+      "gt_x": 353.0,
+      "gt_y": 68.0,
+      "out_x": 297.0,
+      "out_y": 68.0,
+      "dx": -56.0,
+      "dy": 0.0,
+      "width_pct": 0.03703165374681973
+     },
+     {
+      "label": "Gleichner",
+      "gt_x": 128.0,
+      "gt_y": 86.0,
+      "out_x": 114.0,
+      "out_y": 86.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.028165257408559012
+     },
+     {
+      "label": "Reta6@hotmail.com",
+      "gt_x": 203.0,
+      "gt_y": 86.0,
+      "out_x": 175.0,
+      "out_y": 86.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.010021756303959307
+     },
+     {
+      "label": "56CorporateSecuritySupervisor",
+      "gt_x": 334.0,
+      "gt_y": 86.0,
+      "out_x": 277.99964,
+      "out_y": 86.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.0007696975646229617
+     },
+     {
+      "label": "Koepp",
+      "gt_x": 128.0,
+      "gt_y": 176.0,
+      "out_x": 114.0,
+      "out_y": 176.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": -0.013888884829509895
+     },
+     {
+      "label": "Twila8@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 176.0,
+      "out_x": 175.0,
+      "out_y": 176.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.005850691467688059
+     },
+     {
+      "label": "46ProductQualityEngineer",
+      "gt_x": 334.0,
+      "gt_y": 176.0,
+      "out_x": 277.99964,
+      "out_y": 176.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.01266972836543949
+     },
+     {
+      "label": "MacGyver",
+      "gt_x": 128.0,
+      "gt_y": 392.0,
+      "out_x": 114.0,
+      "out_y": 392.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.04439160117668207
+     },
+     {
+      "label": "Jakob86@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 392.0,
+      "out_x": 175.0,
+      "out_y": 392.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.0103480496818604
+     },
+     {
+      "label": "34InternationalResponseEngineer",
+      "gt_x": 334.0,
+      "gt_y": 392.0,
+      "out_x": 277.99964,
+      "out_y": 392.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.02956485144538318
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": [],
+    "unmatched_hidden_gt": 0,
+    "unmatched_hidden_out": 0,
+    "unmatched_hidden_gt_text": [],
+    "unmatched_hidden_out_text": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 3,
+    "worst_delta": 0.0
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "topology": {
+    "groups": 0,
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 36,
+    "out_lines": 36,
+    "samples": [
+     "LaylaHermannBrice_Tromp@gmail.com34PrincipalDataTechnician",
+     "DaronThielCayla_Runte76@gmail.co4m3ForwardMobilityEngineer",
+     "TremaineWaters-WatsicMaadison_Kuhic56@hotm4a1il.DcoirmectAss"
+    ]
+   },
+   "rects": {
+    "gt_count": 0,
+    "out_count": 0,
+    "canonical_gt_count": 0,
+    "canonical_out_count": 0,
+    "matched": 0,
+    "unmatched_gt": 0,
+    "unmatched_out": 0,
+    "mean_center_delta": 0.0,
+    "geometry_threshold": 0.5,
+    "raw_geometry_mismatch_count": 0,
+    "raw_geometry_mismatch_samples": [],
+    "coverage_equivalent_count": 0,
+    "coverage_unmodeled_count": 0,
+    "geometry_mismatch_count": 0,
+    "geometry_mismatch_samples": [],
+    "samples": [],
+    "x": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "y": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "width": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "height": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "edges": {
+     "left": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "top": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "right": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "bottom": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     }
+    }
+   },
+   "noise_floor": 0.5
+  },
+  {
+   "lines": {
+    "gt": 40,
+    "out": 40,
+    "matched": 6,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 0,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.0,
+    "worst_dy": 0.0,
+    "worst_dy_signed": 0.0,
+    "worst_line": "Jordon"
+   },
+   "dx0": {
+    "mean_abs": 24.50009,
+    "worst": -56.00036
+   },
+   "width": {
+    "mean_abs_pct": 0.019196618579652745,
+    "worst_pct": 0.04796103682597525
+   },
+   "instances": {
+    "compared": 24,
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 18,
+    "large_shifts": [
+     {
+      "label": "Bode",
+      "gt_x": 128.0,
+      "gt_y": 140.0,
+      "out_x": 114.0,
+      "out_y": 140.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": -0.024888023951421007
+     },
+     {
+      "label": "Rae89@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 140.0,
+      "out_x": 175.0,
+      "out_y": 140.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.011885364923634692
+     },
+     {
+      "label": "18HumanApplicationsRepresentative",
+      "gt_x": 334.0,
+      "gt_y": 140.0,
+      "out_x": 277.99964,
+      "out_y": 140.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.03340683661313337
+     },
+     {
+      "label": "Schumm",
+      "gt_x": 128.0,
+      "gt_y": 410.0,
+      "out_x": 114.0,
+      "out_y": 410.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.022776889614575455
+     },
+     {
+      "label": "Hope44@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 410.0,
+      "out_x": 175.0,
+      "out_y": 410.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.026582394121438188
+     },
+     {
+      "label": "57SeniorResearchOfficer",
+      "gt_x": 334.0,
+      "gt_y": 410.0,
+      "out_x": 277.99964,
+      "out_y": 410.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.013190760465246903
+     },
+     {
+      "label": "Erdman",
+      "gt_x": 128.0,
+      "gt_y": 536.0,
+      "out_x": 114.0,
+      "out_y": 536.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.022720609791840336
+     },
+     {
+      "label": "Eulah90@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 536.0,
+      "out_x": 175.0,
+      "out_y": 536.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.02155280598270276
+     },
+     {
+      "label": "48InvestorQualityAssistant",
+      "gt_x": 334.0,
+      "gt_y": 536.0,
+      "out_x": 277.99964,
+      "out_y": 536.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.014332987237991928
+     },
+     {
+      "label": "Schroeder",
+      "gt_x": 128.0,
+      "gt_y": 716.0,
+      "out_x": 114.0,
+      "out_y": 716.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.000626649562809148
+     },
+     {
+      "label": "Toby76@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 716.0,
+      "out_x": 175.0,
+      "out_y": 716.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.04796103682597525
+     },
+     {
+      "label": "28CorporateOptimizationTechnician",
+      "gt_x": 334.0,
+      "gt_y": 716.0,
+      "out_x": 277.99964,
+      "out_y": 716.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.013839173151897262
+     },
+     {
+      "label": "Towne",
+      "gt_x": 128.0,
+      "gt_y": 752.0,
+      "out_x": 114.0,
+      "out_y": 752.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.013597085733671604
+     },
+     {
+      "label": "Saul68@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 752.0,
+      "out_x": 175.0,
+      "out_y": 752.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.013003992073783955
+     },
+     {
+      "label": "49ChiefMetricsAgent",
+      "gt_x": 334.0,
+      "gt_y": 752.0,
+      "out_x": 277.99964,
+      "out_y": 752.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.0017676629692223774
+     },
+     {
+      "label": "Wiegand",
+      "gt_x": 128.0,
+      "gt_y": 770.0,
+      "out_x": 114.0,
+      "out_y": 770.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.0019206986124065588
+     },
+     {
+      "label": "Kobe9@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 770.0,
+      "out_x": 175.0,
+      "out_y": 770.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.019536268842113725
+     },
+     {
+      "label": "41HumanConfigurationOfficer",
+      "gt_x": 334.0,
+      "gt_y": 770.0,
+      "out_x": 277.99964,
+      "out_y": 770.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.027303099392767757
+     }
+    ],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 18,
+    "fine_shifts": [
+     {
+      "label": "Bode",
+      "gt_x": 128.0,
+      "gt_y": 140.0,
+      "out_x": 114.0,
+      "out_y": 140.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": -0.024888023951421007
+     },
+     {
+      "label": "Rae89@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 140.0,
+      "out_x": 175.0,
+      "out_y": 140.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.011885364923634692
+     },
+     {
+      "label": "18HumanApplicationsRepresentative",
+      "gt_x": 334.0,
+      "gt_y": 140.0,
+      "out_x": 277.99964,
+      "out_y": 140.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.03340683661313337
+     },
+     {
+      "label": "Schumm",
+      "gt_x": 128.0,
+      "gt_y": 410.0,
+      "out_x": 114.0,
+      "out_y": 410.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.022776889614575455
+     },
+     {
+      "label": "Hope44@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 410.0,
+      "out_x": 175.0,
+      "out_y": 410.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.026582394121438188
+     },
+     {
+      "label": "57SeniorResearchOfficer",
+      "gt_x": 334.0,
+      "gt_y": 410.0,
+      "out_x": 277.99964,
+      "out_y": 410.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.013190760465246903
+     },
+     {
+      "label": "Erdman",
+      "gt_x": 128.0,
+      "gt_y": 536.0,
+      "out_x": 114.0,
+      "out_y": 536.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.022720609791840336
+     },
+     {
+      "label": "Eulah90@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 536.0,
+      "out_x": 175.0,
+      "out_y": 536.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.02155280598270276
+     },
+     {
+      "label": "48InvestorQualityAssistant",
+      "gt_x": 334.0,
+      "gt_y": 536.0,
+      "out_x": 277.99964,
+      "out_y": 536.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.014332987237991928
+     },
+     {
+      "label": "Schroeder",
+      "gt_x": 128.0,
+      "gt_y": 716.0,
+      "out_x": 114.0,
+      "out_y": 716.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.000626649562809148
+     },
+     {
+      "label": "Toby76@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 716.0,
+      "out_x": 175.0,
+      "out_y": 716.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.04796103682597525
+     },
+     {
+      "label": "28CorporateOptimizationTechnician",
+      "gt_x": 334.0,
+      "gt_y": 716.0,
+      "out_x": 277.99964,
+      "out_y": 716.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.013839173151897262
+     },
+     {
+      "label": "Towne",
+      "gt_x": 128.0,
+      "gt_y": 752.0,
+      "out_x": 114.0,
+      "out_y": 752.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.013597085733671604
+     },
+     {
+      "label": "Saul68@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 752.0,
+      "out_x": 175.0,
+      "out_y": 752.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.013003992073783955
+     },
+     {
+      "label": "49ChiefMetricsAgent",
+      "gt_x": 334.0,
+      "gt_y": 752.0,
+      "out_x": 277.99964,
+      "out_y": 752.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": -0.0017676629692223774
+     },
+     {
+      "label": "Wiegand",
+      "gt_x": 128.0,
+      "gt_y": 770.0,
+      "out_x": 114.0,
+      "out_y": 770.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.0019206986124065588
+     },
+     {
+      "label": "Kobe9@gmail.com",
+      "gt_x": 203.0,
+      "gt_y": 770.0,
+      "out_x": 175.0,
+      "out_y": 770.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": -0.019536268842113725
+     },
+     {
+      "label": "41HumanConfigurationOfficer",
+      "gt_x": 334.0,
+      "gt_y": 770.0,
+      "out_x": 277.99964,
+      "out_y": 770.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.027303099392767757
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": [],
+    "unmatched_hidden_gt": 0,
+    "unmatched_hidden_out": 0,
+    "unmatched_hidden_gt_text": [],
+    "unmatched_hidden_out_text": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 5,
+    "worst_delta": 0.0
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "topology": {
+    "groups": 0,
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 34,
+    "out_lines": 34,
+    "samples": [
+     "OscarBaumbachLeann44@yahoo.com57CentralMarketsAssistant",
+     "DylanKshlerinHollie99@hotmail.com65LeadGroupStrategist",
+     "ErichFraneyMaximillian_Kovacek@ho6t4mIanitl.ecronmationalDiv"
+    ]
+   },
+   "rects": {
+    "gt_count": 0,
+    "out_count": 0,
+    "canonical_gt_count": 0,
+    "canonical_out_count": 0,
+    "matched": 0,
+    "unmatched_gt": 0,
+    "unmatched_out": 0,
+    "mean_center_delta": 0.0,
+    "geometry_threshold": 0.5,
+    "raw_geometry_mismatch_count": 0,
+    "raw_geometry_mismatch_samples": [],
+    "coverage_equivalent_count": 0,
+    "coverage_unmodeled_count": 0,
+    "geometry_mismatch_count": 0,
+    "geometry_mismatch_samples": [],
+    "samples": [],
+    "x": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "y": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "width": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "height": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "edges": {
+     "left": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "top": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "right": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "bottom": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     }
+    }
+   },
+   "noise_floor": 0.5
+  },
+  {
+   "lines": {
+    "gt": 21,
+    "out": 21,
+    "matched": 2,
+    "missing": 0,
+    "extra": 0,
+    "deviant": 0,
+    "missing_text": [],
+    "extra_text": []
+   },
+   "baseline": {
+    "mean_abs_dy": 0.0,
+    "worst_dy": 0.0,
+    "worst_dy_signed": 0.0,
+    "worst_line": "Merritt"
+   },
+   "dx0": {
+    "mean_abs": 24.50009,
+    "worst": -56.00036
+   },
+   "width": {
+    "mean_abs_pct": 0.02311865244466029,
+    "worst_pct": 0.055913405656747614
+   },
+   "instances": {
+    "compared": 8,
+    "large_shift_threshold": 5.0,
+    "large_shift_count": 6,
+    "large_shifts": [
+     {
+      "label": "Friesen",
+      "gt_x": 128.0,
+      "gt_y": 104.0,
+      "out_x": 114.0,
+      "out_y": 104.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.014240852891699164
+     },
+     {
+      "label": "Elvis60@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 104.0,
+      "out_x": 175.0,
+      "out_y": 104.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.020433019904035104
+     },
+     {
+      "label": "32DirectIntegrationProducer",
+      "gt_x": 334.0,
+      "gt_y": 104.0,
+      "out_x": 277.99964,
+      "out_y": 104.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.055913405656747614
+     },
+     {
+      "label": "Ritchie",
+      "gt_x": 128.0,
+      "gt_y": 284.0,
+      "out_x": 114.0,
+      "out_y": 284.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.005070054315730521
+     },
+     {
+      "label": "Onie1@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 284.0,
+      "out_x": 175.0,
+      "out_y": 284.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.02129693999728116
+     },
+     {
+      "label": "43InternalApplicationsAssistant",
+      "gt_x": 334.0,
+      "gt_y": 284.0,
+      "out_x": 277.99964,
+      "out_y": 284.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.023785205538766157
+     }
+    ],
+    "fine_shift_threshold": 0.5,
+    "fine_shift_count": 6,
+    "fine_shifts": [
+     {
+      "label": "Friesen",
+      "gt_x": 128.0,
+      "gt_y": 104.0,
+      "out_x": 114.0,
+      "out_y": 104.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.014240852891699164
+     },
+     {
+      "label": "Elvis60@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 104.0,
+      "out_x": 175.0,
+      "out_y": 104.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.020433019904035104
+     },
+     {
+      "label": "32DirectIntegrationProducer",
+      "gt_x": 334.0,
+      "gt_y": 104.0,
+      "out_x": 277.99964,
+      "out_y": 104.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.055913405656747614
+     },
+     {
+      "label": "Ritchie",
+      "gt_x": 128.0,
+      "gt_y": 284.0,
+      "out_x": 114.0,
+      "out_y": 284.0,
+      "dx": -14.0,
+      "dy": 0.0,
+      "width_pct": 0.005070054315730521
+     },
+     {
+      "label": "Onie1@yahoo.com",
+      "gt_x": 203.0,
+      "gt_y": 284.0,
+      "out_x": 175.0,
+      "out_y": 284.0,
+      "dx": -28.0,
+      "dy": 0.0,
+      "width_pct": 0.02129693999728116
+     },
+     {
+      "label": "43InternalApplicationsAssistant",
+      "gt_x": 334.0,
+      "gt_y": 284.0,
+      "out_x": 277.99964,
+      "out_y": 284.0,
+      "dx": -56.00036,
+      "dy": 0.0,
+      "width_pct": 0.023785205538766157
+     }
+    ]
+   },
+   "visibility": {
+    "mismatch_count": 0,
+    "mismatches": [],
+    "unmatched_hidden_gt": 0,
+    "unmatched_hidden_out": 0,
+    "unmatched_hidden_gt_text": [],
+    "unmatched_hidden_out_text": []
+   },
+   "visible_fills": {
+    "mismatch_count": 0,
+    "mismatches": []
+   },
+   "pitch": {
+    "pairs": 1,
+    "worst_delta": 0.0
+   },
+   "wraps": {
+    "count": 0,
+    "samples": []
+   },
+   "topology": {
+    "groups": 0,
+    "gt_lines": 0,
+    "out_lines": 0,
+    "samples": []
+   },
+   "reflow": {
+    "gt_lines": 19,
+    "out_lines": 19,
+    "samples": [
+     "CelestinoOlsonDahlia52@gmail.com63HumanSecurityPlanner",
+     "LupeGerlachDejon_Collier11@gmail.c5o0mLeadFunctionalityDirec",
+     "DallasPacochaDoyle_Leffler76@hotmai6l.0coCmustomerCommunicat"
+    ]
+   },
+   "rects": {
+    "gt_count": 0,
+    "out_count": 0,
+    "canonical_gt_count": 0,
+    "canonical_out_count": 0,
+    "matched": 0,
+    "unmatched_gt": 0,
+    "unmatched_out": 0,
+    "mean_center_delta": 0.0,
+    "geometry_threshold": 0.5,
+    "raw_geometry_mismatch_count": 0,
+    "raw_geometry_mismatch_samples": [],
+    "coverage_equivalent_count": 0,
+    "coverage_unmodeled_count": 0,
+    "geometry_mismatch_count": 0,
+    "geometry_mismatch_samples": [],
+    "samples": [],
+    "x": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "y": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "width": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "height": {
+     "mean_abs": 0.0,
+     "worst": 0.0
+    },
+    "edges": {
+     "left": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "top": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "right": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     },
+     "bottom": {
+      "mean_abs": 0.0,
+      "worst": 0.0
+     }
+    }
+   },
+   "noise_floor": 0.5
+  }
+ ],
+ "gt_pages": 6,
+ "out_pages": 3
+}

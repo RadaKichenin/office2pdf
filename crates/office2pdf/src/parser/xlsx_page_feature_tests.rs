@@ -898,14 +898,49 @@ fn test_hf_code_midway_splits_the_section() {
 ///
 /// `_x005F_x000D_` decodes to the literal text `_x000D_`, exactly as it does
 /// in the pinned native Excel probe from `Gift Budget and Tracker1.xlsx`.
+/// A run ahead of any font code takes the face the Normal font resolves to
+/// through the theme, not the name it declares: Excel seeds the header and
+/// footer with the Normal style, and a theme-scheme Normal font paints in
+/// the theme's UI-script face everywhere else on the sheet (issue #1380).
+#[test]
+fn a_header_footer_run_before_any_font_code_takes_the_resolved_normal_face() {
+    let normal_font = NormalFont {
+        family: "Calibri".to_string(),
+        size_pt: 12.0,
+        color: None,
+        theme_scheme: Some(ThemeFontSlot::Minor),
+        theme_ui_script_faces: ThemeUiScriptFaces {
+            minor: Some("맑은 고딕".to_string()),
+            major: None,
+        },
+    };
+    let hf = parse_hf_format_string("&CPage &P", "Sheet1", Some(&normal_font), &mut Vec::new())
+        .expect("header parsed");
+    let families: Vec<Option<String>> = hf.paragraphs[0]
+        .elements
+        .iter()
+        .filter_map(|element| match element {
+            HFInline::Run(run) => Some(run.style.font_family.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(!families.is_empty(), "the header keeps its run");
+    assert!(
+        families
+            .iter()
+            .all(|family| family.as_deref() == Some("맑은 고딕")),
+        "every seeded run paints in the resolved face, got {families:?}"
+    );
+}
+
 #[test]
 fn a_header_footer_run_before_any_font_code_takes_the_normal_font() {
     let normal_font = NormalFont {
         family: "Corbel".to_string(),
         size_pt: 11.0,
         color: Some(Color::new(0x44, 0x54, 0x6A)),
-        uses_theme_scheme: false,
-        theme_declares_script_faces: false,
+        theme_scheme: None,
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
     let hf = parse_hf_format_string(
         r#"&L_x005F_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal"#,

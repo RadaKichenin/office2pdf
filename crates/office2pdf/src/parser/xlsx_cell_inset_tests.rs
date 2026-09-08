@@ -302,6 +302,11 @@ fn test_a_centred_cell_holds_the_column_centre_at_any_cell_font() {
         style
             .get_alignment_mut()
             .set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Center);
+        // Name the face outright: umya's default cell font defers to the
+        // theme's minor scheme, which resolves to the theme's UI-script face
+        // and a different column unit (issue #1380), while this measurement
+        // is Calibri 32's.
+        style.get_font_mut().set_name("Calibri");
         style.get_font_mut().set_size(32.0);
     }
     let mut cursor = Cursor::new(Vec::new());
