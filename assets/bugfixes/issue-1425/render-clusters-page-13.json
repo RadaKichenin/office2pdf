@@ -1,0 +1,83 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 1329.8688,
+      "bbox_pt": {
+        "height": 53.28,
+        "width": 50.4,
+        "x": 354.48,
+        "y": 384.72
+      },
+      "disposition": {
+        "issue": "#1429",
+        "kind": "issue"
+      },
+      "id": "p13-08b384d8409c",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 1329.1776,
+      "bbox_pt": {
+        "height": 42.48,
+        "width": 52.8,
+        "x": 311.52,
+        "y": 233.28
+      },
+      "disposition": {
+        "issue": "#1429",
+        "kind": "issue"
+      },
+      "id": "p13-a6c9a40502d6",
+      "region": "center"
+    },
+    {
+      "area_pt2": 1328.3136,
+      "bbox_pt": {
+        "height": 53.76,
+        "width": 48.96,
+        "x": 517.92,
+        "y": 390.96
+      },
+      "disposition": {
+        "issue": "#1429",
+        "kind": "issue"
+      },
+      "id": "p13-a20b33566db3",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 1326.0096,
+      "bbox_pt": {
+        "height": 48.72,
+        "width": 33.12,
+        "x": 465.6,
+        "y": 144.72
+      },
+      "disposition": {
+        "issue": "#1429",
+        "kind": "issue"
+      },
+      "id": "p13-2ae62896d935",
+      "region": "top"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 13,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 4,
+    "duplicate": 0,
+    "total": 4,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

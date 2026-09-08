@@ -5592,6 +5592,37 @@ fn generate_chart_radar_plot(
     write_chart_area_end(out, wraps_title);
 }
 
+/// The margin PowerPoint keeps between an automatically laid-out pie or
+/// doughnut plot and its chart area, per side, in points.
+///
+/// Measured on native Microsoft PowerPoint for Mac 16.112 exports through
+/// `scripts/probe_harness.py --backend office`
+/// (`scripts/probes/issue-1425-doughnut-plot-size.json` and its width, pie and
+/// title companions), reading the plot circle back off the exported wedge
+/// paths with `mutool draw -F trace`. The circle's diameter is the chart
+/// area's smaller side less exactly 22pt at every size probed — 122.4, 160,
+/// 200, 240, 280, 320 and 480pt of frame, over both a 4:3 and a 16:9 deck, and
+/// with either side binding. The reduction does not scale with the frame, so
+/// it is an absolute margin rather than a fraction: over that 3.9x range a
+/// proportional model drifts by more than 17pt.
+///
+/// Zero for every other host. Excel and Word draw their own automatic pies and
+/// neither margin has been measured, so they keep the plot they drew before
+/// (issue #1425).
+const PPTX_PIE_PLOT_INSET_PT: f64 = 11.0;
+
+/// The inset [`PPTX_PIE_PLOT_INSET_PT`] describes, for the chart at hand.
+///
+/// A chart whose `c:plotArea/c:layout` states a rectangle is placed by that
+/// rectangle rather than by the automatic rule, so it is left where it was.
+fn automatic_pie_plot_inset_pt(chart: &Chart) -> f64 {
+    if chart.host == crate::ir::ChartHost::Presentation && chart.plot_area_layout.is_none() {
+        PPTX_PIE_PLOT_INSET_PT
+    } else {
+        0.0
+    }
+}
+
 /// Render a pie chart as a circle of wedges, each sized by its share of the
 /// series total, with the legend on the edge `<c:legendPos>` asks for.
 fn generate_chart_pie_plot(
@@ -5602,6 +5633,8 @@ fn generate_chart_pie_plot(
 ) {
     const PIE_DIAMETER: f64 = 200.0;
     const PIE_LEGEND_ROW_H: f64 = 14.0;
+
+    let inset: f64 = automatic_pie_plot_inset_pt(chart);
 
     let Some(series) = chart.series.first() else {
         return;
@@ -5631,13 +5664,14 @@ fn generate_chart_pie_plot(
     let (total_w, total_h) = match frame {
         Some(extent) => extent,
         None => (
-            legend.left + PIE_DIAMETER + legend.right,
-            legend.top + PIE_DIAMETER + legend.bottom,
+            legend.left + PIE_DIAMETER + 2.0 * inset + legend.right,
+            legend.top + PIE_DIAMETER + 2.0 * inset + legend.bottom,
         ),
     };
-    // The pie stays circular, so it takes the smaller of the two axes.
-    let diameter: f64 = (total_w - legend.left - legend.right)
-        .min(total_h - legend.top - legend.bottom)
+    // The pie stays circular, so it takes the smaller of the two axes, less
+    // the margin the host application keeps around an automatic plot.
+    let diameter: f64 = (total_w - legend.left - legend.right - 2.0 * inset)
+        .min(total_h - legend.top - legend.bottom - 2.0 * inset)
         .max(MIN_PLOT_PT);
     let radius: f64 = diameter / 2.0;
     let centre_x: f64 = legend.left + (total_w - legend.left - legend.right) / 2.0;

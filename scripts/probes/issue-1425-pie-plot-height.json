@@ -1,0 +1,14 @@
+{
+  "name": "issue-1425-pie-plot-height",
+  "base": "../../tests/fixtures/pptx/pie-chart.pptx",
+  "part": "ppt/slides/slide1.xml",
+  "factor": "graphic frame a:ext cy (EMU)",
+  "page": 1,
+  "variants": [
+    {"value": "2032000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"6096000\" cy=\"2032000\"", "count": 1},
+    {"value": "2540000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"6096000\" cy=\"2540000\"", "count": 1},
+    {"value": "3048000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"6096000\" cy=\"3048000\"", "count": 1},
+    {"value": "3556000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"6096000\" cy=\"3556000\"", "count": 1},
+    {"value": "4572000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"6096000\" cy=\"4572000\"", "count": 1}
+  ]
+}

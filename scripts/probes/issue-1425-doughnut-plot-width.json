@@ -1,0 +1,13 @@
+{
+  "name": "issue-1425-doughnut-plot-width",
+  "base": "../../tests/fixtures/pptx/office2pdf_introduction_ko.pptx",
+  "part": "ppt/slides/slide29.xml",
+  "factor": "graphic frame a:ext cx (EMU), cy pinned to 4064000",
+  "page": 29,
+  "variants": [
+    {"value": "1554480", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"1554480\" cy=\"4064000\"", "count": 1},
+    {"value": "2032000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"2032000\" cy=\"4064000\"", "count": 1},
+    {"value": "2540000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"2540000\" cy=\"4064000\"", "count": 1},
+    {"value": "3048000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"3048000\" cy=\"4064000\"", "count": 1}
+  ]
+}

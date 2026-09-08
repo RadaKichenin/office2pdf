@@ -1,0 +1,15 @@
+{
+  "name": "issue-1425-doughnut-plot-size",
+  "base": "../../tests/fixtures/pptx/office2pdf_introduction_ko.pptx",
+  "part": "ppt/slides/slide29.xml",
+  "factor": "square graphic frame a:ext side (EMU)",
+  "page": 29,
+  "variants": [
+    {"value": "1554480", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"1554480\" cy=\"1554480\"", "count": 1},
+    {"value": "2032000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"2032000\" cy=\"2032000\"", "count": 1},
+    {"value": "2540000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"2540000\" cy=\"2540000\"", "count": 1},
+    {"value": "3048000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"3048000\" cy=\"3048000\"", "count": 1},
+    {"value": "3556000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"3556000\" cy=\"3556000\"", "count": 1},
+    {"value": "4064000", "find": "cx=\"2651760\" cy=\"1554480\"", "replace": "cx=\"4064000\" cy=\"4064000\"", "count": 1}
+  ]
+}

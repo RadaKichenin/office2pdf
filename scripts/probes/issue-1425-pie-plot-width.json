@@ -1,0 +1,14 @@
+{
+  "name": "issue-1425-pie-plot-width",
+  "base": "../../tests/fixtures/pptx/pie-chart.pptx",
+  "part": "ppt/slides/slide1.xml",
+  "factor": "graphic frame a:ext cx (EMU)",
+  "page": 1,
+  "variants": [
+    {"value": "1524000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"1524000\" cy=\"4064000\"", "count": 1},
+    {"value": "2032000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"2032000\" cy=\"4064000\"", "count": 1},
+    {"value": "2540000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"2540000\" cy=\"4064000\"", "count": 1},
+    {"value": "3048000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"3048000\" cy=\"4064000\"", "count": 1},
+    {"value": "3556000", "find": "cx=\"6096000\" cy=\"4064000\"", "replace": "cx=\"3556000\" cy=\"4064000\"", "count": 1}
+  ]
+}
