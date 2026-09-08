@@ -4,6 +4,10 @@
 //! (default order: down, then over). office2pdf previously clipped them at
 //! the right page edge, silently losing content.
 //!
+//! An unwrapped line that spills past a page-column boundary is printed
+//! again on the next page-column, shifted left by the width already printed
+//! (issue #1381); see [`slice_table_columns`].
+//!
 //! A drawing-only sheet has no columns to split on, so its page-columns come
 //! from the drawings' extents instead ([`split_drawing_only_page`],
 //! issue #713).
@@ -377,26 +381,83 @@ fn column_groups(
     groups
 }
 
+/// The tail of an unwrapped line that reaches past a page-column boundary
+/// from a cell printed before it.
+struct SpillContinuation<'a> {
+    /// The cell whose line continues.
+    source: &'a TableCell,
+    /// Width of the line already printed before the boundary, from the
+    /// source cell's own left gridline.
+    offset_pt: f64,
+    /// Width the line still reaches past the boundary.
+    remaining_pt: f64,
+}
+
+/// The continuation `cell`, starting at column `cell_start` before
+/// `boundary`, sends past that boundary — `None` when its line ends first.
+///
+/// A merged cell's spill is the merge's own width, so it never reaches past
+/// the merge and never continues this way; the straddling merge is handled
+/// by [`slice_table_columns`]'s blanking branch instead.
+fn spill_continuation_past<'a>(
+    cell: &'a TableCell,
+    cell_start: usize,
+    boundary: usize,
+    column_widths: &[f64],
+) -> Option<SpillContinuation<'a>> {
+    let spill_width: f64 = cell.spill_width?;
+    let offset_pt: f64 = column_widths[cell_start..boundary].iter().sum();
+    let remaining_pt: f64 = spill_width - offset_pt;
+    (remaining_pt > 0.0).then_some(SpillContinuation {
+        source: cell,
+        offset_pt,
+        remaining_pt,
+    })
+}
+
+/// Whether a cell paints any text of its own. A cell beyond the used range
+/// carries no blocks; an explicit empty string carries a run with no text.
+fn cell_carries_text(cell: &TableCell) -> bool {
+    cell.content.iter().any(|block| match block {
+        Block::Paragraph(paragraph) => paragraph.runs.iter().any(|run| !run.text.is_empty()),
+        _ => true,
+    })
+}
+
 /// Build a table containing only columns `[start, end)`, truncating cell
 /// spans at the group boundary. A merged cell that starts before the group
 /// keeps its geometry (background/border) but blanks its content.
 ///
-/// That blanking is a stopgap, not a match for how a spreadsheet application
-/// prints the continuation. A LibreOffice render of
+/// An unmerged cell whose unwrapped line spills past the boundary is printed
+/// again on this page-column: Excel redraws the whole line in the group's
+/// first cell, shifted left by the width it already printed, and clips it at
+/// the page-column's edge. On the native export of
+/// `tests/fixtures/xlsx/customers_overflow_strip.xlsx` every tail on the strip
+/// sits exactly the first page-column's 450pt to the left of where the same
+/// word stands on page 1 (issue #1381). The continuation keeps the source's
+/// inset and vertical seat so its baseline matches; the fill and border are
+/// the strip cell's own.
+///
+/// The merge blanking is a stopgap, not a match for how a spreadsheet
+/// application prints the continuation. A LibreOffice render of
 /// `tests/fixtures/xlsx/merged_row_overflows_page_column.xlsx` redraws the
 /// merge's line on the following page-column at a negative x so its tail lands
-/// there, rather than leaving the cell empty. Reproducing that is #631; no
-/// native Excel export has been measured yet, so the exact geometry is
-/// corroborated rather than settled.
+/// there, rather than leaving the cell empty (#631); no native Excel export
+/// of a straddling merge has been measured yet.
 fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
     let column_count: usize = table.column_widths.len();
     // Tracks rows still covered by a row-spanning cell, per column.
     let mut rowspan_remaining: Vec<usize> = vec![0; column_count];
+    let group_width: f64 = table.column_widths[start..end].iter().sum();
 
     let mut rows: Vec<TableRow> = Vec::with_capacity(table.rows.len());
     for row in &table.rows {
         let mut column_cursor: usize = 0;
         let mut cells: Vec<TableCell> = Vec::new();
+        // The line, if any, still reaching into this group from a cell on an
+        // earlier page-column. Only a row's last text before the boundary can
+        // reach it: any later text or merge blocks the spill first.
+        let mut pending_continuation: Option<SpillContinuation<'_>> = None;
 
         for cell in &row.cells {
             while column_cursor < column_count && rowspan_remaining[column_cursor] > 0 {
@@ -417,6 +478,16 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
                 }
             }
 
+            if cell_end <= start {
+                if let Some(continuation) =
+                    spill_continuation_past(cell, cell_start, start, &table.column_widths)
+                {
+                    pending_continuation = Some(continuation);
+                } else if cell_carries_text(cell) || span > 1 {
+                    pending_continuation = None;
+                }
+            }
+
             let overlap_start: usize = cell_start.max(start);
             let overlap_end: usize = cell_end.min(end);
             if overlap_start < overlap_end {
@@ -434,6 +505,17 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
                     // remains of the group from this cell's left edge.
                     let available: f64 = table.column_widths[overlap_start..end].iter().sum();
                     sliced.spill_width = Some(spill.min(available));
+                } else if cell_start == start
+                    && span == 1
+                    && cell.row_span <= 1
+                    && !cell_carries_text(cell)
+                    && let Some(continuation) = pending_continuation.take()
+                {
+                    sliced.content = continuation.source.content.clone();
+                    sliced.spill_width = Some(continuation.remaining_pt.min(group_width));
+                    sliced.spill_continuation_offset_pt = Some(continuation.offset_pt);
+                    sliced.padding = continuation.source.padding;
+                    sliced.vertical_align = continuation.source.vertical_align;
                 }
                 cells.push(sliced);
             }

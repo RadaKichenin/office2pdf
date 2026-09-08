@@ -1298,18 +1298,28 @@ fn generate_table_cell(
         // Nothing is lost on the anchored side: the line starts at that same
         // content edge, so the width given up is width the text never occupies.
         let spill_inset: Insets = cell.padding.unwrap_or(default_cell_padding);
-        let clip_width_pt: f64 = (spill_width
-            - match horizontal_alignment {
-                // A centred box sits on the content box's centre, which is the
-                // cell's own centre while the two insets match. Only the
-                // difference between them offsets it — as on an icon-set cell,
-                // whose left inset carries the icon's reserve (issue #652) —
-                // and both sides have to give that up to stay inside the cell.
-                Some(Alignment::Center) => (spill_inset.left - spill_inset.right).abs(),
-                Some(Alignment::Right) => spill_inset.right,
-                _ => spill_inset.left,
-            })
-        .max(0.0);
+        // A continuation of a line begun on an earlier page-column is the one
+        // case where ink lies on the anchored side: Excel clips it at the
+        // page-column's edge, this cell's gridline, so the clip box opens on
+        // that gridline rather than on the inset content edge, and the line
+        // inside is moved back by the width already printed (issue #1381).
+        let continuation_offset_pt: Option<f64> = cell.spill_continuation_offset_pt;
+        let clip_width_pt: f64 = match continuation_offset_pt {
+            Some(_) => spill_width,
+            None => (spill_width
+                - match horizontal_alignment {
+                    // A centred box sits on the content box's centre, which is
+                    // the cell's own centre while the two insets match. Only
+                    // the difference between them offsets it — as on an
+                    // icon-set cell, whose left inset carries the icon's
+                    // reserve (issue #652) — and both sides have to give that
+                    // up to stay inside the cell.
+                    Some(Alignment::Center) => (spill_inset.left - spill_inset.right).abs(),
+                    Some(Alignment::Right) => spill_inset.right,
+                    _ => spill_inset.left,
+                })
+            .max(0.0),
+        };
         // `#place` ignores the table's `align:`, so the wrapper must anchor
         // where the cell's effective vertical alignment puts the line. The
         // hardcoded `horizon` centred bottom-aligned titles in tall rows
@@ -1355,23 +1365,58 @@ fn generate_table_cell(
         let spill_content = generate_sheet_cell_content(out, &cell.content, ctx);
         ctx.in_spill_cell = enclosing_in_spill_cell;
         spill_content?;
+        // The single-line box, moved back inside the clip for a continuation:
+        // the box's clip cuts the moved ink at the gridline, where the
+        // page-column edge is, without the move touching layout.
+        let single_line: String = match continuation_offset_pt {
+            Some(offset_pt) => format!(
+                "#move(dx: {}pt)[#box(width: measure(o2p-spill).width)[#o2p-spill]]",
+                format_geometry(spill_inset.left - offset_pt)
+            ),
+            None => "#box(width: measure(o2p-spill).width)[#o2p-spill]".to_string(),
+        };
         // Translate the placed line itself. Wrapping this whole `#context`
         // in `#move` changes the measurement region that `place(center)`
         // resolves against and can move a wide title off the page (#1493).
-        if let Some((content_dx, content_dy)) = content_shift {
+        // A continuation's clip box also steps back over the left inset so it
+        // opens on the gridline.
+        let placement_shift: Option<(f64, f64)> = match (content_shift, continuation_offset_pt) {
+            (Some((dx, dy)), Some(_)) => Some((dx - spill_inset.left, dy)),
+            (Some(shift), None) => Some(shift),
+            (None, Some(_)) => Some((-spill_inset.left, 0.0)),
+            (None, None) => None,
+        };
+        // The spill width is an estimate, so a continuation is emitted for
+        // every line that may cross the boundary. Excel prints nothing on
+        // the strip for a line that ends before it, so the placement is
+        // gated on the laid-out width reaching this gridline: the text
+        // origin sits `offset - inset` before it (issue #1381).
+        let placement_gate: String = match continuation_offset_pt {
+            Some(offset_pt) => format!(
+                "if measure(o2p-spill).width > {}pt {{",
+                format_geometry(offset_pt - spill_inset.left)
+            ),
+            None => String::new(),
+        };
+        let placement_gate_close: &str = if continuation_offset_pt.is_some() {
+            "}"
+        } else {
+            ""
+        };
+        if let Some((placement_dx, placement_dy)) = placement_shift {
             let _ = write!(
                 out,
-                "]; place({anchor} + {vertical_anchor}, dx: {}pt, dy: {}pt, box(width: {}pt, height: {height}, clip: true)\
-                 [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
-                format_geometry(content_dx),
-                format_geometry(content_dy),
+                "]; {placement_gate}place({anchor} + {vertical_anchor}, dx: {}pt, dy: {}pt, box(width: {}pt, height: {height}, clip: true)\
+                 [{single_line}]){placement_gate_close}}}#box(width: 0pt, height: {height})",
+                format_geometry(placement_dx),
+                format_geometry(placement_dy),
                 format_f64(clip_width_pt),
             );
         } else {
             let _ = write!(
                 out,
-                "]; place({anchor} + {vertical_anchor}, box(width: {}pt, height: {height}, clip: true)\
-                 [#box(width: measure(o2p-spill).width)[#o2p-spill]])}}#box(width: 0pt, height: {height})",
+                "]; {placement_gate}place({anchor} + {vertical_anchor}, box(width: {}pt, height: {height}, clip: true)\
+                 [{single_line}]){placement_gate_close}}}#box(width: 0pt, height: {height})",
                 format_f64(clip_width_pt),
             );
         }

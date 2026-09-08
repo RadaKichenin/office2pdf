@@ -1801,9 +1801,10 @@ struct NamedFaceRowHeights {
 /// agree with the named-face sweep exactly, which identifies the series, and
 /// issue #1226 folds in that sweep's other eight sizes after capturing native
 /// Excel exports of the two customer workbooks that exercise 12pt. Their 18pt
-/// row pitch now agrees; the remaining theme-face/column, final-column text
-/// overflow and pristine-sheet paper differences are tracked in #1380, #1381
-/// and #1382 respectively.
+/// row pitch now agrees, the theme-face column unit (#1380) and the pristine
+/// sheet's paper (#1382) are settled, and the final-column overflow strip is
+/// continued (#1381); what still keeps those workbooks a page-column short of
+/// the native export is their undeclared default column width (#1656).
 ///
 /// A spelling is only aliased once it has been swept as its own variant.
 /// `NanumMyeongjo` is not `나눔명조` here: it answers a column of its own that
@@ -2967,6 +2968,7 @@ pub(super) fn build_rows_for_range(
                 icon_color,
                 icon_shading,
                 spill_width,
+                spill_continuation_offset_pt: None,
                 vertical_align: cell_vertical_align,
             });
         }
