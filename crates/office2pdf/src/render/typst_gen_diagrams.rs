@@ -1980,8 +1980,11 @@ impl LegendBox {
         } else {
             let stack_h: f64 = entries as f64 * layout.row_h;
             let x: f64 = match (position, layout.right_inset) {
-                (LegendPosition::Right | LegendPosition::TopRight, Some((entry_w, edge_pad))) => {
-                    (content_x + content_w + self.right - edge_pad - entry_w)
+                // `clearance` is measured from the content box's own right
+                // edge, so a plot that reserves space inside the chart area
+                // reports a smaller one — see `powerpoint_right_legend_inset`.
+                (LegendPosition::Right | LegendPosition::TopRight, Some((entry_w, clearance))) => {
+                    (content_x + content_w + self.right - clearance - entry_w)
                         .max(content_x + content_w)
                 }
                 (LegendPosition::Left, _) => (content_x - self.left).max(0.0),
@@ -3877,14 +3880,33 @@ fn excel_legend_key_height_pt(chart: &Chart) -> Option<f64> {
     Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_legend_text_pt(chart))
 }
 
-/// Width of the widest entry in a PowerPoint right-side axis legend.
+/// Width of the widest entry in a PowerPoint right-side axis legend, and the
+/// clearance that entry keeps beyond the content box the stack is measured
+/// against.
 ///
 /// PowerPoint places the stacked column as one right-fitted group, so every
-/// key starts at the position needed by its widest label. If the source face
-/// cannot be measured (notably in font-search-free WASM builds), returning
-/// `None` preserves the prior plot-relative fallback.
+/// key starts at the position needed by its widest label. What it fits against
+/// is the *chart area's* right edge, not the plot's: repackaging
+/// `tests/fixtures/pptx/bar-chart.pptx` as a column chart through
+/// `scripts/probes/issue-1435-column-legend-center.json` leaves the legend key
+/// on the unpatched bar control's x to the last emitted digit at 10, 12, 18, 24
+/// and 36pt chart text — 441.4465, 435.6760, 418.4018, 401.1207 and 366.5520pt
+/// inside a 480pt frame.
+///
+/// The content box stops at the plot, and a column plot keeps
+/// [`axis_plot_insets`]' right inset — plus, where a secondary value axis is
+/// drawn, [`column_secondary_value_band_pt`]'s label band — inside the chart
+/// area. That reserve therefore comes back before the frame clearance is taken
+/// off, or the legend is fitted twice and lands inside its own gutter: page 8
+/// of the #1407 deck put its labels 11.011pt left of a native PowerPoint
+/// export. A bar plot reserves neither, which is why #999 and #1000 fitted the
+/// clearance alone and only the column family was wrong (#1436).
+///
+/// If the source face cannot be measured (notably in font-search-free WASM
+/// builds), returning `None` preserves the prior plot-relative fallback.
 fn powerpoint_right_legend_inset(
     chart: &Chart,
+    frame: Option<(f64, f64)>,
     names: &[String],
     key_size_pt: f64,
     key_label_gap_pt: f64,
@@ -3910,9 +3932,11 @@ fn powerpoint_right_legend_inset(
         .into_iter()
         .reduce(f64::max)?
         * size_pt;
+    let plot_right_reserve: f64 =
+        axis_plot_insets(chart, frame).1 + column_secondary_value_band_pt(chart);
     Some((
         key_size_pt + key_label_gap_pt + widest_label,
-        PPTX_LEGEND_RIGHT_EDGE_PAD_PT,
+        PPTX_LEGEND_RIGHT_EDGE_PAD_PT - plot_right_reserve,
     ))
 }
 
@@ -4759,7 +4783,7 @@ fn generate_chart_axis(
     let (horizontal_end_trim, horizontal_x_shift) =
         excel_bottom_legend_row_adjustment(chart, key.width_pt, key.label_gap_pt, &legend_names);
     let right_inset =
-        powerpoint_right_legend_inset(chart, &legend_names, key.width_pt, key.label_gap_pt);
+        powerpoint_right_legend_inset(chart, frame, &legend_names, key.width_pt, key.label_gap_pt);
     let legend_entries: usize = if chart.has_legend { series.len() } else { 0 };
     for (s_index, s) in series.iter().enumerate().take(legend_entries) {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
