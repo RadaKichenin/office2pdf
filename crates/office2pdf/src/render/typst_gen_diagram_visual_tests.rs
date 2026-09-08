@@ -4501,6 +4501,11 @@ fn a_powerpoint_column_right_legend_uses_the_native_vertical_center_at_multiple_
     // re-measured on the column exports. Our own placement differs because a
     // column's content box ends in the category band rather than the value
     // tick band, which is what this correction removes (#1435).
+    //
+    // Each value is the key's top edge inside the post-title chart body. #1437
+    // moved the plot's own top inset inside that body, and
+    // `powerpoint_right_legend_y_shift` gives that movement back so these
+    // native anchors do not follow it.
     let measurements = [
         (10.0, 133.7634),
         (12.0, 131.5808),
@@ -4591,9 +4596,13 @@ fn only_a_powerpoint_column_right_legend_takes_the_column_block_correction() {
         chart.chart_type = chart_type;
         chart.host = host;
         chart.legend_position = position;
-        powerpoint_right_legend_y_shift(&chart)
+        powerpoint_right_legend_y_shift(&chart, Some((480.0, 320.0)), 0.0)
     };
 
+    // Read with no title band, so the correction is the fitted pair alone;
+    // `a_powerpoint_column_right_legend_uses_the_native_vertical_center_at_multiple_sizes`
+    // asserts the native key tops it lands on once #1437's measured band has
+    // moved the box under it.
     for (size_pt, expected) in [
         (10.0, -6.5282),
         (12.0, -6.2498),
@@ -4815,6 +4824,127 @@ fn a_framed_column_chart_reserves_powerpoint_measured_chrome() {
     assert!(
         errors.iter().all(|(_, _, _, error)| *error <= 0.1),
         "column chart edges: {errors:?}"
+    );
+}
+
+/// `tests/fixtures/pptx/bar-chart.pptx` repackaged as the column chart the
+/// #1437 probes export, on the deck's own 480 x 320pt graphic frame.
+///
+/// `chart_space_pt` is the `c:chartSpace/c:txPr` size every string inherits;
+/// `title_pt` is the size the title states for itself, which PowerPoint prints
+/// instead of scaling the chart space's by [`CHART_AREA_TITLE_SCALE`].
+fn powerpoint_column_probe_chart(chart_space_pt: f64, title_pt: Option<f64>) -> Chart {
+    let mut chart = two_series_bar_chart(Vec::new());
+    chart.chart_type = ChartType::Column;
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.series.truncate(1);
+    chart.series[0].name = Some("Sales".to_string());
+    chart.series[0].values = vec![8.2, 3.2, 1.4, 1.2];
+    chart.categories = ["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]
+        .iter()
+        .map(|category| (*category).to_string())
+        .collect();
+    chart.title = Some("Sales".to_string());
+    chart.text_style.size_pt = Some(chart_space_pt);
+    chart.title_text_style.size_pt = title_pt;
+    chart
+}
+
+/// Plot top and bottom of the probe chart, in points below the frame's own
+/// top edge and above its bottom edge.
+fn powerpoint_column_probe_bands(chart: &Chart) -> (f64, f64) {
+    let (_, top, _, bottom) = axis_plot_rect(chart, (480.0, 320.0), true);
+    (top, 320.0 - bottom)
+}
+
+#[test]
+fn a_powerpoint_column_plot_takes_the_native_automatic_top_band() {
+    // Native PowerPoint 16.112 exports of `bar-chart.pptx` repackaged as a
+    // column chart on its 480 x 320pt frame, plot top read off the value axis
+    // line with `mutool draw -F trace`, in points below the frame's top edge.
+    //
+    // `scripts/probes/issue-1435-column-legend-center.json` moves the chart
+    // space's own size, which carries the automatic title with it at 1.2x.
+    for (chart_space_pt, native_top) in [
+        (10.0, 34.752),
+        (12.0, 38.900),
+        (18.0, 51.353),
+        (24.0, 63.802),
+        (36.0, 88.708),
+    ] {
+        let chart = powerpoint_column_probe_chart(chart_space_pt, None);
+        let (top, _) = powerpoint_column_probe_bands(&chart);
+        assert!(
+            (top - native_top).abs() <= 0.05,
+            "a {chart_space_pt}pt chart space must start its plot {native_top}pt \
+             below the frame; got {top}"
+        );
+    }
+    // `scripts/probes/issue-1437-column-plot-top.json` holds the chart space at
+    // 18pt and states the title's own size instead, so the two series separate
+    // the title band from the plot's own inset.
+    for (title_pt, native_top) in [
+        (10.0, 37.192),
+        (14.0, 42.077),
+        (18.0, 46.962),
+        (24.0, 54.282),
+        (36.0, 68.932),
+    ] {
+        let chart = powerpoint_column_probe_chart(18.0, Some(title_pt));
+        let (top, _) = powerpoint_column_probe_bands(&chart);
+        assert!(
+            (top - native_top).abs() <= 0.05,
+            "a {title_pt}pt title must start the plot {native_top}pt below the \
+             frame; got {top}"
+        );
+    }
+}
+
+#[test]
+fn a_powerpoint_column_plot_reserves_the_native_category_band() {
+    // The same exports, plot bottom read off the category axis line. The 36pt
+    // chart space is left out: PowerPoint wraps `4th Qtr` onto a second line
+    // there and we slant it instead, so neither side is drawing one flat band
+    // (issue #1675).
+    for (chart_space_pt, native_band) in [
+        (10.0, 25.052),
+        (12.0, 28.767),
+        (18.0, 39.902),
+        (24.0, 51.028),
+    ] {
+        let chart = powerpoint_column_probe_chart(chart_space_pt, None);
+        let (_, band) = powerpoint_column_probe_bands(&chart);
+        assert!(
+            (band - native_band).abs() <= 0.1,
+            "a {chart_space_pt}pt category axis must reserve {native_band}pt \
+             under the plot; got {band}"
+        );
+    }
+    // The band holds the category labels, so the title's size cannot move it.
+    for title_pt in [10.0, 14.0, 18.0, 24.0, 36.0] {
+        let chart = powerpoint_column_probe_chart(18.0, Some(title_pt));
+        let (_, band) = powerpoint_column_probe_bands(&chart);
+        assert!(
+            (band - 39.902).abs() <= 0.1,
+            "a {title_pt}pt title must leave the 18pt category band at 39.902pt; \
+             got {band}"
+        );
+    }
+}
+
+#[test]
+fn a_powerpoint_bar_plot_keeps_its_own_measured_top_band() {
+    // The unpatched re-zip control of both probes is the same deck as a bar
+    // chart: 18pt chart space, 22pt automatic title, plot top 46.365pt below
+    // the frame. The column calibration must not reach the bar family, whose
+    // band [`CHART_PLOT_TOP_PAD_PT`] still carries the top inset a bar plot
+    // keeps on its own account.
+    let mut chart = powerpoint_column_probe_chart(18.0, None);
+    chart.chart_type = ChartType::Bar;
+    let (top, _) = powerpoint_column_probe_bands(&chart);
+    assert!(
+        (top - 46.365).abs() <= 0.2,
+        "the bar control must keep its 46.365pt top band; got {top}"
     );
 }
 
