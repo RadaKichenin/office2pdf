@@ -907,6 +907,7 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
     let chart = Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Sales".to_string()),
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -1085,6 +1086,7 @@ fn sheet_page_with_chart_print_scale(print_scale: f64) -> SheetPage {
     let chart = Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Sales".to_string()),
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -1171,6 +1173,7 @@ fn test_table_page_with_chart_at_end() {
     let chart = Chart {
         chart_type: ChartType::Pie,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Pie".to_string()),
         categories: vec!["A".to_string()],
         series: vec![ChartSeries {

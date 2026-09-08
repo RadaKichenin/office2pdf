@@ -16,6 +16,7 @@ fn test_codegen_chart_bar_visual_bars() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Sales Report".to_string()),
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -107,6 +108,7 @@ fn test_codegen_chart_axis_ticks_and_no_raw_floats() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("My Bar Chart".to_string()),
         categories: vec!["1st Qtr".to_string(), "2nd Qtr".to_string()],
         series: vec![ChartSeries {
@@ -186,6 +188,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Pie,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Market Share".to_string()),
         categories: vec!["A".to_string(), "B".to_string()],
         series: vec![ChartSeries {
@@ -270,6 +273,7 @@ fn test_codegen_chart_line_trend_indicators() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Trends".to_string()),
         categories: vec!["Jan".to_string(), "Feb".to_string(), "Mar".to_string()],
         series: vec![ChartSeries {
@@ -351,6 +355,7 @@ fn test_codegen_chart_empty_series() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Empty".to_string()),
         categories: vec![],
         series: vec![],
@@ -440,6 +445,7 @@ fn an_axis_chart_that_does_not_fit_moves_to_the_next_page_whole() {
     content.push(Block::Chart(Box::new(Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Quarterly Units Shipped".to_string()),
         categories: vec![
             "Northlake".to_string(),
@@ -521,6 +527,7 @@ fn a_bordered_chart_box_that_does_not_fit_moves_to_the_next_page_whole() {
     content.push(Block::Chart(Box::new(Chart {
         chart_type: ChartType::Pie,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Fixture Documents by Format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![ChartSeries {
@@ -741,6 +748,7 @@ fn test_codegen_chart_line_plot() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["1".to_string(), "2".to_string(), "3".to_string()],
         series: vec![
@@ -841,6 +849,7 @@ fn a_chart_too_tall_for_a_page_still_breaks_rather_than_overflowing() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Scatter,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Sixty Sample Sites".to_string()),
         categories: categories.clone(),
         series: vec![ChartSeries {
@@ -922,6 +931,7 @@ fn stacked_support_chart(grouping: ChartGrouping) -> Chart {
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Supported elements by format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![
@@ -1142,6 +1152,7 @@ fn legend_chart(position: LegendPosition) -> Chart {
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Supported elements by format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![
@@ -1383,6 +1394,7 @@ fn a_declared_series_fill_reaches_the_bars() {
     let chart = Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Production LOC by layer".to_string()),
         categories: vec!["parser".to_string(), "render".to_string()],
         series: vec![ChartSeries {
@@ -1458,6 +1470,7 @@ fn a_series_without_a_fill_still_takes_the_palette() {
     let chart = Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["parser".to_string(), "render".to_string()],
         series: vec![ChartSeries {
@@ -1527,6 +1540,7 @@ fn per_point_fills_colour_each_bar_separately() {
     let chart = Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![ChartSeries {
@@ -1603,6 +1617,7 @@ fn axis_titled_chart(category: Option<&str>, value: Option<&str>) -> Chart {
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Production LOC by layer".to_string()),
         categories: vec!["parser".to_string(), "render".to_string()],
         series: vec![ChartSeries {
@@ -1725,6 +1740,7 @@ fn labelled_chart(labels: DataLabels) -> Chart {
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["DOCX".to_string(), "PPTX".to_string()],
         series: vec![ChartSeries {
@@ -1842,6 +1858,7 @@ fn pie_chart(values: Vec<f64>) -> Chart {
     Chart {
         chart_type: ChartType::Pie,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Fixture documents by format".to_string()),
         categories: vec!["DOCX".to_string(), "PPTX".to_string(), "XLSX".to_string()],
         series: vec![ChartSeries {
@@ -2058,6 +2075,7 @@ fn test_chart_default_gridline_matches_powerpoint() {
     let doc = make_doc(vec![make_flow_page(vec![Block::Chart(Box::new(Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -2236,6 +2254,7 @@ fn tick_mark_chart(
     Chart {
         chart_type,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Weekly Throughput".to_string()),
         categories: TICK_MARK_CATEGORIES.map(str::to_string).to_vec(),
         series: vec![ChartSeries {
@@ -2855,6 +2874,7 @@ fn band_layout_chart(
     Chart {
         chart_type,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Weekly Throughput".to_string()),
         categories: vec!["Mon".to_string(), "Tue".to_string(), "Wed".to_string()],
         series: BAND_SERIES_VALUES
@@ -3152,6 +3172,7 @@ fn two_series_bar_chart(theme_accent_colors: Vec<crate::ir::Color>) -> Chart {
     Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string()],
         series: vec![
@@ -5595,6 +5616,7 @@ fn test_data_table_prints_a_series_number_format() {
         // fallback this rule lives in.
         chart_type: ChartType::Other("bubbleChart".to_string()),
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string(), "Q2".to_string()],
         series: vec![ChartSeries {
@@ -5669,6 +5691,7 @@ fn test_data_table_prints_a_declared_thousands_format() {
         // fallback this rule lives in.
         chart_type: ChartType::Other("bubbleChart".to_string()),
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string()],
         series: vec![ChartSeries {
@@ -5741,6 +5764,7 @@ fn test_data_table_without_a_number_format_prints_plainly() {
         // fallback this rule lives in.
         chart_type: ChartType::Other("bubbleChart".to_string()),
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string()],
         series: vec![ChartSeries {
@@ -5812,6 +5836,7 @@ fn test_a_currency_axis_label_is_escaped() {
     let chart = Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string()],
         series: vec![ChartSeries {
@@ -5885,6 +5910,7 @@ fn single_series_chart(auto_title_deleted: bool) -> Chart {
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string()],
         series: vec![ChartSeries {
@@ -5977,6 +6003,7 @@ fn automatic_title_chart(series_names: &[Option<&str>], auto_title_deleted: bool
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["Q1".to_string(), "Q2".to_string(), "Q3".to_string()],
         series: series_names
@@ -6725,6 +6752,7 @@ fn combo_budget_chart() -> Chart {
     Chart {
         chart_type: ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["May".to_string(), "Jun".to_string()],
         series: vec![
@@ -6929,6 +6957,7 @@ fn combo_line_and_scatter_chart() -> Chart {
     Chart {
         chart_type: ChartType::Line,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec!["jan".to_string(), "feb".to_string(), "mar".to_string()],
         series: vec![
@@ -9718,4 +9747,158 @@ fn a_stated_plot_rectangle_keeps_a_pie_off_the_automatic_inset() {
         "expected the stated-layout pie unchanged at 320pt, drew {:.3}pt",
         outer * 2.0
     );
+}
+
+// ---------------------------------------------------------------------------
+// Authored first-slice rotation (issue #1429)
+// ---------------------------------------------------------------------------
+
+/// Every drawn wedge's outline vertices, one entry per wedge, in the order the
+/// wedges are emitted.
+///
+/// Each vertex is stated as `((x pt, y pt), (in…), (out…))`, so splitting on
+/// the opening `((` yields the outline and skips the bare centre point a pie
+/// wedge starts from.
+fn emitted_wedge_outlines(source: &str) -> Vec<Vec<(f64, f64)>> {
+    let mut wedges: Vec<Vec<(f64, f64)>> = Vec::new();
+    for line in source.lines().filter(|line| line.contains("path(fill:")) {
+        let mut outline: Vec<(f64, f64)> = Vec::new();
+        for triple in line.split("((").skip(1) {
+            let Some((pair, _)) = triple.split_once("),") else {
+                continue;
+            };
+            let Some((x, y)) = pair.split_once(", ") else {
+                continue;
+            };
+            if let (Ok(x), Ok(y)) = (
+                x.trim_end_matches("pt").parse::<f64>(),
+                y.trim_end_matches("pt").parse::<f64>(),
+            ) {
+                outline.push((x, y));
+            }
+        }
+        if !outline.is_empty() {
+            wedges.push(outline);
+        }
+    }
+    wedges
+}
+
+/// `angle` measured clockwise from twelve o'clock about `centre`, in degrees.
+///
+/// Typst places from the top-left with y growing downward, so a clockwise turn
+/// on the page runs from `-y` towards `+x`.
+fn clockwise_degrees_from_twelve(centre: (f64, f64), point: (f64, f64)) -> f64 {
+    (point.0 - centre.0)
+        .atan2(-(point.1 - centre.1))
+        .to_degrees()
+        .rem_euclid(360.0)
+}
+
+/// Signed difference between two clockwise angles, folded into ±180 degrees so
+/// a boundary at 359.99 and one at 0.01 read as neighbours.
+fn degrees_apart(left: f64, right: f64) -> f64 {
+    (left - right + 180.0).rem_euclid(360.0) - 180.0
+}
+
+/// A four-point pie whose shares are the ones `GENERAL SERVICES.pptx` page 13
+/// plots, so no two boundaries coincide and a rotation cannot hide in a
+/// symmetry.
+fn unequal_pie_chart(chart_type: ChartType, first_slice_angle_deg: Option<u32>) -> Chart {
+    let mut chart = quartered_pie_chart(chart_type);
+    chart.series[0].values = vec![39.0, 20.0, 20.0, 21.0];
+    chart.hole_size_percent = Some(71);
+    chart.first_slice_angle_deg = first_slice_angle_deg;
+    chart
+}
+
+#[test]
+fn an_authored_first_slice_angle_turns_the_whole_plot_clockwise() {
+    // Native PowerPoint for Mac 16.112 exports of `GENERAL SERVICES.pptx`,
+    // read off the exported wedge paths with `mutool draw -F trace`: page 13
+    // declares `<c:firstSliceAng val="12"/>` and starts its first boundary
+    // 11.996 degrees clockwise of twelve o'clock, page 14 declares 11 and
+    // starts at 11.003. Every following boundary is that start plus the
+    // shares already plotted, so the rotation moves the plot without
+    // resizing a wedge (issue #1429).
+    const FRAME_W: f64 = 563.125;
+    const FRAME_H: f64 = 340.125;
+    let centre: (f64, f64) = (FRAME_W / 2.0, FRAME_H / 2.0);
+    let shares: [f64; 4] = [39.0, 20.0, 20.0, 21.0];
+
+    for chart_type in [ChartType::Pie, ChartType::Doughnut] {
+        for authored in [0_u32, 11, 12, 90, 137, 270, 360] {
+            let chart: Chart = unequal_pie_chart(chart_type.clone(), Some(authored));
+            let source: String = framed_chart_source(&chart, FRAME_W, FRAME_H);
+            let wedges: Vec<Vec<(f64, f64)>> = emitted_wedge_outlines(&source);
+            assert_eq!(
+                wedges.len(),
+                shares.len(),
+                "{chart_type:?} at {authored} degrees draws one path per share, got:\n{source}"
+            );
+
+            let mut expected: f64 = f64::from(authored);
+            for (index, share) in shares.iter().enumerate() {
+                let start: f64 = clockwise_degrees_from_twelve(centre, wedges[index][0]);
+                assert!(
+                    degrees_apart(start, expected).abs() < 0.01,
+                    "{chart_type:?} at {authored} degrees: wedge {index} starts at \
+                     {start:.3} degrees, expected {:.3}",
+                    expected.rem_euclid(360.0)
+                );
+                expected += share / 100.0 * 360.0;
+            }
+        }
+    }
+}
+
+/// Triangulation on the absent case: `ST_FirstSliceAng` defaults to 0, so a
+/// chart that declares nothing keeps the twelve o'clock start.
+#[test]
+fn a_chart_without_a_first_slice_angle_starts_at_twelve_oclock() {
+    const FRAME_W: f64 = 480.0;
+    const FRAME_H: f64 = 320.0;
+    let centre: (f64, f64) = (FRAME_W / 2.0, FRAME_H / 2.0);
+
+    for chart_type in [ChartType::Pie, ChartType::Doughnut] {
+        let chart: Chart = unequal_pie_chart(chart_type.clone(), None);
+        let source: String = framed_chart_source(&chart, FRAME_W, FRAME_H);
+        let wedges: Vec<Vec<(f64, f64)>> = emitted_wedge_outlines(&source);
+        let start: f64 = clockwise_degrees_from_twelve(centre, wedges[0][0]);
+        assert!(
+            degrees_apart(start, 0.0).abs() < 0.01,
+            "{chart_type:?} with no authored angle starts at {start:.3} degrees"
+        );
+    }
+}
+
+/// The rotation turns the plot; it must not resize it. The ring keeps the
+/// automatic plot diameter of #1425, the authored hole ratio, and its centre.
+#[test]
+fn a_turned_ring_keeps_its_centre_diameter_and_hole() {
+    const FRAME_W: f64 = 563.125;
+    const FRAME_H: f64 = 340.125;
+    let centre: (f64, f64) = (FRAME_W / 2.0, FRAME_H / 2.0);
+    let expected_outer: f64 = (FRAME_H - 22.0) / 2.0;
+
+    for authored in [None, Some(0), Some(12), Some(137), Some(359)] {
+        let chart: Chart = unequal_pie_chart(ChartType::Doughnut, authored);
+        let source: String = framed_chart_source(&chart, FRAME_W, FRAME_H);
+        let radii: Vec<f64> = emitted_wedge_outlines(&source)
+            .iter()
+            .flatten()
+            .map(|(x, y)| ((x - centre.0).powi(2) + (y - centre.1).powi(2)).sqrt())
+            .collect();
+        let outer: f64 = radii.iter().copied().fold(f64::MIN, f64::max);
+        let inner: f64 = radii.iter().copied().fold(f64::MAX, f64::min);
+        assert!(
+            (outer - expected_outer).abs() < 0.01,
+            "{authored:?}: outer radius {outer:.3}pt, expected {expected_outer:.3}pt"
+        );
+        assert!(
+            (inner / outer - 0.71).abs() < 1e-6,
+            "{authored:?}: hole ratio {:.4}, expected 0.7100",
+            inner / outer
+        );
+    }
 }

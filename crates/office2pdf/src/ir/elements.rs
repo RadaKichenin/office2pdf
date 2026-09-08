@@ -277,6 +277,14 @@ pub struct Chart {
     /// `<c:holeSize val>` for a doughnut, as a percentage of the outer radius.
     /// `None` for every other type (issue #679).
     pub hole_size_percent: Option<u32>,
+    /// `<c:firstSliceAng val>` for a pie or doughnut: how far clockwise of
+    /// twelve o'clock the first wedge begins, in degrees.
+    ///
+    /// `None` where the element is absent or the family never declares it.
+    /// `ST_FirstSliceAng` defaults to 0, which is the twelve o'clock start
+    /// every pie drew before, so nothing is substituted for the absence
+    /// (issue #1429).
+    pub first_slice_angle_deg: Option<u32>,
     /// Optional chart title.
     pub title: Option<String>,
     /// Category labels (x-axis or pie slice names).

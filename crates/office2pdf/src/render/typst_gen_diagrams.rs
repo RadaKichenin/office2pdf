@@ -5690,8 +5690,9 @@ fn generate_chart_pie_plot(
         sheet_paint_offset_pt,
     );
 
-    // Office starts the first wedge at twelve o'clock and sweeps clockwise.
-    let mut start: f64 = -std::f64::consts::FRAC_PI_2;
+    // Office sweeps clockwise from the boundary `<c:firstSliceAng>` names,
+    // which is twelve o'clock for the chart that declares nothing.
+    let mut start: f64 = -std::f64::consts::FRAC_PI_2 + first_slice_offset_radians(chart);
     for (index, value) in series.values.iter().enumerate() {
         if *value <= 0.0 {
             continue;
@@ -5856,6 +5857,23 @@ fn write_pie_wedge(
     }
     path.push_str("))");
     let _ = writeln!(out, "{path}");
+}
+
+/// Where the first wedge begins, in radians clockwise of twelve o'clock.
+///
+/// `<c:firstSliceAng>` turns the whole plot: every wedge keeps its share of
+/// the circle and the boundaries move together. Native PowerPoint for Mac
+/// 16.112 exports of `GENERAL SERVICES.pptx` put the first boundary of the
+/// page-13 doughnut at 11.996 degrees against its authored 12, and the
+/// page-14 one at 11.003 against its authored 11, measured off the exported
+/// wedge paths with `mutool draw -F trace`.
+///
+/// `ST_FirstSliceAng` defaults to 0, so a chart that declares nothing starts
+/// at twelve o'clock as it always did. The renderer's angles grow clockwise
+/// because Typst's y grows downward, so the authored degrees add directly
+/// (issue #1429).
+fn first_slice_offset_radians(chart: &Chart) -> f64 {
+    f64::from(chart.first_slice_angle_deg.unwrap_or(0)).to_radians()
 }
 
 /// The inner radius of a doughnut, or `None` for a pie.
