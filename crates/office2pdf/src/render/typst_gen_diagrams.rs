@@ -1634,8 +1634,28 @@ const PPTX_LEGEND_RIGHT_EDGE_PAD_PT: f64 = 10.127;
 ///
 /// A fixed plus text-scaled correction fitted to native PowerPoint 16.112
 /// exports at 10, 12, 18, 24, and 36pt keeps every key top within 0.002pt.
-const PPTX_RIGHT_LEGEND_Y_SHIFT_PT: f64 = 1.579;
-const PPTX_RIGHT_LEGEND_Y_SHIFT_EM: f64 = -0.357249;
+pub(super) const PPTX_RIGHT_LEGEND_Y_SHIFT_PT: f64 = 1.579;
+pub(super) const PPTX_RIGHT_LEGEND_Y_SHIFT_EM: f64 = -0.357249;
+
+/// The same correction for a *column* plot, whose content box ends in the
+/// category label band rather than the value tick band and so centres the
+/// generic side stack lower still.
+///
+/// PowerPoint puts the right legend at one page position per chart size,
+/// whichever way the bars run: repackaging `tests/fixtures/pptx/bar-chart.pptx`
+/// as a column chart through
+/// `scripts/probes/issue-1435-column-legend-center.json` moves its 18pt legend
+/// key nowhere at all — native `y[282.7380, 292.6268]` for both families. The
+/// two corrections differ only because our own content box does, so this pair
+/// is fitted separately against the same native exports at 10, 12, 18 and
+/// 24pt, where it holds every key top to 0.002pt (#1435).
+///
+/// The 36pt export is deliberately outside the fit. There PowerPoint wraps the
+/// category labels onto a second line and drops the value axis to three ticks,
+/// while we keep one line and ten; our plot rectangle, not the legend rule,
+/// then carries the residual, and it is tracked by #1437.
+const PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_PT: f64 = -7.920088;
+const PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_EM: f64 = 0.139188;
 
 /// Fixed chart-area padding that remains after the text-scaled bands.
 const CHART_PLOT_TOP_PAD_PT: f64 = 19.84;
@@ -3896,14 +3916,27 @@ fn powerpoint_right_legend_inset(
     ))
 }
 
-fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
-    if matches!(chart.host, crate::ir::ChartHost::Presentation)
-        && matches!(chart.chart_type, ChartType::Bar)
-        && matches!(chart.legend_position, LegendPosition::Right)
+/// How far up the generic side stack a PowerPoint right legend has to move to
+/// land where the native automatic layout puts it.
+///
+/// Both families are centred beside a content box that reaches down past the
+/// plot, but a bar chart's box ends in the value tick band and a column
+/// chart's in the category label band, so each needs its own measured pair.
+/// Anything else — another host, another edge, another plot family — keeps the
+/// uncorrected placement.
+pub(super) fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
+    if !matches!(chart.host, crate::ir::ChartHost::Presentation)
+        || !matches!(chart.legend_position, LegendPosition::Right)
     {
-        PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * chart_legend_text_pt(chart)
-    } else {
-        0.0
+        return 0.0;
+    }
+    let size_pt: f64 = chart_legend_text_pt(chart);
+    match chart.chart_type {
+        ChartType::Bar => PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * size_pt,
+        ChartType::Column => {
+            PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_EM * size_pt
+        }
+        _ => 0.0,
     }
 }
 

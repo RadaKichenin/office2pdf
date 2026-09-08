@@ -1,0 +1,14 @@
+{
+  "name": "issue-1435-column-legend-center",
+  "base": "../../tests/fixtures/pptx/bar-chart.pptx",
+  "part": "ppt/charts/chart1.xml",
+  "factor": "column chart-space c:defRPr sz (1/100 pt)",
+  "page": 1,
+  "variants": [
+    {"value": "1000", "find": "val=\"bar\"(/>[\\s\\S]*?sz=\")1800(\")", "replace": "val=\"col\"\\g<1>1000\\g<2>", "regex": true, "count": 1},
+    {"value": "1200", "find": "val=\"bar\"(/>[\\s\\S]*?sz=\")1800(\")", "replace": "val=\"col\"\\g<1>1200\\g<2>", "regex": true, "count": 1},
+    {"value": "1800", "find": "val=\"bar\"(/>[\\s\\S]*?sz=\")1800(\")", "replace": "val=\"col\"\\g<1>1800\\g<2>", "regex": true, "count": 1},
+    {"value": "2400", "find": "val=\"bar\"(/>[\\s\\S]*?sz=\")1800(\")", "replace": "val=\"col\"\\g<1>2400\\g<2>", "regex": true, "count": 1},
+    {"value": "3600", "find": "val=\"bar\"(/>[\\s\\S]*?sz=\")1800(\")", "replace": "val=\"col\"\\g<1>3600\\g<2>", "regex": true, "count": 1}
+  ]
+}

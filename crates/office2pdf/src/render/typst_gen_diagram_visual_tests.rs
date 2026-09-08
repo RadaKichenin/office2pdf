@@ -5,10 +5,12 @@ use crate::ir::{ChartAreaFill, ChartAreaOutline};
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
     LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
-    PPTX_LEGEND_KEY_LABEL_GAP_PT, ROW, SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP,
-    axis_plot_rect, chart_area_title_h, chart_category_band_pt, chart_category_gutter_pt,
-    chart_category_rotated_label_x, chart_category_rotated_label_y, chart_face_line_metrics_em,
-    chart_tick_band_pt, excel_legend_trailing_gutter_pt, pptx_column_data_label_seat_pt,
+    PPTX_LEGEND_KEY_LABEL_GAP_PT, PPTX_RIGHT_LEGEND_Y_SHIFT_EM, PPTX_RIGHT_LEGEND_Y_SHIFT_PT, ROW,
+    SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP, axis_plot_rect, chart_area_title_h,
+    chart_category_band_pt, chart_category_gutter_pt, chart_category_rotated_label_x,
+    chart_category_rotated_label_y, chart_face_line_metrics_em, chart_tick_band_pt,
+    excel_legend_trailing_gutter_pt, powerpoint_right_legend_y_shift,
+    pptx_column_data_label_seat_pt,
 };
 
 #[test]
@@ -4483,6 +4485,166 @@ fn a_powerpoint_column_right_legend_uses_the_native_text_scaled_row_pitch() {
             .iter()
             .all(|pitch| (*pitch - 14.0).abs() <= 0.01),
         "the separately calibrated PowerPoint bar path must keep its 14pt pitch, got {bar_pitches:?}; source:\n{bar_source}"
+    );
+}
+
+#[test]
+fn a_powerpoint_column_right_legend_uses_the_native_vertical_center_at_multiple_sizes() {
+    // Native PowerPoint 16.112 exports of `tests/fixtures/pptx/bar-chart.pptx`
+    // repackaged as a column chart, one `<c:defRPr sz>` at a time, through
+    // `scripts/probes/issue-1435-column-legend-center.json`. PowerPoint puts
+    // the right legend at the same page position for both families — the
+    // 18pt column variant's key lands on the unpatched bar control's
+    // `y[282.7380, 292.6268]` to the last emitted digit — so these targets are
+    // the bar values of
+    // `a_powerpoint_right_legend_uses_the_native_vertical_center_at_multiple_sizes`
+    // re-measured on the column exports. Our own placement differs because a
+    // column's content box ends in the category band rather than the value
+    // tick band, which is what this correction removes (#1435).
+    let measurements = [
+        (10.0, 133.7634),
+        (12.0, 131.5808),
+        (18.0, 125.0423),
+        (24.0, 118.5052),
+    ];
+
+    for (size_pt, expected_y) in measurements {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.chart_type = ChartType::Column;
+        chart.series.truncate(1);
+        chart.series[0].name = Some("Sales".to_string());
+        chart.host = crate::ir::ChartHost::Presentation;
+        chart.text_font_family = Some("Calibri".to_string());
+
+        let source = framed_chart_source(&chart, 480.0, 320.0);
+        let actual_y = legend_entry_y(&source, "Sales");
+        assert!(
+            (actual_y - expected_y).abs() <= 0.01,
+            "{size_pt}pt PowerPoint column legend key starts at y={actual_y}pt, expected {expected_y}pt; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_powerpoint_column_right_legend_correction_translates_the_whole_stack() {
+    // The correction moves the block, so it must not disturb what the block is
+    // made of: the #1434 row pitch stays, and legends of different lengths stay
+    // centred on one another. Page 8 of the #1220 deck is the shape this
+    // reproduces — 11.97pt legend text on a 690 x 220.8pt frame — where the
+    // native three keys centre on 395.734pt and the uncorrected stack sat
+    // 6.95pt below it.
+    let column_legend = |names: &[&str]| -> Vec<f64> {
+        let mut chart = bar_chart_at(Some(11.97), &["Year 1", "Year 2", "Year 3"]);
+        chart.chart_type = ChartType::Column;
+        chart.host = crate::ir::ChartHost::Presentation;
+        chart.legend_position = LegendPosition::Right;
+        chart.text_font_family = Some("Avenir Next LT Pro".to_string());
+        chart.series.truncate(1);
+        let template = chart.series[0].clone();
+        chart.series = names
+            .iter()
+            .map(|name| {
+                let mut series = template.clone();
+                series.name = Some((*name).to_string());
+                series
+            })
+            .collect();
+        let source = framed_chart_source(&chart, 690.0, 220.8);
+        names
+            .iter()
+            .map(|name| legend_entry_y(&source, name))
+            .collect()
+    };
+
+    let row_h: f64 = 1.6 * 11.97;
+    let three = column_legend(&["Total Sales", "Total Cogs", "Net Profit"]);
+    let pitches = [three[1] - three[0], three[2] - three[1]];
+    assert!(
+        pitches.iter().all(|pitch| (*pitch - row_h).abs() <= 0.01),
+        "the #1434 row pitch must survive the block correction, got {pitches:?}"
+    );
+
+    // A shorter legend has to centre on the same line, or the correction is
+    // changing the stack rather than translating it.
+    let two = column_legend(&["Total Sales", "Total Cogs"]);
+    let centre_of =
+        |origins: &[f64]| -> f64 { origins[0] + (origins.len() - 1) as f64 * row_h / 2.0 };
+    assert!(
+        (centre_of(&three) - centre_of(&two)).abs() <= 0.01,
+        "two and three entries must share a centre, got {} and {}",
+        centre_of(&two),
+        centre_of(&three)
+    );
+}
+
+#[test]
+fn only_a_powerpoint_column_right_legend_takes_the_column_block_correction() {
+    // The correction is a PowerPoint automatic-layout figure measured on
+    // column exports, so it must not reach an Excel column chart, a legend on
+    // another edge, or the separately calibrated PowerPoint bar path.
+    let shift_of = |host: crate::ir::ChartHost,
+                    chart_type: ChartType,
+                    position: LegendPosition,
+                    size_pt: f64|
+     -> f64 {
+        let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr"]);
+        chart.chart_type = chart_type;
+        chart.host = host;
+        chart.legend_position = position;
+        powerpoint_right_legend_y_shift(&chart)
+    };
+
+    for (size_pt, expected) in [
+        (10.0, -6.5282),
+        (12.0, -6.2498),
+        (18.0, -5.4147),
+        (24.0, -4.5796),
+    ] {
+        let actual = shift_of(
+            crate::ir::ChartHost::Presentation,
+            ChartType::Column,
+            LegendPosition::Right,
+            size_pt,
+        );
+        assert!(
+            (actual - expected).abs() <= 0.001,
+            "{size_pt}pt PowerPoint column right legend rises {actual}pt, expected {expected}pt"
+        );
+    }
+
+    for (host, chart_type, position) in [
+        (
+            crate::ir::ChartHost::Spreadsheet,
+            ChartType::Column,
+            LegendPosition::Right,
+        ),
+        (
+            crate::ir::ChartHost::Presentation,
+            ChartType::Column,
+            LegendPosition::TopRight,
+        ),
+        (
+            crate::ir::ChartHost::Presentation,
+            ChartType::Column,
+            LegendPosition::Bottom,
+        ),
+    ] {
+        let actual = shift_of(host, chart_type.clone(), position, 18.0);
+        assert_eq!(
+            actual, 0.0,
+            "{host:?} {chart_type:?} {position:?} must keep the generic side stack, got {actual}pt"
+        );
+    }
+
+    let bar = shift_of(
+        crate::ir::ChartHost::Presentation,
+        ChartType::Bar,
+        LegendPosition::Right,
+        18.0,
+    );
+    assert!(
+        (bar - (PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * 18.0)).abs() < 1e-9,
+        "the horizontal-bar calibration must be untouched, got {bar}pt"
     );
 }
 
