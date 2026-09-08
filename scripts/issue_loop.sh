@@ -12,6 +12,8 @@
 #   scripts/issue_loop.sh --once          # exit as soon as the queue is empty
 #   scripts/issue_loop.sh --max-issues 1  # trial: stop after one agent run
 #
+#   scripts/issue_loop.sh --usage-limit-reason LOG  # why a run counted as rate-limited
+#
 # Stop it gracefully with `touch target/issue-loop-logs/STOP` (finishes the current
 # issue first) or Ctrl+C. Per-run reports land in target/issue-loop-logs/.
 #
@@ -37,8 +39,9 @@ EXPECT_USER=""                    # optional: require this gh login before touch
 CARGO_TARGET_DIR_OVERRIDE=""      # optional: share one build dir across the agents' worktrees
 ONCE=0
 MAX_ISSUES=0
+USAGE_LIMIT_LOG=""                # diagnostic: report why one run counted as rate-limited
 
-usage() { sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { awk 'NR > 1 { if (!/^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0; }
 
 while (( $# )); do
   case "$1" in
@@ -54,11 +57,77 @@ while (( $# )); do
     --expect-user) shift; EXPECT_USER="${1:-}" ;;
     --cargo-target-dir) shift; CARGO_TARGET_DIR_OVERRIDE="${1:-}" ;;
     --min-free-gb) shift; MIN_FREE_GB="${1:-0}" ;;
+    --usage-limit-reason) shift; USAGE_LIMIT_LOG="${1:-}" ;;
     -h|--help) usage ;;
     *) echo "unknown argument: $1 (try --help)" >&2; exit 2 ;;
   esac
   shift
 done
+
+# Prints a short reason when a run really hit a usage limit, and nothing when it
+# did not. Only the CLI's own result/error text and its non-JSON output can carry
+# that message. Reading the raw log instead matches the telemetry around it: a
+# --verbose stream-json init event lists the `usage-credits` slash command, and
+# every turn emits a `rate_limit_event` whose status is normally `allowed_warning`.
+usage_limit_reason() {
+  python3 - "$1" <<'USAGE_LIMIT_PY'
+import json
+import re
+import sys
+
+MESSAGE = re.compile(
+    r"usage limit reached|reached your .{0,60}?limit|cc_cli_limit_message",
+    re.IGNORECASE,
+)
+
+
+def report(text: str, source: str) -> None:
+    found = MESSAGE.search(text)
+    if found:
+        print("%s: %s" % (source, found.group(0).strip()))
+        raise SystemExit(0)
+
+
+try:
+    raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+except OSError:
+    raise SystemExit(1)          # a run that never opened its log is not a limit
+
+try:
+    events = [json.loads(raw)]   # --output-format json: one object, no telemetry
+except ValueError:
+    events = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except ValueError:
+            report(line, "cli output")
+
+for event in events:
+    if not isinstance(event, dict):
+        continue
+    if event.get("type") == "rate_limit_event":
+        # `allowed` and `allowed_warning` are the states of a run that was served.
+        status = (event.get("rate_limit_info") or {}).get("status", "")
+        if status and not status.startswith("allowed"):
+            print("rate_limit_event status=%s" % status)
+            raise SystemExit(0)
+        continue
+    for key in ("result", "error", "message"):
+        value = event.get(key)
+        if isinstance(value, str):
+            report(value, key)
+raise SystemExit(1)
+USAGE_LIMIT_PY
+}
+
+if [[ -n "$USAGE_LIMIT_LOG" ]]; then
+  usage_limit_reason "$USAGE_LIMIT_LOG"
+  exit $?
+fi
 
 STOP_FILE="$LOG_DIR/STOP"
 mkdir -p "$LOG_DIR"
@@ -177,11 +246,13 @@ while true; do
   rc=$?
   processed=$((processed + 1))
 
-  # Both wordings seen in practice: "usage limit reached" and
-  # "You've reached your <model> limit. Run /usage-credits to continue".
-  if grep -qiE "usage limit|limit reached|reached your .{0,40}limit|usage-credits|rate.?limit" "$log"; then
+  # A false positive costs the whole run: the check below returns to the top of
+  # the loop without ever reading the issue's state, so a finished agent's work
+  # goes uncounted and the loop sleeps an hour before repeating it.
+  limit_reason="$(usage_limit_reason "$log" || true)"
+  if [[ -n "$limit_reason" ]]; then
     processed=$((processed - 1))
-    echo "usage limit reached — sleeping $((USAGE_LIMIT_SLEEP / 60))m, then retrying this issue."
+    echo "usage limit reached ($limit_reason) — sleeping $((USAGE_LIMIT_SLEEP / 60))m, then retrying this issue."
     sleep "$USAGE_LIMIT_SLEEP"
     continue
   fi
