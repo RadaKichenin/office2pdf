@@ -2298,6 +2298,288 @@ fn test_an_axis_title_is_not_the_charts_automatic_title() {
     assert_eq!(chart.category_axis_title.as_deref(), Some("Quarter"));
 }
 
+// ----- A `c:title`'s rich text run properties (issue #1424) -----
+
+/// A `<c:title>` written the way PowerPoint writes one: the string and the run
+/// properties that paint it live in `<c:tx><c:rich>`, and the trailing
+/// `<c:txPr>` repeats the paragraph defaults for the empty run after the text.
+///
+/// `ppt/charts/chart8.xml` of the deck in issue #1220 is exactly this shape.
+fn rich_title_xml(paragraph_def_rpr: &str, run_rpr: &str, tx_pr: &str) -> String {
+    format!(
+        r#"<c:title><c:tx><c:rich>
+            <a:bodyPr rot="0" spcFirstLastPara="1" vertOverflow="ellipsis"/>
+            <a:lstStyle/>
+            <a:p><a:pPr>{paragraph_def_rpr}</a:pPr>
+            <a:r>{run_rpr}<a:t>Annual Income &amp; Gross Profit</a:t></a:r></a:p>
+        </c:rich></c:tx><c:overlay val="0"/>{tx_pr}</c:title>"#
+    )
+}
+
+/// The grey `<a:defRPr>` `chart8.xml` writes in both its paragraph properties
+/// and its `<c:txPr>`: 18.62pt regular over `tx1` lifted to #595959.
+const RICH_TITLE_GREY_DEF_RPR: &str = r#"<a:defRPr sz="1862" b="0" i="0" u="none" strike="noStrike" kern="1200" spc="0" baseline="0">
+    <a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill>
+    <a:latin typeface="+mn-lt"/></a:defRPr>"#;
+
+/// The theme of the deck in issue #1220: `accent2` is the teal #107082 the
+/// chart titles are painted in, and `tx1`/`dk1` is black for the lumMod
+/// transform above to lift.
+fn contoso_scheme_colors() -> std::collections::HashMap<String, Color> {
+    [
+        ("accent2".to_string(), Color::new(0x10, 0x70, 0x82)),
+        ("tx1".to_string(), Color::new(0, 0, 0)),
+        ("dk1".to_string(), Color::new(0, 0, 0)),
+    ]
+    .into_iter()
+    .collect()
+}
+
+/// The bold accent colour a title run declares outranks the regular grey its
+/// own `<c:txPr>` states for the same title.
+///
+/// Native PowerPoint 16.112 paints page 8's `Annual Income & Gross Profit` and
+/// page 11's `Success Ratios` bold teal; the run properties were read for
+/// their text alone, so both printed regular grey (issue #1424).
+#[test]
+fn a_title_rich_run_weight_and_colour_outrank_the_titles_own_tx_pr() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml(
+        RICH_TITLE_GREY_DEF_RPR,
+        r#"<a:rPr lang="en-US" b="1" dirty="0"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:rPr>"#,
+        &format!(
+            "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>{RICH_TITLE_GREY_DEF_RPR}</a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr>"
+        ),
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(
+        chart.title.as_deref(),
+        Some("Annual Income & Gross Profit"),
+        "the text must survive the run properties beside it"
+    );
+    assert_eq!(chart.title_text_style.bold, Some(true), "declared weight");
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x10, 0x70, 0x82)),
+        "declared colour"
+    );
+    assert_eq!(
+        chart.title_text_style.size_pt,
+        Some(18.62),
+        "the size neither the run nor the paragraph changes"
+    );
+}
+
+/// Triangulation: the opposite declarations resolve the opposite way, so
+/// nothing can pass by returning bold teal for every rich title.
+#[test]
+fn a_title_rich_run_stating_regular_weight_outranks_a_bold_tx_pr() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml(
+        "",
+        r#"<a:rPr lang="en-US" sz="900" b="0"><a:solidFill><a:srgbClr val="C6FC15"/></a:solidFill></a:rPr>"#,
+        r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1862" b="1"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:defRPr></a:pPr></a:p></c:txPr>"#,
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.title_text_style.bold, Some(false));
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0xC6, 0xFC, 0x15))
+    );
+    assert_eq!(chart.title_text_style.size_pt, Some(9.0));
+}
+
+/// The paragraph's `<a:pPr><a:defRPr>` governs whatever the run leaves
+/// unstated, and still outranks the title's `<c:txPr>`.
+#[test]
+fn a_title_rich_paragraph_defaults_fill_what_the_run_leaves_unstated() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml(
+        r#"<a:defRPr sz="1400" spc="-125"><a:solidFill><a:srgbClr val="C6FC15"/></a:solidFill></a:defRPr>"#,
+        r#"<a:rPr lang="en-US" b="1"/>"#,
+        r#"<c:txPr><a:p><a:pPr><a:defRPr sz="1862" b="0" spc="0"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:defRPr></a:pPr></a:p></c:txPr>"#,
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.title_text_style.bold, Some(true), "from the run");
+    assert_eq!(
+        chart.title_text_style.size_pt,
+        Some(14.0),
+        "from the paragraph, not the title's own c:txPr"
+    );
+    assert_eq!(
+        chart.title_text_style.letter_spacing_hundredths,
+        Some(-125),
+        "from the paragraph, not the title's own c:txPr"
+    );
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0xC6, 0xFC, 0x15)),
+        "from the paragraph, not the title's own c:txPr"
+    );
+}
+
+/// A title whose rich text declares nothing keeps everything its `<c:txPr>`
+/// states, which is what `any_sheets.xlsx` depends on (issue #1215).
+#[test]
+fn a_title_rich_text_declaring_nothing_keeps_the_tx_pr_properties() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml(
+        "",
+        "",
+        &format!(
+            "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>{RICH_TITLE_GREY_DEF_RPR}</a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr>"
+        ),
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.title_text_style.size_pt, Some(18.62));
+    assert_eq!(chart.title_text_style.bold, Some(false));
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x59, 0x59, 0x59)),
+        "tx1 lifted by lumMod 65% / lumOff 35%"
+    );
+}
+
+/// `<a:endParaRPr>` describes the empty run after the text rather than the
+/// text, so its weight and colour must never become the title's.
+#[test]
+fn a_title_rich_end_para_run_properties_are_not_the_titles() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(
+        r#"<c:title><c:tx><c:rich><a:p>
+            <a:r><a:rPr lang="en-US" b="1"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:rPr><a:t>Success Ratios</a:t></a:r>
+            <a:endParaRPr lang="en-US" sz="4000" b="0"><a:solidFill><a:srgbClr val="C6FC15"/></a:solidFill></a:endParaRPr>
+        </a:p></c:rich></c:tx></c:title>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.title.as_deref(), Some("Success Ratios"));
+    assert_eq!(chart.title_text_style.bold, Some(true));
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x10, 0x70, 0x82))
+    );
+    assert_eq!(chart.title_text_style.size_pt, None);
+}
+
+/// An `<a:ln>` inside the run properties outlines the glyphs; its fill is not
+/// the colour the text is painted in (the rule `c:txPr` already follows, #916).
+#[test]
+fn a_title_rich_run_outline_fill_is_not_the_text_colour() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml(
+        "",
+        r#"<a:rPr lang="en-US" b="1"><a:ln><a:solidFill><a:srgbClr val="C6FC15"/></a:solidFill></a:ln><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:rPr>"#,
+        "",
+    ));
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x10, 0x70, 0x82)),
+        "the outline colour must not win over the text fill"
+    );
+}
+
+/// The chart space's `<c:txPr>` stays the least specific of the three: it
+/// reaches the model on its own key, and the title keeps what its rich text
+/// declares.
+#[test]
+fn a_title_rich_run_does_not_displace_the_chart_space_run_properties() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml(
+        "",
+        r#"<a:rPr lang="en-US" b="1"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:rPr>"#,
+        "",
+    ))
+    .replace(
+        "</c:chart>",
+        r#"</c:chart><c:txPr><a:p><a:pPr><a:defRPr sz="1000" b="0"/></a:pPr></a:p></c:txPr>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.text_style.size_pt, Some(10.0));
+    assert_eq!(chart.text_style.bold, Some(false));
+    assert_eq!(chart.title_text_style.bold, Some(true));
+    assert_eq!(
+        chart.title_text_style.color,
+        Some(Color::new(0x10, 0x70, 0x82))
+    );
+}
+
+/// An axis title carries rich text too, and reading its run properties must
+/// not leak them into the chart's own title style.
+#[test]
+fn an_axis_title_rich_run_does_not_style_the_chart_title() {
+    let colors = contoso_scheme_colors();
+    let aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let scheme = SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let xml = single_series_chart_xml(&rich_title_xml("", "", "")).replace(
+        "</c:plotArea>",
+        r#"<c:catAx><c:axId val="1"/><c:title><c:tx><c:rich><a:p><a:r>
+            <a:rPr lang="en-US" sz="4000" b="1"><a:solidFill><a:srgbClr val="C6FC15"/></a:solidFill></a:rPr>
+            <a:t>Quarter</a:t></a:r></a:p></c:rich></c:tx></c:title></c:catAx></c:plotArea>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &scheme).expect("chart parses");
+
+    assert_eq!(chart.category_axis_title.as_deref(), Some("Quarter"));
+    assert_eq!(
+        chart.title_text_style,
+        crate::ir::ChartTextStyle::default(),
+        "the chart title declares nothing of its own"
+    );
+}
+
 /// A series that names its fill through a theme colour resolves it against the
 /// host document's theme — the chart part declares none of its own (#876).
 ///

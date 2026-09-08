@@ -180,8 +180,10 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
     // its own inside `c:plotArea`, and a flat loop would read that one (#668).
     let mut text_font_family: Option<String> = None;
     let mut text_style: ChartTextStyle = ChartTextStyle::default();
-    // `c:title/c:txPr` governs the title alone; the chart space's governs
-    // everything else and is a poor stand-in for it (issue #1215).
+    // The title's own `c:tx/c:rich` run properties over its `c:txPr` govern the
+    // title alone, the rich text winning where both speak (issue #1424); the
+    // chart space's `c:txPr` governs everything else and is a poor stand-in
+    // for it (issue #1215).
     let mut title_text_style: ChartTextStyle = ChartTextStyle::default();
     let mut title_layout: Option<ChartTitleLayout> = None;
     // A legend can override the chart space's run properties independently of
@@ -1079,6 +1081,136 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
     }
 }
 
+/// Which run properties the reader is inside while reading a `<c:rich>`.
+///
+/// `<a:pPr><a:defRPr>` states the paragraph's defaults and `<a:r><a:rPr>` one
+/// run's overrides; both carry an `<a:solidFill>`, so the colour has to know
+/// which of the two it belongs to.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RichRunScope {
+    Paragraph,
+    Run,
+}
+
+/// Read a title's `<c:rich>`: the text it names and the run properties that
+/// paint it.
+///
+/// PowerPoint writes a chart title's formatting here, not in the `<c:txPr>`
+/// beside it: `chart8.xml` of the deck in issue #1220 states `b="1"` over
+/// `<a:schemeClr val="accent2">` on the run, while its `<c:txPr>` repeats the
+/// regular grey paragraph default for the empty run after the text. The
+/// subtree was read for its text alone, so both titles printed regular grey.
+///
+/// A title is one string in the model, so where several runs state the same
+/// property the first one that states it wins — the rule `<c:txPr>` already
+/// follows for a repeated `<a:defRPr>`.
+fn parse_chart_rich_text(
+    reader: &mut Reader<&[u8]>,
+    scheme: &SchemeColors<'_>,
+) -> (String, ChartTextStyle) {
+    let mut text = String::new();
+    let mut in_t: bool = false;
+    let mut paragraph: ChartTextStyle = ChartTextStyle::default();
+    let mut run: ChartTextStyle = ChartTextStyle::default();
+    let mut scope: Option<RichRunScope> = None;
+    let mut in_p_pr: bool = false;
+    let mut in_run: bool = false;
+    let mut in_solid_fill: bool = false;
+    // `<a:ln>` inside the run properties outlines the glyphs, and its own
+    // `<a:solidFill>` is not the colour the text is painted in (issue #916).
+    let mut in_line: bool = false;
+
+    loop {
+        match reader.read_event() {
+            // A colour element written with children keeps its transforms
+            // there, so its start tag alone is not the colour; this arm has to
+            // precede the shared start/empty one below, which cannot consume
+            // the children (issue #1160).
+            Ok(Event::Start(ref e))
+                if in_solid_fill
+                    && matches!(
+                        e.local_name().as_ref(),
+                        b"srgbClr" | b"schemeClr" | b"sysClr"
+                    ) =>
+            {
+                let parsed = drawingml::parse_color_from_start(reader, e, scheme);
+                if let Some(target) = rich_scope_style(scope, &mut paragraph, &mut run) {
+                    target.color = target.color.or(parsed.color);
+                }
+            }
+            Ok(Event::Start(ref e)) => match e.local_name().as_ref() {
+                b"pPr" => in_p_pr = true,
+                b"r" => in_run = true,
+                b"ln" => in_line = true,
+                b"defRPr" if in_p_pr => {
+                    read_def_rpr_into(e, &mut paragraph);
+                    scope = Some(RichRunScope::Paragraph);
+                }
+                b"rPr" if in_run => {
+                    read_def_rpr_into(e, &mut run);
+                    scope = Some(RichRunScope::Run);
+                }
+                b"solidFill" if scope.is_some() && !in_line => in_solid_fill = true,
+                b"t" => in_t = true,
+                _ => {}
+            },
+            Ok(Event::Empty(ref e)) => match e.local_name().as_ref() {
+                // A self-closing property element opens no scope: `<a:ln>`'s
+                // fill would otherwise still be read as the text colour.
+                b"defRPr" if in_p_pr => read_def_rpr_into(e, &mut paragraph),
+                b"rPr" if in_run => read_def_rpr_into(e, &mut run),
+                _ if in_solid_fill => {
+                    if let Some(target) = rich_scope_style(scope, &mut paragraph, &mut run) {
+                        target.color = target
+                            .color
+                            .or(drawingml::parse_color_from_empty(e, scheme).color);
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::Text(ref t)) if in_t => {
+                if let Ok(s) = t.xml_content() {
+                    text.push_str(s.as_ref());
+                }
+            }
+            Ok(Event::GeneralRef(ref reference)) if in_t => {
+                if let Some(s) = xml_util::decode_general_ref(reference) {
+                    text.push_str(&s);
+                }
+            }
+            Ok(Event::End(ref e)) => match e.local_name().as_ref() {
+                b"rich" => break,
+                b"pPr" => in_p_pr = false,
+                // `<a:endParaRPr>` describes the empty run after the text, so
+                // leaving the run here keeps it out of the title's style.
+                b"r" => in_run = false,
+                b"ln" => in_line = false,
+                b"defRPr" | b"rPr" => scope = None,
+                b"solidFill" => in_solid_fill = false,
+                b"t" => in_t = false,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+
+    (text, paragraph.overridden_by(run))
+}
+
+/// The style the run properties currently being read belong to.
+fn rich_scope_style<'a>(
+    scope: Option<RichRunScope>,
+    paragraph: &'a mut ChartTextStyle,
+    run: &'a mut ChartTextStyle,
+) -> Option<&'a mut ChartTextStyle> {
+    match scope {
+        Some(RichRunScope::Paragraph) => Some(paragraph),
+        Some(RichRunScope::Run) => Some(run),
+        None => None,
+    }
+}
+
 /// Parse the chart title text and its own run properties from `<c:title>`.
 ///
 /// Returns the text, whether the element named text of its own — a `<c:tx>` —,
@@ -1089,7 +1221,9 @@ fn axis_tick_mark_for(value: &str) -> AxisTickMark {
 ///
 /// The `<c:txPr>` is the title's own, and outranks the chart space's for the
 /// string it governs: `any_sheets.xlsx` states `sz="1400" b="0"` in grey there
-/// beside a chart space that states nothing at all (issue #1215).
+/// beside a chart space that states nothing at all (issue #1215). The
+/// `<c:tx><c:rich>` runs that carry the string are more specific still, and
+/// outrank that `<c:txPr>` in turn (issue #1424).
 fn parse_chart_title(
     reader: &mut Reader<&[u8]>,
     scheme: &SchemeColors<'_>,
@@ -1102,7 +1236,8 @@ fn parse_chart_title(
     let mut text = String::new();
     let mut in_t = false;
     let mut names_own_text = false;
-    let mut style: ChartTextStyle = ChartTextStyle::default();
+    let mut tx_pr_style: ChartTextStyle = ChartTextStyle::default();
+    let mut rich_style: ChartTextStyle = ChartTextStyle::default();
     let mut layout: Option<ChartTitleLayout> = None;
     let mut depth = 1u32;
 
@@ -1115,11 +1250,17 @@ fn parse_chart_title(
                 } else if local.as_ref() == b"txPr" {
                     // Consumes through `</c:txPr>`, so the reader comes back on
                     // the title's next sibling.
-                    style = parse_chart_text_style(reader, scheme);
+                    tx_pr_style = parse_chart_text_style(reader, scheme);
                 } else if local.as_ref() == b"layout" {
                     layout = parse_title_layout(reader);
                 } else if local.as_ref() == b"tx" {
                     names_own_text = true;
+                } else if local.as_ref() == b"rich" {
+                    // Consumes through `</c:rich>`, text included, so `a:t`
+                    // never reaches the arm below.
+                    let (rich_text, style) = parse_chart_rich_text(reader, scheme);
+                    text.push_str(&rich_text);
+                    rich_style = rich_style.overridden_by(style);
                 } else if local.as_ref() == b"t" {
                     in_t = true;
                 }
@@ -1156,7 +1297,12 @@ fn parse_chart_title(
     } else {
         Some(trimmed)
     };
-    (title, names_own_text, style, layout)
+    (
+        title,
+        names_own_text,
+        tx_pr_style.overridden_by(rich_style),
+        layout,
+    )
 }
 
 /// Plot-area settings that sit beside `<c:ser>` inside a chart type element.

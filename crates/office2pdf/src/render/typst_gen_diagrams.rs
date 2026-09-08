@@ -3164,7 +3164,7 @@ const AUTOMATIC_CHART_TITLE: &str = "Chart Title";
 /// 18pt `bar-chart.pptx` declares comes back as a 22pt title.
 const CHART_AREA_TITLE_SCALE: f64 = 1.2;
 
-/// Band a chart-area title of a size its own `c:txPr` states takes, above the
+/// Band a chart-area title of a size the title itself states takes, above the
 /// plot's own inset.
 ///
 /// Measured against twelve Excel for Mac 16.100 exports of the `Chart`
@@ -3215,11 +3215,13 @@ const CHARTSHEET_TITLE_BASELINE_EM: f64 = 1.26390;
 
 /// The chart-area title's size.
 ///
-/// A `c:title` stating a size in its own `c:txPr` states the printed size:
-/// `any_sheets.xlsx` writes `sz="1400"` there and Excel prints
-/// `trm="14 0 0 14"`. [`CHART_AREA_TITLE_SCALE`] belongs to the chart space's
-/// size, which Office scales *into* a title size, and applying it to a size
-/// the title already states would scale it twice (issue #1215).
+/// A `c:title` stating a size of its own states the printed size:
+/// `any_sheets.xlsx` writes `sz="1400"` on the title's `c:txPr` and Excel
+/// prints `trm="14 0 0 14"`. [`CHART_AREA_TITLE_SCALE`] belongs to the chart
+/// space's size, which Office scales *into* a title size, and applying it to a
+/// size the title already states would scale it twice (issue #1215). A
+/// `c:tx/c:rich` run or paragraph size outranks that `c:txPr` and arrives here
+/// the same way (issue #1424).
 ///
 /// A chart declaring nothing keeps [`CHART_AREA_TITLE_PT`], which is what
 /// [`AREA_TITLE_H`] was measured against; one whose chart space declares a
@@ -3258,12 +3260,16 @@ pub(super) fn chart_area_title_h(chart: &Chart) -> f64 {
 
 /// Every `text` argument the chart-area title carries beyond its size.
 ///
-/// The title's own `c:txPr` weight overrides the chart space's weight. The
-/// weight the title has always been drawn with is the fallback when neither
-/// states one, so a chart that says nothing does not change. The colour
-/// resolves the same way — the title's own `c:txPr` over the chart space's —
-/// and stays empty where neither states one, leaving the black it was drawn in
-/// (issue #1215).
+/// The title's own weight overrides the chart space's weight. The weight the
+/// title has always been drawn with is the fallback when neither states one,
+/// so a chart that says nothing does not change. The colour resolves the same
+/// way — the title's own over the chart space's — and stays empty where
+/// neither states one, leaving the black it was drawn in (issue #1215).
+///
+/// The title's own weight and colour are its `c:tx/c:rich` run properties over
+/// its `c:txPr`, resolved in the parser: PowerPoint writes a bold accented
+/// title on the run while leaving the regular grey paragraph default in the
+/// `c:txPr` beside it (issue #1424).
 fn chart_area_title_attrs(chart: &Chart) -> String {
     let bold: bool = chart
         .title_text_style
