@@ -938,6 +938,83 @@ fn test_a_pie_chart_carries_no_hole_size() {
     assert_eq!(chart.hole_size_percent, None);
 }
 
+/// `<c:firstSliceAng>` turns the whole plot clockwise from twelve o'clock.
+/// `GENERAL SERVICES.pptx` writes 12 on its page-13 doughnut and 11 on its
+/// page-14 one, and PowerPoint honours both (issue #1429).
+#[test]
+fn test_a_doughnut_chart_carries_its_first_slice_angle() {
+    let xml = chart_of_type(
+        "doughnutChart",
+        r#"<c:firstSliceAng val="12"/><c:holeSize val="71"/>"#,
+    );
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty())
+        .expect("a doughnut chart must not be dropped");
+
+    assert_eq!(chart.chart_type, ChartType::Doughnut);
+    assert_eq!(chart.first_slice_angle_deg, Some(12));
+    // The rotation is its own quantity; reading it must not disturb the hole.
+    assert_eq!(chart.hole_size_percent, Some(71));
+}
+
+/// Triangulation: the pie family declares the same element, and a different
+/// value has to come back, so the field cannot be a constant.
+#[test]
+fn test_a_pie_chart_carries_its_first_slice_angle() {
+    let xml = chart_of_type("pieChart", r#"<c:firstSliceAng val="90"/>"#);
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("a pie chart parses");
+
+    assert_eq!(chart.chart_type, ChartType::Pie);
+    assert_eq!(chart.first_slice_angle_deg, Some(90));
+}
+
+/// Absence is recorded as absence. `ST_FirstSliceAng` defaults to 0, which is
+/// the twelve o'clock start the renderer already drew, so nothing is
+/// substituted here.
+#[test]
+fn test_a_chart_without_a_first_slice_angle_records_none() {
+    for family in ["pieChart", "doughnutChart"] {
+        let xml = chart_of_type(family, "");
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("the chart parses");
+
+        assert_eq!(chart.first_slice_angle_deg, None, "{family}");
+    }
+}
+
+/// `ST_FirstSliceAng` is bounded 0..360. A file outside that range describes
+/// no drawable rotation, so the nearest bound is the closest reading of it —
+/// the same treatment `<c:gapWidth>` gets.
+#[test]
+fn test_an_out_of_range_first_slice_angle_is_held_to_the_schema_bounds() {
+    for (written, expected) in [("400", 360), ("-30", 0), ("0", 0), ("360", 360)] {
+        let xml = chart_of_type(
+            "doughnutChart",
+            &format!(r#"<c:firstSliceAng val="{written}"/>"#),
+        );
+
+        let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("the chart parses");
+
+        assert_eq!(
+            chart.first_slice_angle_deg,
+            Some(expected),
+            "val=\"{written}\""
+        );
+    }
+}
+
+/// A family that does not declare the element carries no rotation, so a bar
+/// chart cannot pick one up from a neighbouring pie's plot area.
+#[test]
+fn test_a_bar_chart_carries_no_first_slice_angle() {
+    let xml = chart_of_type("barChart", r#"<c:firstSliceAng val="45"/>"#);
+
+    let chart = parse_chart_xml(&xml, &SchemeColors::empty()).expect("a bar chart parses");
+
+    assert_eq!(chart.first_slice_angle_deg, None);
+}
+
 #[test]
 fn test_every_schema_chart_family_is_recognised() {
     // ECMA-376's full CT_PlotArea group. None may return None.

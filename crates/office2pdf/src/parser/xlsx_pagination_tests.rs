@@ -101,6 +101,7 @@ fn bar_chart() -> crate::ir::Chart {
     crate::ir::Chart {
         chart_type: crate::ir::ChartType::Bar,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: None,
         categories: vec![],
         series: vec![],

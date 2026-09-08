@@ -1388,6 +1388,7 @@ fn test_document_requests_font_families_true_for_a_chart_only_document() {
     let mut chart = crate::ir::Chart {
         chart_type: crate::ir::ChartType::Column,
         hole_size_percent: None,
+        first_slice_angle_deg: None,
         title: Some("Sales".to_string()),
         categories: vec!["Q1".to_string()],
         series: Vec::new(),

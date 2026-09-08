@@ -144,6 +144,7 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
     let mut reader = Reader::from_str(xml);
     let mut chart_type = None;
     let mut hole_size_percent: Option<u32> = None;
+    let mut first_slice_angle_deg: Option<u32> = None;
     let mut title = None;
     let mut categories: Vec<String> = Vec::new();
     let mut series: Vec<ChartSeries> = Vec::new();
@@ -299,6 +300,14 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
                             hole_size_percent =
                                 plot.hole_size.as_deref().and_then(|v| v.parse().ok());
                         }
+                        // Both circular families write it; no other family
+                        // declares the element at all.
+                        if matches!(chart_type, Some(ChartType::Pie | ChartType::Doughnut)) {
+                            first_slice_angle_deg = plot
+                                .first_slice_ang
+                                .as_deref()
+                                .and_then(first_slice_angle_degrees);
+                        }
                     }
                     // A combo plot area holds one element per chart family and
                     // only the bar family carries these two, so the family that
@@ -379,6 +388,7 @@ pub(super) fn parse_chart_xml_with_stroke_defaults(
     Some(Chart {
         chart_type,
         hole_size_percent,
+        first_slice_angle_deg,
         title,
         categories,
         series,
@@ -1325,6 +1335,10 @@ struct PlotAreaProps {
     overlap: Option<String>,
     /// `<c:holeSize>`, exclusive to the doughnut family (issue #679).
     hole_size: Option<String>,
+    /// `<c:firstSliceAng>`, declared by the pie and doughnut families alone,
+    /// and written after the last `</c:ser>` as `<c:gapWidth>` is
+    /// (issue #1429).
+    first_slice_ang: Option<String>,
     /// `<c:axId>`, one per axis the family plots against, trailing the series
     /// like `<c:gapWidth>` does (issue #1374).
     axis_ids: Vec<String>,
@@ -1341,6 +1355,7 @@ impl PlotAreaProps {
             b"gapWidth" => self.gap_width = xml_util::get_attr_str(e, b"val"),
             b"overlap" => self.overlap = xml_util::get_attr_str(e, b"val"),
             b"holeSize" => self.hole_size = xml_util::get_attr_str(e, b"val"),
+            b"firstSliceAng" => self.first_slice_ang = xml_util::get_attr_str(e, b"val"),
             b"axId" => self.axis_ids.extend(xml_util::get_attr_str(e, b"val")),
             _ => return false,
         }
@@ -1382,6 +1397,21 @@ fn bar_percent(value: &str, low: f64, high: f64) -> Option<f64> {
         .ok()
         .filter(|percent| percent.is_finite())
         .map(|percent| percent.clamp(low, high))
+}
+
+/// Read `<c:firstSliceAng>`'s `val` as degrees clockwise of twelve o'clock.
+///
+/// `ST_FirstSliceAng` is an unsigned integer the schema bounds to 0..360, and
+/// PowerPoint's own dial offers exactly that range. A file outside it
+/// describes no drawable rotation, so the nearest bound is the closest reading
+/// of what it meant — the same treatment `<c:gapWidth>` gets in
+/// [`bar_percent`] (issue #1429).
+fn first_slice_angle_degrees(value: &str) -> Option<u32> {
+    value
+        .trim()
+        .parse::<i64>()
+        .ok()
+        .map(|degrees| degrees.clamp(0, 360) as u32)
 }
 
 /// Parse series data from within a chart type element (e.g., `<c:barChart>`).
