@@ -1608,8 +1608,10 @@ pub(super) const LEGEND_ENTRY_W: f64 = 78.0;
 /// text-scaled one: 6.505pt plus 0.927 times the resolved size. These
 /// coefficients come from native PowerPoint 16.112 exports of
 /// `bar-chart.pptx` at 10, 12, 18, 24, and 36pt chart-space text. They size the
-/// plot chrome only; [`powerpoint_nice_axis`] separately sizes the horizontal
-/// PowerPoint value axis. Vertical PowerPoint axes remain uncalibrated.
+/// plot chrome only; [`powerpoint_nice_axis`] separately scales the horizontal
+/// PowerPoint value axis. A vertical PowerPoint value axis still picks its own
+/// maximum and step; only the rectangle it runs down is measured, by
+/// [`PPTX_TITLE_BAND_PT`] and [`CHART_TICK_BAND_BASE_PT`] (issue #1437).
 const CHART_LABEL_EDGE_PAD_PT: f64 = 6.505;
 const CHART_LABEL_EDGE_PAD_EM: f64 = 0.927;
 const CHART_LEGEND_BASE_PAD_PT: f64 = 23.008;
@@ -1652,17 +1654,37 @@ pub(super) const PPTX_RIGHT_LEGEND_Y_SHIFT_EM: f64 = -0.357249;
 ///
 /// The 36pt export is deliberately outside the fit. There PowerPoint wraps the
 /// category labels onto a second line and drops the value axis to three ticks,
-/// while we keep one line and ten; our plot rectangle, not the legend rule,
-/// then carries the residual, and it is tracked by #1437.
+/// while we slant them and keep ten; our plot rectangle, not the legend rule,
+/// then carries the residual, and it is tracked by #1675.
+///
+/// The pair is fitted against the content box as #1435 measured it, so
+/// [`powerpoint_right_legend_y_shift`] gives back half of whatever #1437's
+/// measured band later moved that box's top by. Refitting the pair instead
+/// cannot work: it is a function of the legend's size, while the band moves
+/// with the title's and the value axis', and page 8 of the #1220 deck sizes
+/// those differently.
 const PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_PT: f64 = -7.920088;
 const PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_EM: f64 = 0.139188;
 
-/// Fixed chart-area padding that remains after the text-scaled bands.
+/// Band a chart-area title takes when the chart space states a size and the
+/// title does not, *plus* the top inset a bar plot keeps on its own account.
+///
+/// [`axis_plot_insets`] reserves nothing for the bar family, so the two are
+/// fitted together here. A column plot on a slide reserves an inset of its
+/// own and therefore cannot use this band — it would count the bar's a second
+/// time — and takes [`PPTX_TITLE_BAND_PT`] instead (issue #1437).
 const CHART_PLOT_TOP_PAD_PT: f64 = 19.84;
-const CHART_TICK_BAND_BASE_PT: f64 = 6.58;
-
-/// Additional gap above and below the plot, as a multiple of the chart text.
 const CHART_PLOT_TOP_PAD_EM: f64 = 1.465;
+
+/// Fixed part of the band PowerPoint reserves under a plot for the one flat
+/// line of labels that sits there, whichever axis owns them.
+///
+/// Fitted on the #706 bar exports, where the labels are the value ticks.
+/// Re-measuring the *category* band on the #1437 column exports of the same
+/// deck — 25.052, 28.767, 39.902 and 51.028pt at 10, 12, 18 and 24pt — gives
+/// `6.5009 + 1.8554 em`, which reproduces this pair to 0.08pt, so both
+/// families read it (issue #1437).
+const CHART_TICK_BAND_BASE_PT: f64 = 6.58;
 const CHART_TICK_BAND_EM: f64 = 1.855;
 
 /// Left gutter of a column plot whose value labels run down that edge.
@@ -2074,7 +2096,7 @@ fn category_total<'a>(
 /// [`chart_fits_on_one_page`] so the atomicity decision uses the same geometry
 /// the box is actually drawn with.
 fn chart_axis_extent(chart: &Chart) -> (f64, f64) {
-    let (plot_w, plot_h) = axis_plot_size(chart, None);
+    let (plot_w, plot_h) = axis_plot_size(chart, None, 0.0);
     let legend: LegendBox = axis_legend_box(chart);
     let (label_gutter_w, label_gutter_h) = axis_label_gutters(chart, None);
     (
@@ -2866,6 +2888,25 @@ fn axis_label_gutters(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
             EXCEL_COLUMN_BOTTOM_EDGE_PAD_PT
                 + EXCEL_COLUMN_CATEGORY_BAND_AT_NINE_PT
                 + EXCEL_COLUMN_CATEGORY_BAND_GROWTH_EM * (size_pt - 9.0)
+        } else if powerpoint_column_chrome(chart)
+            && (chart.text_style.size_pt.is_some()
+                || chart.category_axis_text_style.size_pt.is_some())
+        {
+            // PowerPoint reserves one band under a plot for the flat labels
+            // that sit there, whichever axis owns them. Re-measuring the
+            // category band on the #1437 column exports of `bar-chart.pptx`
+            // gives 25.052, 28.767, 39.902 and 51.028pt at 10, 12, 18 and 24pt,
+            // whose least-squares line `6.5009 + 1.8554 em` reproduces the bar
+            // family's own value tick band to 0.08pt — so the two share the
+            // constants rather than carrying a near-duplicate pair. Five title
+            // sizes over the same 18pt category axis leave the band on 39.902pt
+            // throughout, which is what says it belongs to the labels.
+            //
+            // [`chart_category_band_pt`] is the band one category takes *across*
+            // the axis, not under it; using it here reserved 3.4em and put the
+            // page-8 plot floor 13.6pt high (issue #1437).
+            CHART_TICK_BAND_BASE_PT
+                + CHART_TICK_BAND_EM * chart_axis_text_pt(chart, chart.category_axis_text_style)
         } else {
             chart_category_band_pt(chart)
         };
@@ -2975,7 +3016,7 @@ const LABEL_OUTSIDE_GAP: f64 = 2.4;
 /// and the legend, so the chart fills its `<p:graphicFrame>` the way PowerPoint
 /// lays it out. Without one it keeps the intrinsic size: `PLOT_MAIN` along the
 /// value axis, one `ROW` per category across it.
-fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
+fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>, title_h: f64) -> (f64, f64) {
     let plot_cross: f64 = chart.categories.len() as f64 * chart_category_band_pt(chart);
     let (intrinsic_w, intrinsic_h) = if matches!(chart.chart_type, ChartType::Bar) {
         (PLOT_MAIN, plot_cross)
@@ -2987,7 +3028,7 @@ fn axis_plot_size(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
     };
     let legend: LegendBox = axis_legend_box(chart);
     let (gutter_w, gutter_h) = axis_label_gutters(chart, frame);
-    let (inset_top, inset_right) = axis_plot_insets(chart, frame);
+    let (inset_top, inset_right) = axis_plot_insets(chart, frame, title_h);
     let secondary_band: f64 = column_secondary_value_band_pt(chart);
     // A frame too small for the chrome would give a negative plot, so the
     // intrinsic size is the floor rather than a source of inverted geometry.
@@ -3018,7 +3059,12 @@ fn column_secondary_value_band_pt(chart: &Chart) -> f64 {
     }
 }
 
-fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
+/// `title_h` is the band the title block takes above the plot box, and zero
+/// when no title is drawn. A framed PowerPoint column plot's top edge is
+/// measured against the chart area itself rather than against that box, so the
+/// inset it keeps is whatever the measured band has left over — see
+/// [`powerpoint_column_top_band_pt`].
+fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>, title_h: f64) -> (f64, f64) {
     if frame.is_some() && matches!(chart.chart_type, ChartType::Column) {
         let has_declared_value_size: bool =
             chart.text_style.size_pt.is_some() || chart.value_axis_text_style.size_pt.is_some();
@@ -3028,13 +3074,55 @@ fn axis_plot_insets(chart: &Chart, frame: Option<(f64, f64)>) -> (f64, f64) {
             EXCEL_COLUMN_TOP_INSET_AT_NINE_PT
                 + EXCEL_COLUMN_TOP_INSET_GROWTH_EM * (size_pt - 9.0).max(0.0)
         } else {
-            CHART_COLUMN_TOP_PAD_PT
-                + CHART_COLUMN_TOP_PAD_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
+            column_plot_own_top_inset_pt(chart)
+        };
+        let top: f64 = match powerpoint_column_top_band_pt(chart, title_h) {
+            // The band is measured from the chart area's own top edge, so the
+            // title block drawn above the plot box has already spent part of
+            // it and the inset is the remainder. That remainder goes negative
+            // where the title block is taller than PowerPoint's whole band —
+            // a 36pt title over an 18pt chart space spends 71.24pt of a
+            // 68.96pt band — and the plot then starts inside the block rather
+            // than 2.28pt below where PowerPoint starts it. The plot's bottom
+            // edge does not move with this, so only the top edge is placed by
+            // it. Its seat and band are #1678.
+            Some(band) => band - title_h,
+            None => top,
         };
         (top, CHART_COLUMN_RIGHT_PAD_PT)
     } else {
         (0.0, 0.0)
     }
+}
+
+/// The whole distance a framed PowerPoint column plot keeps between the chart
+/// area's top edge and its own, in points.
+///
+/// [`PPTX_TITLE_BAND_PT`] holds the two native sweeps this comes from. A chart
+/// drawing no title spends only the plot's own inset, which is what the #841
+/// exports measured; one that declares no size at all keeps the pre-#1437
+/// geometry, since neither sweep covers it.
+fn powerpoint_column_top_band_pt(chart: &Chart, title_h: f64) -> Option<f64> {
+    if !powerpoint_column_chrome(chart)
+        || (chart.title_text_style.size_pt.is_none() && chart.text_style.size_pt.is_none())
+    {
+        return None;
+    }
+    let inset: f64 = column_plot_own_top_inset_pt(chart);
+    if title_h <= 0.0 {
+        return Some(inset);
+    }
+    Some(PPTX_TITLE_BAND_PT + PPTX_TITLE_BAND_EM * chart_area_title_pt(chart) + inset)
+}
+
+/// The top inset a framed column plot keeps on its own account, whatever sits
+/// above it.
+///
+/// Measured on the native #841 exports, whose chart draws no title at all, so
+/// this is the whole distance from the chart area's top edge there.
+fn column_plot_own_top_inset_pt(chart: &Chart) -> f64 {
+    CHART_COLUMN_TOP_PAD_PT
+        + CHART_COLUMN_TOP_PAD_EM * chart_axis_text_pt(chart, chart.value_axis_text_style)
 }
 
 /// What the full chart-area frame leaves its inner content box after the title
@@ -3044,12 +3132,27 @@ fn axis_content_frame(frame: Option<(f64, f64)>, title_h: f64) -> Option<(f64, f
     frame.map(|(width, height)| (width, (height - title_h).max(MIN_PLOT_PT)))
 }
 
+/// Whether the chart is the one family whose vertical chrome is measured
+/// against native PowerPoint: a column plot on a slide.
+///
+/// The bar family keeps its own #706 calibration — see [`PPTX_TITLE_BAND_PT`]
+/// and [`chart_tick_band_pt`] — and the spreadsheet hosts theirs, so the two
+/// bands this gates never reach either (issue #1437).
+fn powerpoint_column_chrome(chart: &Chart) -> bool {
+    chart.host == crate::ir::ChartHost::Presentation
+        && matches!(chart.chart_type, ChartType::Column)
+}
+
 /// Where the plot sits when the chart states no rectangle of its own: hard
 /// against the chrome its labels and its legend reserve.
-fn automatic_plot_origin(chart: &Chart, content_frame: Option<(f64, f64)>) -> (f64, f64) {
+fn automatic_plot_origin(
+    chart: &Chart,
+    content_frame: Option<(f64, f64)>,
+    title_h: f64,
+) -> (f64, f64) {
     let legend: LegendBox = axis_legend_box(chart);
     let (gutter_w, _) = axis_label_gutters(chart, content_frame);
-    let (inset_top, _) = axis_plot_insets(chart, content_frame);
+    let (inset_top, _) = axis_plot_insets(chart, content_frame, title_h);
     (legend.left + gutter_w, legend.top + inset_top)
 }
 
@@ -3129,9 +3232,9 @@ struct AxisPlot {
 /// the automatic one that fills the frame less its chrome.
 fn axis_plot_layout(chart: &Chart, frame: Option<(f64, f64)>, title_h: f64) -> AxisPlot {
     let content_frame: Option<(f64, f64)> = axis_content_frame(frame, title_h);
-    let (auto_x, auto_y) = automatic_plot_origin(chart, content_frame);
+    let (auto_x, auto_y) = automatic_plot_origin(chart, content_frame, title_h);
     let (x, y, width, height) = stated_plot_rect(chart, frame, title_h).unwrap_or_else(|| {
-        let (width, height) = axis_plot_size(chart, content_frame);
+        let (width, height) = axis_plot_size(chart, content_frame, title_h);
         (auto_x, auto_y, width, height)
     });
     AxisPlot {
@@ -3220,6 +3323,41 @@ const CHART_AREA_TITLE_SCALE: f64 = 1.2;
 const CHART_TITLE_BAND_PT: f64 = 8.994;
 const CHART_TITLE_BAND_EM: f64 = 1.72912;
 
+/// The title's share of the band a framed PowerPoint column plot keeps above
+/// itself — which is not [`CHART_TITLE_BAND_EM`]'s Excel figure.
+///
+/// Two one-factor native PowerPoint 16.112 sweeps of
+/// `tests/fixtures/pptx/bar-chart.pptx` repackaged as a column chart on its
+/// 480 x 320pt frame measure the band, the plot's top edge read off the value
+/// axis line with `mutool draw -F trace`:
+///
+/// | probe | factor | plot top below the frame |
+/// | --- | --- | --- |
+/// | `issue-1435-column-legend-center` | chart space 10, 12, 18, 24, 36pt | 34.752, 38.900, 51.353, 63.802, 88.708 |
+/// | `issue-1437-column-plot-top` | title 10, 14, 18, 24, 36pt at an 18pt chart space | 37.192, 42.077, 46.962, 54.282, 68.932 |
+///
+/// The first sweep carries the automatic title with the chart space at
+/// [`CHART_AREA_TITLE_SCALE`]; the second states the title's own size and
+/// leaves every other string at 18pt, so between them the title's share
+/// separates from the plot's own inset. Taking [`axis_plot_insets`]' measured
+/// `5pt + 0.607em` off both series leaves one least-squares line through all
+/// ten exports, `9.0253 + 1.22242 em` on the printed title size, and no export
+/// sits further than 0.026pt from it. Its fixed term lands on
+/// [`CHART_TITLE_BAND_PT`] to 0.032pt, so the two hosts differ in the
+/// text-scaled term alone.
+///
+/// This pair sizes the plot's top edge only, through
+/// [`powerpoint_column_top_band_pt`]. [`chart_area_title_h`] still gives the
+/// title *block* Excel's height and centres the title text in it: correcting
+/// the block without re-seating the text moves the baseline from about 1.9pt
+/// low to about 3.4pt high across these same exports, so the two belong
+/// together and are #1678. The bar family keeps its own #706 band, whose
+/// constant carries a bar plot's top inset as well — see
+/// [`CHART_PLOT_TOP_PAD_PT`] — and re-splitting that needs bar-family exports
+/// this calibration does not have (issue #1437).
+const PPTX_TITLE_BAND_PT: f64 = 9.0253;
+const PPTX_TITLE_BAND_EM: f64 = 1.22242;
+
 /// Left text inset inside a manually positioned PowerPoint chart-title box.
 ///
 /// The two title layouts in `GENERAL SERVICES.pptx` put the first glyph
@@ -3271,6 +3409,11 @@ fn chart_area_title_pt(chart: &Chart) -> f64 {
 /// 36pt establish the explicit chart-space size relationship in between (#706).
 /// It changes only the title/plot chrome, not the horizontal PowerPoint
 /// automatic axis scale resolved by [`powerpoint_nice_axis`].
+///
+/// The band a framed PowerPoint column plot's *top edge* sits below is measured
+/// separately and in full — see [`PPTX_TITLE_BAND_PT`] — so that family's plot
+/// does not inherit this height. Moving the title text with it needs the seat
+/// inside the band re-derived, which is #1678.
 pub(super) fn chart_area_title_h(chart: &Chart) -> f64 {
     if chart.title_text_style.size_pt.is_some() {
         CHART_TITLE_BAND_PT + CHART_TITLE_BAND_EM * chart_area_title_pt(chart)
@@ -3932,8 +4075,10 @@ fn powerpoint_right_legend_inset(
         .into_iter()
         .reduce(f64::max)?
         * size_pt;
+    // Only the right reserve is wanted here, and no title band reaches it, so
+    // the band argument is immaterial.
     let plot_right_reserve: f64 =
-        axis_plot_insets(chart, frame).1 + column_secondary_value_band_pt(chart);
+        axis_plot_insets(chart, frame, 0.0).1 + column_secondary_value_band_pt(chart);
     Some((
         key_size_pt + key_label_gap_pt + widest_label,
         PPTX_LEGEND_RIGHT_EDGE_PAD_PT - plot_right_reserve,
@@ -3948,7 +4093,11 @@ fn powerpoint_right_legend_inset(
 /// chart's in the category label band, so each needs its own measured pair.
 /// Anything else — another host, another edge, another plot family — keeps the
 /// uncorrected placement.
-pub(super) fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
+pub(super) fn powerpoint_right_legend_y_shift(
+    chart: &Chart,
+    frame: Option<(f64, f64)>,
+    title_h: f64,
+) -> f64 {
     if !matches!(chart.host, crate::ir::ChartHost::Presentation)
         || !matches!(chart.legend_position, LegendPosition::Right)
     {
@@ -3958,7 +4107,15 @@ pub(super) fn powerpoint_right_legend_y_shift(chart: &Chart) -> f64 {
     match chart.chart_type {
         ChartType::Bar => PPTX_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_RIGHT_LEGEND_Y_SHIFT_EM * size_pt,
         ChartType::Column => {
+            // The stack is centred on a box whose top is the plot's own inset,
+            // and that box's centre moves half as far as the inset does. #1437
+            // re-placed the plot's top edge from a measured band, so the pair
+            // fitted against the pre-#1437 box gives the difference back and
+            // the native key tops it was fitted to stay put.
+            let moved: f64 =
+                axis_plot_insets(chart, frame, title_h).0 - column_plot_own_top_inset_pt(chart);
             PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_PT + PPTX_COLUMN_RIGHT_LEGEND_Y_SHIFT_EM * size_pt
+                - moved / 2.0
         }
         _ => 0.0,
     }
@@ -3981,8 +4138,9 @@ fn axis_legend_row_height_pt(chart: &Chart) -> f64 {
 /// edge clearances observed in the same native multi-size exports used for the
 /// other #706 chart chrome. Horizontal legends retain their per-entry layout;
 /// neither branch chooses the host-specific axis scale. Horizontal PowerPoint
-/// scaling is resolved after this box yields the plot width; vertical
-/// PowerPoint axes remain uncalibrated.
+/// scaling is resolved after this box yields the plot width; a vertical
+/// PowerPoint value axis still scales itself, though the rectangle it runs
+/// down is measured (issue #1437).
 fn axis_legend_box(chart: &Chart) -> LegendBox {
     if !chart.has_legend {
         return LegendBox::hidden();
@@ -4791,16 +4949,25 @@ fn generate_chart_axis(
         let name: &str = s.name.as_deref().unwrap_or(&default_name);
         // The content the legend sits beside spans the plot and both label
         // gutters, so a bottom legend clears the category labels.
+        // A column plot on a slide measures its own bottom band, so the box
+        // has to be the one the plot was laid out inside; taking the generic
+        // band here left the legend centred on a box the plot no longer filled
+        // (issue #1437).
+        let measures_own_band: bool = (chart.host == crate::ir::ChartHost::Spreadsheet
+            || powerpoint_column_chrome(chart))
+            && (chart.text_style.size_pt.is_some()
+                || chart.category_axis_text_style.size_pt.is_some());
         let (gutter_w, gutter_h) = if horizontal {
             (
                 chart_category_gutter_pt(chart) + GAP,
-                chart_tick_band_pt(chart),
+                if powerpoint_column_chrome(chart) && measures_own_band {
+                    axis_label_gutters(chart, frame).1
+                } else {
+                    chart_tick_band_pt(chart)
+                },
             )
         } else {
-            let category_gutter_h: f64 = if chart.host == crate::ir::ChartHost::Spreadsheet
-                && (chart.text_style.size_pt.is_some()
-                    || chart.category_axis_text_style.size_pt.is_some())
-            {
+            let category_gutter_h: f64 = if measures_own_band {
                 axis_label_gutters(chart, frame).1
             } else {
                 chart_category_band_pt(chart)
@@ -4821,7 +4988,7 @@ fn generate_chart_axis(
                 row_h: axis_legend_row_height_pt(chart),
                 widths: &entry_widths,
                 right_inset,
-                side_y_shift: powerpoint_right_legend_y_shift(chart),
+                side_y_shift: powerpoint_right_legend_y_shift(chart, frame, title_h),
                 horizontal_end_trim,
                 horizontal_x_shift,
             },

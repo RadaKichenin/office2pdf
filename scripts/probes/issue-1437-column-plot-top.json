@@ -1,0 +1,44 @@
+{
+  "name": "issue-1437-column-plot-top",
+  "base": "../../tests/fixtures/pptx/bar-chart.pptx",
+  "part": "ppt/charts/chart1.xml",
+  "factor": "column chart title c:defRPr sz (1/100 pt), chart space held at 1800",
+  "page": 1,
+  "variants": [
+    {
+      "value": "1000",
+      "find": "<c:title><c:layout/><c:overlay val=\"0\"/></c:title>(<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/><c:barChart><c:barDir val=\")bar(\")",
+      "replace": "<c:title><c:layout/><c:overlay val=\"0\"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1000\"/></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title>\\g<1>col\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "1400",
+      "find": "<c:title><c:layout/><c:overlay val=\"0\"/></c:title>(<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/><c:barChart><c:barDir val=\")bar(\")",
+      "replace": "<c:title><c:layout/><c:overlay val=\"0\"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1400\"/></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title>\\g<1>col\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "1800",
+      "find": "<c:title><c:layout/><c:overlay val=\"0\"/></c:title>(<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/><c:barChart><c:barDir val=\")bar(\")",
+      "replace": "<c:title><c:layout/><c:overlay val=\"0\"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"1800\"/></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title>\\g<1>col\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "2400",
+      "find": "<c:title><c:layout/><c:overlay val=\"0\"/></c:title>(<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/><c:barChart><c:barDir val=\")bar(\")",
+      "replace": "<c:title><c:layout/><c:overlay val=\"0\"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"2400\"/></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title>\\g<1>col\\g<2>",
+      "regex": true,
+      "count": 1
+    },
+    {
+      "value": "3600",
+      "find": "<c:title><c:layout/><c:overlay val=\"0\"/></c:title>(<c:autoTitleDeleted val=\"0\"/><c:plotArea><c:layout/><c:barChart><c:barDir val=\")bar(\")",
+      "replace": "<c:title><c:layout/><c:overlay val=\"0\"/><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz=\"3600\"/></a:pPr><a:endParaRPr lang=\"en-US\"/></a:p></c:txPr></c:title>\\g<1>col\\g<2>",
+      "regex": true,
+      "count": 1
+    }
+  ]
+}
