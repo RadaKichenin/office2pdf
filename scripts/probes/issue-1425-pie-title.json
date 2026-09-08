@@ -1,0 +1,15 @@
+{
+  "name": "issue-1425-pie-title",
+  "base": "../../tests/fixtures/pptx/pie-chart.pptx",
+  "part": "ppt/charts/chart1.xml",
+  "factor": "chart title present",
+  "page": 1,
+  "variants": [
+    {
+      "value": "deleted",
+      "find": "<c:title><c:layout/><c:overlay val=\"0\"/></c:title><c:autoTitleDeleted val=\"0\"/>",
+      "replace": "<c:autoTitleDeleted val=\"1\"/>",
+      "count": 1
+    }
+  ]
+}

@@ -9562,3 +9562,160 @@ fn a_line_over_columns_reads_against_its_secondary_axis() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Automatic pie and doughnut plot inset (issue #1425)
+// ---------------------------------------------------------------------------
+
+/// A pie or doughnut of four equal slices, with no title and no legend.
+///
+/// Equal quarters put a wedge boundary at twelve, three, six and nine o'clock,
+/// so the emitted vertices land on the circle's own extremes and the drawn
+/// bounding box is the plot circle rather than a chord of it.
+fn quartered_pie_chart(chart_type: ChartType) -> Chart {
+    let mut chart = sized_bar_chart(CHART_DEFAULT_TEXT_PT);
+    chart.chart_type = chart_type;
+    chart.title = None;
+    chart.has_legend = false;
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.categories = ["Q1", "Q2", "Q3", "Q4"].map(str::to_string).to_vec();
+    chart.series.truncate(1);
+    chart.series[0].values = vec![25.0, 25.0, 25.0, 25.0];
+    chart.series[0].data_labels = DataLabels::default();
+    chart
+}
+
+/// The centre, outer radius and inner radius of the drawn wedges, in points.
+///
+/// Every wedge vertex is stated as `((x pt, y pt), (in…), (out…))`, so the
+/// first pair of each triple is a point on the drawn outline. The circle is
+/// read back from those points alone, which keeps the assertion on what the
+/// chart draws rather than on how the generator arrived at it.
+fn emitted_ring_geometry(source: &str) -> ((f64, f64), f64, f64) {
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    for line in source.lines().filter(|line| line.contains("path(fill:")) {
+        for triple in line.split("((").skip(1) {
+            let Some((pair, _)) = triple.split_once("),") else {
+                continue;
+            };
+            let Some((x, y)) = pair.split_once(", ") else {
+                continue;
+            };
+            if let (Ok(x), Ok(y)) = (
+                x.trim_end_matches("pt").parse::<f64>(),
+                y.trim_end_matches("pt").parse::<f64>(),
+            ) {
+                points.push((x, y));
+            }
+        }
+    }
+    assert!(!points.is_empty(), "no wedge path in:\n{source}");
+    let min_x: f64 = points.iter().map(|(x, _)| *x).fold(f64::MAX, f64::min);
+    let max_x: f64 = points.iter().map(|(x, _)| *x).fold(f64::MIN, f64::max);
+    let min_y: f64 = points.iter().map(|(_, y)| *y).fold(f64::MAX, f64::min);
+    let max_y: f64 = points.iter().map(|(_, y)| *y).fold(f64::MIN, f64::max);
+    let centre: (f64, f64) = ((min_x + max_x) / 2.0, (min_y + max_y) / 2.0);
+    let radius = |(x, y): &(f64, f64)| ((x - centre.0).powi(2) + (y - centre.1).powi(2)).sqrt();
+    let outer: f64 = points.iter().map(radius).fold(f64::MIN, f64::max);
+    let inner: f64 = points.iter().map(radius).fold(f64::MAX, f64::min);
+    (centre, outer, inner)
+}
+
+#[test]
+fn an_automatic_powerpoint_pie_reserves_the_native_plot_inset() {
+    // Native PowerPoint for Mac 16.112 exports, measured off the wedge paths
+    // with `scripts/probe_harness.py --backend office`: the plot circle is the
+    // chart area's smaller side less a constant 22pt, whatever that side is.
+    for (frame_w, frame_h) in [
+        (480.0, 320.0),
+        (340.0, 340.0),
+        (563.125, 340.125),
+        (240.0, 320.0),
+        (208.8, 122.4),
+    ] {
+        let source: String =
+            framed_chart_source(&quartered_pie_chart(ChartType::Pie), frame_w, frame_h);
+        let (centre, outer, _) = emitted_ring_geometry(&source);
+        assert!(
+            (outer * 2.0 - (frame_w.min(frame_h) - 22.0)).abs() < 0.01,
+            "{frame_w}x{frame_h}pt frame: expected a {:.3}pt circle, drew {:.3}pt",
+            frame_w.min(frame_h) - 22.0,
+            outer * 2.0
+        );
+        assert!(
+            (centre.0 - frame_w / 2.0).abs() < 0.01 && (centre.1 - frame_h / 2.0).abs() < 0.01,
+            "{frame_w}x{frame_h}pt frame: the inset is symmetric, so the circle stays centred; \
+             got {centre:?}"
+        );
+    }
+}
+
+#[test]
+fn an_automatic_powerpoint_doughnut_insets_its_ring_and_keeps_its_hole() {
+    for (frame_w, frame_h, hole) in [
+        (563.125, 340.125, 71_u32),
+        (208.8, 122.4, 62),
+        (320.0, 480.0, 40),
+    ] {
+        let mut chart = quartered_pie_chart(ChartType::Doughnut);
+        chart.hole_size_percent = Some(hole);
+        let source: String = framed_chart_source(&chart, frame_w, frame_h);
+        let (centre, outer, inner) = emitted_ring_geometry(&source);
+        assert!(
+            (outer * 2.0 - (frame_w.min(frame_h) - 22.0)).abs() < 0.01,
+            "{frame_w}x{frame_h}pt frame: expected a {:.3}pt ring, drew {:.3}pt",
+            frame_w.min(frame_h) - 22.0,
+            outer * 2.0
+        );
+        assert!(
+            (inner / outer - f64::from(hole) / 100.0).abs() < 1e-6,
+            "the inset must not disturb the authored {hole}% hole, got {:.4}",
+            inner / outer
+        );
+        assert!(
+            (centre.0 - frame_w / 2.0).abs() < 0.01 && (centre.1 - frame_h / 2.0).abs() < 0.01,
+            "{frame_w}x{frame_h}pt frame: ring centre {centre:?}"
+        );
+    }
+}
+
+#[test]
+fn a_worksheet_pie_keeps_the_plot_size_excel_was_measured_at() {
+    // The 22pt inset is a PowerPoint measurement. Excel's own automatic pie
+    // inset is unmeasured, so a worksheet chart keeps what it drew before.
+    for host in [
+        crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+        crate::ir::ChartHost::WordProcessing,
+    ] {
+        let mut chart = quartered_pie_chart(ChartType::Pie);
+        chart.host = host;
+        let source: String = framed_chart_source(&chart, 480.0, 320.0);
+        let (_, outer, _) = emitted_ring_geometry(&source);
+        assert!(
+            (outer * 2.0 - 320.0).abs() < 0.01,
+            "{host:?}: expected the full 320pt, drew {:.3}pt",
+            outer * 2.0
+        );
+    }
+}
+
+#[test]
+fn a_stated_plot_rectangle_keeps_a_pie_off_the_automatic_inset() {
+    // `c:plotArea/c:layout` places the plot itself, so the automatic inset is
+    // not the rule that applies; the stated case is left exactly as it was.
+    let mut chart = quartered_pie_chart(ChartType::Pie);
+    chart.plot_area_layout = Some(crate::ir::ChartPlotAreaLayout {
+        x: 0.05,
+        y: 0.05,
+        width: 0.9,
+        height: 0.9,
+    });
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    let (_, outer, _) = emitted_ring_geometry(&source);
+    assert!(
+        (outer * 2.0 - 320.0).abs() < 0.01,
+        "expected the stated-layout pie unchanged at 320pt, drew {:.3}pt",
+        outer * 2.0
+    );
+}
