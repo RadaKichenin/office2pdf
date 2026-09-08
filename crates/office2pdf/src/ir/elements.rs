@@ -366,7 +366,9 @@ pub struct Chart {
     /// Run properties `c:chartSpace/c:txPr` declares, which govern every string
     /// the chart draws unless a more specific `c:txPr` overrides them.
     pub text_style: ChartTextStyle,
-    /// What `c:title/c:txPr` declares for the chart-area title alone.
+    /// What `c:title` declares for the chart-area title alone: its
+    /// `c:tx/c:rich` run and paragraph properties merged over its own
+    /// `c:txPr`, the rich text winning where both speak (issue #1424).
     ///
     /// Office writes the title's size, weight and colour here rather than on
     /// the chart space, so a title reading its size off `text_style` gets the
@@ -581,6 +583,25 @@ impl ChartTextStyle {
     /// This style's colour where `override_style` states none.
     pub fn resolved_color(self, override_style: Self) -> Option<Color> {
         override_style.color.or(self.color)
+    }
+
+    /// This style with every property `override_style` states replacing it.
+    ///
+    /// The chart title's formatting arrives on two elements at once — the
+    /// `<c:tx><c:rich>` runs that carry the string and the `<c:txPr>` that
+    /// carries the defaults for the empty run after it — and the model holds
+    /// one style per scope, so the more specific element is merged in as it is
+    /// read rather than at the rendering edge (issue #1424).
+    pub fn overridden_by(self, override_style: Self) -> Self {
+        Self {
+            size_pt: self.resolved_size_pt(override_style),
+            bold: self.resolved_bold(override_style),
+            letter_spacing_hundredths: override_style
+                .letter_spacing_hundredths
+                .or(self.letter_spacing_hundredths),
+            color: self.resolved_color(override_style),
+            ellipsis_overflow: self.ellipsis_overflow || override_style.ellipsis_overflow,
+        }
     }
 }
 
