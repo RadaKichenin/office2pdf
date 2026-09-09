@@ -187,6 +187,47 @@ fn a_custom_geometry_horizontal_flip_mirrors_only_x() {
     assert_eq!(subpaths[0].vertices, vec![(0.75, 0.25), (0.25, 0.75)]);
 }
 
+/// A shape box may be zero-height. The page-8 title rule of the deck on
+/// issue #1447 is `<a:ext cx="3708000" cy="0"/>` around an open two-point
+/// custom geometry, and its `<a:path w=…>` declares no `h`. That subpath used
+/// to be discarded for want of a vertical coordinate space, leaving the
+/// rectangle fallback to stroke a closed zero-height box whose round corner
+/// joins printed as semicircular ends where PowerPoint draws flat ones.
+#[test]
+fn a_zero_height_custom_geometry_rule_stays_an_open_line() {
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Rule"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="942535" y="1337304"/><a:ext cx="3708000" cy="0"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="3218815"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="3218395" y="0"/></a:lnTo></a:path></a:pathLst></a:custGeom><a:ln w="54863"><a:solidFill><a:srgbClr val="F0CDA1"/></a:solidFill></a:ln></p:spPr></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let (document, _warnings) = PptxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the zero-height rule deck parses");
+    let page = first_fixed_page(&document);
+    let FixedElementKind::Shape(parsed_shape) = &page.elements[0].kind else {
+        panic!("expected a custom Shape, got {:?}", page.elements[0].kind);
+    };
+    let ShapeKind::Path { subpaths } = &parsed_shape.kind else {
+        panic!(
+            "a zero-height rule must keep its open path, got {:?}",
+            parsed_shape.kind
+        );
+    };
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    assert!(
+        !subpaths[0].closed,
+        "the rule declares no a:close, so its stroke must not join back"
+    );
+    assert_eq!(subpaths[0].vertices.len(), 2, "got {:?}", subpaths[0]);
+    assert_eq!(subpaths[0].vertices[0], (0.0, 0.0));
+    assert!(
+        (subpaths[0].vertices[1].0 - 3_218_395.0 / 3_218_815.0).abs() < 1e-9,
+        "the horizontal span comes from the path's own space, got {:?}",
+        subpaths[0].vertices[1]
+    );
+    assert_eq!(subpaths[0].vertices[1].1, 0.0);
+}
+
 #[test]
 fn test_shape_transparency() {
     let shape = make_styled_shape(

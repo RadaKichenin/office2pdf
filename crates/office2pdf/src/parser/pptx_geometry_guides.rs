@@ -37,6 +37,15 @@ impl ShapeExtent {
     pub(crate) fn is_usable(&self) -> bool {
         self.width > 0.0 && self.height > 0.0
     }
+
+    /// Whether the box has any extent at all.
+    ///
+    /// One zero axis still places a coordinate — on the axis that remains,
+    /// which is how DrawingML states a straight rule (`cy="0"`). A box with
+    /// neither axis places nothing at all (issue #1447).
+    pub(crate) fn spans_an_axis(&self) -> bool {
+        self.width > 0.0 || self.height > 0.0
+    }
 }
 
 /// The guides a geometry has defined so far, and the box they measure against.
