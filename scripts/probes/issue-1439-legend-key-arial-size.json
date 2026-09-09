@@ -1,0 +1,39 @@
+{
+  "name": "issue-1439-legend-key-arial-size",
+  "base": "../../tests/fixtures/pptx/bar-chart.pptx",
+  "part": "ppt/charts/chart1.xml",
+  "factor": "chart-space c:defRPr sz (1/100 pt) in Arial",
+  "page": 1,
+  "variants": [
+    {
+      "value": "1000",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1000\"><a:latin typeface=\"Arial\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "1200",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1200\"><a:latin typeface=\"Arial\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "1800",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Arial\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "2400",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"2400\"><a:latin typeface=\"Arial\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "3600",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"3600\"><a:latin typeface=\"Arial\"/></a:defRPr>",
+      "count": 1
+    }
+  ]
+}

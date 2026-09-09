@@ -4,7 +4,7 @@ use crate::ir::MarkerSymbol;
 use crate::ir::{ChartAreaFill, ChartAreaOutline};
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
-    LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_EM,
+    LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE,
     PPTX_LEGEND_KEY_LABEL_GAP_PT, PPTX_RIGHT_LEGEND_Y_SHIFT_EM, PPTX_RIGHT_LEGEND_Y_SHIFT_PT, ROW,
     SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP, axis_plot_rect, chart_area_title_h,
     chart_category_band_pt, chart_category_gutter_pt, chart_category_rotated_label_x,
@@ -4381,16 +4381,139 @@ fn a_powerpoint_right_legend_places_its_scaled_entry_at_multiple_sizes() {
             .lines()
             .find(|line| line.contains("box[#box") && line.contains("[Sales]]"))
             .expect("the chart emits its Sales legend entry");
-        let key_size = PPTX_LEGEND_KEY_EM * size_pt;
-        let gap = PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt;
-        assert!((key_size - expected_key_size).abs() <= 0.002);
-        assert!((gap - expected_gap).abs() <= 0.001);
-        assert!(entry.contains(&format!(
-            "box(width: {}pt, height: {}pt",
-            format_f64(key_size),
-            format_f64(key_size)
-        )));
-        assert!(entry.contains(&format!("#h({}pt)", format_f64(gap))));
+        let (key_size, key_height, gap) = *emitted_legend_key_boxes(entry)
+            .first()
+            .expect("the legend entry draws its filled key");
+        assert!(
+            (key_size - expected_key_size).abs() <= 0.002
+                && (key_height - expected_key_size).abs() <= 0.002,
+            "{size_pt}pt PowerPoint key is {key_size}pt by {key_height}pt, native {expected_key_size}pt; got:\n{source}"
+        );
+        assert!(
+            (gap - expected_gap).abs() <= 0.001,
+            "{size_pt}pt PowerPoint key leaves {gap}pt before its label, native {expected_gap}pt; got:\n{source}"
+        );
+    }
+}
+
+/// Native PowerPoint 16.112 exports of `tests/fixtures/pptx/bar-chart.pptx`
+/// with only the chart space's `<a:latin>` typeface patched, driven by
+/// `scripts/probes/issue-1439-legend-key-face.json` and gated by its
+/// layout-identical re-zip control. Each row is the source face, its
+/// `hhea` ascent-plus-descent sum in the face's own em, the key side that
+/// export draws at 18pt chart text, and the gap it leaves before the label.
+/// Read off `mutool draw -F trace`; the control is the Calibri row, which the
+/// theme's minor font supplies (#1439).
+const POWERPOINT_LEGEND_KEY_FACE_EXPORTS: [(&str, f64, f64, f64); 7] = [
+    ("Calibri", (1950.0 + 550.0) / 2048.0, 9.8887, 4.5694),
+    ("Arial", (1854.0 + 434.0) / 2048.0, 9.0495, 4.1498),
+    ("Times New Roman", (1825.0 + 443.0) / 2048.0, 8.9707, 4.1104),
+    ("Courier New", (1705.0 + 615.0) / 2048.0, 9.1755, 4.2127),
+    ("Georgia", (1878.0 + 449.0) / 2048.0, 9.2025, 4.2262),
+    ("Trebuchet MS", (1923.0 + 455.0) / 2048.0, 9.4050, 4.3275),
+    ("Verdana", (2059.0 + 430.0) / 2048.0, 9.8438, 4.5469),
+];
+
+/// The 18pt PowerPoint right legend of the probe series, in `family`.
+fn powerpoint_legend_key_sweep_chart(family: &str, size_pt: f64) -> Chart {
+    let mut chart = bar_chart_at(Some(size_pt), &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+    chart.series.truncate(1);
+    chart.series[0].name = Some("Sales".to_string());
+    chart.has_legend = true;
+    chart.legend_position = LegendPosition::Right;
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_font_family = Some(family.to_string());
+    chart
+}
+
+#[test]
+fn a_powerpoint_legend_key_sizes_itself_from_the_legend_face_line_box() {
+    // Seven faces over one 18pt chart separate the face from the size: a key
+    // fitted in Calibri ems alone draws every one of them 9.8874pt wide, where
+    // the native exports span 8.9707..9.8887pt.
+    let mut checked: Vec<&str> = Vec::new();
+    for (family, source_line_box_em, native_side_pt, native_gap_pt) in
+        POWERPOINT_LEGEND_KEY_FACE_EXPORTS
+    {
+        // A runner without the source face installed resolves a substitute
+        // whose line box belongs to another design, and the native number
+        // cannot be asserted against that. Calibri's metrics are calibrated
+        // in-tree and reach every runner, so the sweep never empties out --
+        // the assertion after the loop is what holds that.
+        let Some((ascent_em, descent_em)) = chart_face_line_metrics_em(family, false) else {
+            continue;
+        };
+        if (ascent_em + descent_em - source_line_box_em).abs() > 1e-6 {
+            continue;
+        }
+        checked.push(family);
+
+        let source = framed_chart_source(
+            &powerpoint_legend_key_sweep_chart(family, 18.0),
+            480.0,
+            320.0,
+        );
+        let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+        assert_eq!(
+            keys.len(),
+            1,
+            "the one series takes one key; got:\n{source}"
+        );
+        let (width_pt, height_pt, gap_pt) = keys[0];
+        assert!(
+            (width_pt - native_side_pt).abs() <= 0.002
+                && (height_pt - native_side_pt).abs() <= 0.002,
+            "{family}: PowerPoint draws a {native_side_pt}pt square key, got {width_pt}pt by {height_pt}pt in:\n{source}"
+        );
+        assert!(
+            (gap_pt - native_gap_pt).abs() <= 0.002,
+            "{family}: PowerPoint leaves {native_gap_pt}pt before the label, got {gap_pt}pt in:\n{source}"
+        );
+    }
+    assert!(
+        checked.contains(&"Calibri"),
+        "the calibrated Calibri row must be checked on every runner; checked {checked:?}"
+    );
+}
+
+#[test]
+fn a_powerpoint_legend_key_scales_that_line_box_with_chart_text() {
+    // The same probe holding the face at Arial and moving the chart space's
+    // `<a:defRPr sz>` instead
+    // (`scripts/probes/issue-1439-legend-key-arial-size.json`): one line box
+    // times the size, with no fixed term anywhere in the series.
+    let (arial, arial_line_box_em, _, _) = POWERPOINT_LEGEND_KEY_FACE_EXPORTS[1];
+    // Arial is the runner-dependent half of the sweep above; where the source
+    // face is absent there is nothing native to compare a substitute against.
+    let Some((ascent_em, descent_em)) = chart_face_line_metrics_em(arial, false) else {
+        return;
+    };
+    if (ascent_em + descent_em - arial_line_box_em).abs() > 1e-6 {
+        return;
+    }
+    for (size_pt, native_side_pt) in [
+        (10.0_f64, 5.0288_f64),
+        (12.0, 6.0345),
+        (18.0, 9.0495),
+        (24.0, 12.0646),
+        (36.0, 18.0989),
+    ] {
+        let source = framed_chart_source(
+            &powerpoint_legend_key_sweep_chart(arial, size_pt),
+            480.0,
+            320.0,
+        );
+        let keys: Vec<(f64, f64, f64)> = emitted_legend_key_boxes(&source);
+        assert_eq!(
+            keys.len(),
+            1,
+            "the one series takes one key; got:\n{source}"
+        );
+        assert!(
+            (keys[0].0 - native_side_pt).abs() <= 0.002,
+            "{size_pt}pt {arial}: PowerPoint draws a {native_side_pt}pt key, got {}pt in:\n{source}",
+            keys[0].0
+        );
     }
 }
 
@@ -7660,7 +7783,7 @@ fn an_excel_chartsheet_legend_key_scales_as_a_square_with_its_text() {
         );
         let expected_side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
         let expected_gap_pt: f64 =
-            PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt;
+            PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE * expected_side_pt + PPTX_LEGEND_KEY_LABEL_GAP_PT;
         for (width_pt, height_pt, gap_pt) in keys {
             assert!(
                 (width_pt - expected_side_pt).abs() <= 0.01

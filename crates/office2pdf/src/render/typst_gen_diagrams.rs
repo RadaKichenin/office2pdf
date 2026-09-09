@@ -495,17 +495,24 @@ pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, label: &str) -> Opt
     )
 }
 
-/// The share of the legend face's line box Excel gives a filled key's height.
+/// The share of the legend face's line box a filled legend key spends.
 ///
-/// The key is a flat bar, not a square: 5.39pt tall for the 9pt Segoe UI legend
-/// of the #1169 workbook against a 19.2pt width. The height is the only part of
-/// the key that moves, and it follows the face as well as the size — 4.9512pt
-/// in Calibri where Segoe UI gives 5.3902 at the same 9pt — which identifies it
-/// as a share of [`chart_face_line_metrics_em`]'s bare `hhea` box rather than
-/// of the size. Fitting all ten exports gives 0.4498 (Segoe UI 6/9/12/18/24pt,
-/// Calibri 9/18pt, Arial and Georgia at 9pt), inside the 0.0122pt the GT's own
-/// 0.82 print scale can resolve of a flat 0.45.
-const EXCEL_LEGEND_KEY_LINE_BOX_SHARE: f64 = 0.45;
+/// Excel's key is a flat bar, not a square: 5.39pt tall for the 9pt Segoe UI
+/// legend of the #1169 workbook against a 19.2pt width. The height is the only
+/// part of that key that moves, and it follows the face as well as the size —
+/// 4.9512pt in Calibri where Segoe UI gives 5.3902 at the same 9pt — which
+/// identifies it as a share of [`chart_face_line_metrics_em`]'s bare `hhea`
+/// box rather than of the size. Fitting all ten exports gives 0.4498 (Segoe UI
+/// 6/9/12/18/24pt, Calibri 9/18pt, Arial and Georgia at 9pt), inside the
+/// 0.0122pt the GT's own 0.82 print scale can resolve of a flat 0.45.
+///
+/// PowerPoint spends the same share on the *side* of its square key. Eleven
+/// native PowerPoint 16.112 exports of `bar-chart.pptx`, seven faces at 18pt
+/// through `scripts/probes/issue-1439-legend-key-face.json` and five Arial
+/// sizes through `scripts/probes/issue-1439-legend-key-arial-size.json`, put
+/// the ratio between 0.44995 and 0.45005 with no export further than 0.0017pt
+/// from a flat 0.45 (#1439).
+const LEGEND_KEY_LINE_BOX_SHARE: f64 = 0.45;
 
 /// Worksheet-space origin and the existing plot calibration, before printing
 /// applies the sheet scale. Legend samples use their independent placement.
@@ -1617,17 +1624,31 @@ const CHART_LABEL_EDGE_PAD_EM: f64 = 0.927;
 const CHART_LEGEND_BASE_PAD_PT: f64 = 23.008;
 const CHART_LEGEND_PAD_EM: f64 = 1.605;
 
-/// PowerPoint's square legend key and the visible space after it scale with
-/// chart text. The right-hand entry is then fitted against a stable frame-edge
-/// clearance instead of starting immediately after the plot.
+/// The side PowerPoint gives a square legend key where the legend face cannot
+/// be measured, as a multiple of chart text.
 ///
-/// Measured from native PowerPoint 16.112 exports of `bar-chart.pptx` at 10,
-/// 12, 18, 24, and 36pt chart text. The fixed/relative gap fit stays within
-/// 0.001pt of all five exports; the right-edge clearance is the midpoint of
-/// the 12pt and 18pt layouts used by the regression test.
-pub(super) const PPTX_LEGEND_KEY_EM: f64 = 0.5493;
+/// It is [`LEGEND_KEY_LINE_BOX_SHARE`] of Calibri's own line box, which is what
+/// the five native PowerPoint 16.112 exports of `bar-chart.pptx` at 10, 12, 18,
+/// 24 and 36pt chart text measured before the face term was separated out
+/// (#804): the theme's minor font supplies Calibri to all five. A
+/// font-search-free build (notably wasm) resolves no metrics for an arbitrary
+/// family, and sizing the key from the deck's declared size alone is closer
+/// than sizing it from whatever substitute the runner happens to hold.
+pub(super) const PPTX_LEGEND_KEY_EM: f64 =
+    LEGEND_KEY_LINE_BOX_SHARE * (CALIBRI_CHART_LINE_METRICS_EM.0 + CALIBRI_CHART_LINE_METRICS_EM.1);
+
+/// The visible space PowerPoint leaves between a legend key and its label:
+/// half the key's own side, less a fixed 0.375pt.
+///
+/// Measured from the key's right edge to the label's first pen position, which
+/// is what `#h()` sets. The seven-face sweep of
+/// `scripts/probes/issue-1439-legend-key-face.json` holds this pair to
+/// 0.0006pt at 18pt chart text — 4.1104pt in Times New Roman against 4.5694pt
+/// in Calibri, each exactly half its own key — and Excel's chartsheet export
+/// agrees independently: a 4.9433pt key at 9pt is followed by 2.0967pt
+/// (#1315, #1439).
 pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_PT: f64 = -0.375;
-pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_EM: f64 = 0.274655;
+pub(super) const PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE: f64 = 0.5;
 const PPTX_LEGEND_RIGHT_EDGE_PAD_PT: f64 = 10.127;
 
 /// Vertical correction for a PowerPoint right-side legend centred beside a
@@ -3970,29 +3991,36 @@ struct LegendKeyMetrics {
 
 /// The legend key metrics of the host the chart came from.
 ///
-/// PowerPoint and an Excel chartsheet scale an axis chart's *square* key and
-/// its following gap with chart text (#804, #1315). An Excel chart anchored to
-/// a worksheet draws a flat bar instead — [`LEGEND_KEY_LEN_PT`] wide whatever
-/// the text, [`EXCEL_LEGEND_KEY_LINE_BOX_SHARE`] of the legend face's line box
-/// tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before the label
-/// (#1169). A Word-hosted chart has never been measured against a native
-/// export, so it keeps the legacy square.
+/// PowerPoint and an Excel chartsheet draw an axis chart's key as a *square*
+/// [`LEGEND_KEY_LINE_BOX_SHARE`] of the legend face's line box on a side, and
+/// leave half that side less [`PPTX_LEGEND_KEY_LABEL_GAP_PT`] before the label
+/// (#804, #1315, #1439). An Excel chart anchored to a worksheet draws a flat
+/// bar instead — [`LEGEND_KEY_LEN_PT`] wide whatever the text, the same share
+/// of the line box tall — and leaves [`EXCEL_LEGEND_KEY_LABEL_GAP_PT`] before
+/// the label (#1169). A Word-hosted chart has never been measured against a
+/// native export, so it keeps the legacy square.
+///
+/// Only the chartsheet has been measured in one face; it shares this path with
+/// PowerPoint as #1315 established, and the worksheet bar beside it spends the
+/// same share of the same box, which is why the face term is not restated for
+/// it.
 fn axis_legend_entry_metrics(chart: &Chart) -> LegendKeyMetrics {
     let size_pt: f64 = chart_legend_text_pt(chart);
     if matches!(
         chart.host,
         crate::ir::ChartHost::Presentation | crate::ir::ChartHost::SpreadsheetChartsheet
     ) {
-        let side_pt: f64 = PPTX_LEGEND_KEY_EM * size_pt;
+        let side_pt: f64 = legend_key_line_box_pt(chart).unwrap_or(PPTX_LEGEND_KEY_EM * size_pt);
         return LegendKeyMetrics {
             width_pt: side_pt,
             height_pt: side_pt,
-            label_gap_pt: (PPTX_LEGEND_KEY_LABEL_GAP_PT + PPTX_LEGEND_KEY_LABEL_GAP_EM * size_pt)
+            label_gap_pt: (PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE * side_pt
+                + PPTX_LEGEND_KEY_LABEL_GAP_PT)
                 .max(0.0),
         };
     }
     if matches!(chart.host, crate::ir::ChartHost::Spreadsheet)
-        && let Some(height_pt) = excel_legend_key_height_pt(chart)
+        && let Some(height_pt) = legend_key_line_box_pt(chart)
     {
         return LegendKeyMetrics {
             width_pt: LEGEND_KEY_LEN_PT,
@@ -4007,20 +4035,21 @@ fn axis_legend_entry_metrics(chart: &Chart) -> LegendKeyMetrics {
     }
 }
 
-/// The height Excel gives a filled legend key, or `None` where the legend's
-/// face resolves to nothing measurable.
+/// The share of the legend face's line box a filled legend key spends — an
+/// Excel key's height, a PowerPoint key's whole side — or `None` where the
+/// legend's face resolves to nothing measurable.
 ///
 /// Falling back rather than substituting a nominal box keeps a font-search-free
-/// build (notably wasm) on the shape it always drew instead of sizing the key
-/// from a face the export never used.
-fn excel_legend_key_height_pt(chart: &Chart) -> Option<f64> {
+/// build (notably wasm) on a shape derived from the declared size instead of
+/// sizing the key from a face the export never used.
+fn legend_key_line_box_pt(chart: &Chart) -> Option<f64> {
     let family: &str = chart
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
     let (ascent_em, descent_em) =
         chart_face_line_metrics_em(family, chart_legend_text_is_bold(chart))?;
-    Some(EXCEL_LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_legend_text_pt(chart))
+    Some(LEGEND_KEY_LINE_BOX_SHARE * (ascent_em + descent_em) * chart_legend_text_pt(chart))
 }
 
 /// Width of the widest entry in a PowerPoint right-side axis legend, and the
