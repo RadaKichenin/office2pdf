@@ -1,0 +1,45 @@
+{
+  "name": "issue-1439-legend-key-face",
+  "base": "../../tests/fixtures/pptx/bar-chart.pptx",
+  "part": "ppt/charts/chart1.xml",
+  "factor": "chart-space a:latin typeface at a fixed 18pt",
+  "page": 1,
+  "variants": [
+    {
+      "value": "Arial",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Arial\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "Times New Roman",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Times New Roman\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "Courier New",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Courier New\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "Georgia",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Georgia\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "Trebuchet MS",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Trebuchet MS\"/></a:defRPr>",
+      "count": 1
+    },
+    {
+      "value": "Verdana",
+      "find": "<a:defRPr sz=\"1800\"/>",
+      "replace": "<a:defRPr sz=\"1800\"><a:latin typeface=\"Verdana\"/></a:defRPr>",
+      "count": 1
+    }
+  ]
+}
