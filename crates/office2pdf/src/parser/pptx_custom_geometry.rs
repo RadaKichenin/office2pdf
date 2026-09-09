@@ -71,8 +71,10 @@ pub(crate) struct ParsedCustomGeometry {
 /// still leaves the caller's parse in step.
 ///
 /// Returns an empty vector when nothing usable was found — no path, a
-/// degenerate coordinate space, or a subpath with too few points to draw.
-/// The caller keeps its rectangle fallback for those.
+/// coordinate space with neither axis, or a subpath with too few points to
+/// draw. The caller keeps its rectangle fallback for those. A space with one
+/// zero axis is not one of those cases: that axis collapses onto its single
+/// position rather than discarding the geometry (issue #1447).
 ///
 /// **Every** subpath is returned, each as its own polygon. A geometry's
 /// subpaths come from separate `<a:path>` elements and from a `moveTo`
@@ -378,13 +380,18 @@ impl SubpathBuilder {
         }
         let vertices: Vec<(f64, f64)> = std::mem::take(&mut self.vertices);
         let closed: bool = std::mem::take(&mut self.closed);
-        if !self.space.is_usable() {
+        if !self.space.spans_an_axis() {
             return;
         }
         self.paths.push(Subpath {
             vertices: vertices
                 .into_iter()
-                .map(|(x, y)| (x / self.space.width, y / self.space.height))
+                .map(|(x, y)| {
+                    (
+                        normalize_axis(x, self.space.width),
+                        normalize_axis(y, self.space.height),
+                    )
+                })
                 .collect(),
             closed,
         });
@@ -412,6 +419,21 @@ impl SubpathBuilder {
         self.paths.retain(Subpath::encloses_or_draws);
         self.paths
     }
+}
+
+/// Place one coordinate in its axis's 0..1 span.
+///
+/// A zero-length axis holds exactly one position, so every coordinate on it
+/// is 0. DrawingML lets a shape box declare a zero axis for a straight rule:
+/// the page-8 title rule of the deck on issue #1447 is
+/// `<a:ext cx="3708000" cy="0"/>` around an open two-point path, and the
+/// `<a:path w=…>` beside it inherits that zero height because it declares no
+/// `h` of its own. Dropping the subpath for want of a coordinate space handed
+/// the caller its rectangle fallback, which strokes a closed zero-height box
+/// whose round corner joins print as semicircular ends where PowerPoint draws
+/// flat ones.
+fn normalize_axis(coordinate: f64, span: f64) -> f64 {
+    if span > 0.0 { coordinate / span } else { 0.0 }
 }
 
 /// The drawing commands a path can carry. `close` is handled separately: it

@@ -437,6 +437,54 @@ fn a_single_declared_path_axis_scales_independently() {
     assert!(close_to(vertices[1], (1.0, 0.5)), "got {:?}", vertices[1]);
 }
 
+/// A shape box may declare a zero axis. The page-8 title rule of the deck on
+/// issue #1447 is `<a:ext cx="3708000" cy="0"/>` around an open two-point
+/// path, and the `<a:path w=…>` beside it declares no `h`, so the vertical
+/// coordinate space is zero as well. Discarding the subpath there handed the
+/// caller its rectangle fallback, which strokes a closed zero-height box
+/// whose round corner joins print as semicircular ends where PowerPoint
+/// draws flat ones. A zero-length axis holds one position, so every
+/// coordinate on it normalizes to 0 and the other axis still scales.
+#[test]
+fn a_zero_height_coordinate_space_keeps_the_path_on_its_only_row() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path w="3218815">
+            <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+            <a:lnTo><a:pt x="3218395" y="0"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(3_708_000.0, 0.0),
+    );
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    assert!(!subpaths[0].closed, "the path declares no a:close");
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[0], (0.0, 0.0)), "got {:?}", vertices[0]);
+    assert!(
+        close_to(vertices[1], (3_218_395.0 / 3_218_815.0, 0.0)),
+        "got {:?}",
+        vertices[1]
+    );
+}
+
+/// Triangulation: the rule is per-axis, not a horizontal-rule special case.
+/// A zero-width box collapses every `x` while `y` keeps scaling against the
+/// path's own declared space.
+#[test]
+fn a_zero_width_coordinate_space_keeps_the_path_in_its_only_column() {
+    let subpaths = parse_subpaths_in(
+        r#"<a:custGeom><a:pathLst><a:path h="500">
+            <a:moveTo><a:pt x="0" y="125"/></a:moveTo>
+            <a:lnTo><a:pt x="200" y="375"/></a:lnTo>
+        </a:path></a:pathLst></a:custGeom>"#,
+        ShapeExtent::new(0.0, 200_000.0),
+    );
+
+    assert_eq!(subpaths.len(), 1, "got {subpaths:?}");
+    let vertices: &Vec<(f64, f64)> = &subpaths[0].vertices;
+    assert!(close_to(vertices[0], (0.0, 0.25)), "got {:?}", vertices[0]);
+    assert!(close_to(vertices[1], (0.0, 0.75)), "got {:?}", vertices[1]);
+}
+
 /// A coordinate may be a guide name rather than a number. Reading only
 /// numbers left the geometry empty and the caller's rectangle fallback
 /// standing in for it (issue #1205).
