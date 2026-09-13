@@ -21,7 +21,7 @@ typescript = ["ts-rs"]
 
 [dependencies]
 thiserror = "2"
-lopdf = { version = "0.39", optional = true }
+lopdf = { version = "0.45", optional = true }
 typst = "0.15"
 typst-pdf = "0.15"
 # `PagedDocument` is no longer re-exported through `typst` since 0.15.
