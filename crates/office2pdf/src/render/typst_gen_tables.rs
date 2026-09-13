@@ -1161,7 +1161,7 @@ fn generate_table_cell(
         };
         let _ = write!(
             out,
-            "#place(left + horizon, dx: {}pt, box(width: {}, height: {}, fill: gradient.linear({}, {}.lighten(83%))))",
+            "#place(left + horizon, dx: {}pt, box(width: {}, height: {}, fill: gradient.linear({}, {}.lighten(83%), space: rgb)))",
             format_geometry(bar_dx),
             bar_width,
             bar_height,

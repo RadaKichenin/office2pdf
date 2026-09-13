@@ -163,7 +163,7 @@ fn write_rectangle_top_bevel(
     // pattern fills underneath.
     let _ = writeln!(
         out,
-        "#place(top + left)[#rect(width: {}pt, height: {}pt, fill: gradient.linear((rgb(90, 165, 255, {}), 0%), (rgb(90, 165, 255, {}), 100%), angle: 270deg), stroke: none)]",
+        "#place(top + left)[#rect(width: {}pt, height: {}pt, fill: gradient.linear((rgb(90, 165, 255, {}), 0%), (rgb(90, 165, 255, {}), 100%), angle: 270deg, space: rgb), stroke: none)]",
         format_f64(width),
         format_f64(height),
         alpha(40.0),
@@ -173,11 +173,11 @@ fn write_rectangle_top_bevel(
     let right = width - inset;
     let bottom = height - inset;
     let top_fill = format!(
-        "gradient.linear((rgb(90, 165, 255, 0), 0%), (rgb(150, 225, 255, {}), 25%), (rgb(90, 165, 255, 0), 100%), angle: 90deg)",
+        "gradient.linear((rgb(90, 165, 255, 0), 0%), (rgb(150, 225, 255, {}), 25%), (rgb(90, 165, 255, 0), 100%), angle: 90deg, space: rgb)",
         alpha(255.0),
     );
     let left_fill = format!(
-        "gradient.linear((rgb(0, 0, 0, {}), 0%), (rgb(0, 0, 0, {}), 20%), (rgb(0, 0, 0, {}), 50%), (rgb(0, 0, 0, 0), 100%))",
+        "gradient.linear((rgb(0, 0, 0, {}), 0%), (rgb(0, 0, 0, {}), 20%), (rgb(0, 0, 0, {}), 50%), (rgb(0, 0, 0, 0), 100%), space: rgb)",
         alpha(80.0 - rotation_bias),
         alpha(38.0 - rotation_bias / 2.0),
         alpha(13.0),
@@ -1132,6 +1132,10 @@ pub(super) fn write_gradient_fill(out: &mut String, gradient: &GradientFill) {
     if gradient.angle.abs() > 0.001 {
         let _ = write!(out, ", angle: {}deg", format_f64(gradient.angle));
     }
+    // typst 0.14 ignored the Oklab default in PDF and blended every gradient in
+    // sRGB; typst 0.15 honours it, moving a red-to-green midpoint from
+    // (127,128,0) to (208,168,0). Pinning sRGB keeps fills from recolouring.
+    out.push_str(", space: rgb");
     out.push(')');
 }
 

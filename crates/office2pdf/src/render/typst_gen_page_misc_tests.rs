@@ -3392,7 +3392,7 @@ fn a_behind_text_header_banner_is_drawn_on_the_background_layer() {
     );
     assert!(
         output.source.contains(
-            "gradient.linear((rgb(159, 223, 191), 0%), (rgb(78, 179, 207), 100%), angle: 32deg)"
+            "gradient.linear((rgb(159, 223, 191), 0%), (rgb(78, 179, 207), 100%), angle: 32deg, space: rgb)"
         ),
         "{}",
         output.source
