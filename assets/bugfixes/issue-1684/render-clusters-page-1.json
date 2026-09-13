@@ -1,0 +1,306 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 58.2912,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 19.2,
+        "x": 137.28,
+        "y": 273.6
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-bdfbfd196b4b",
+      "region": "left"
+    },
+    {
+      "area_pt2": 46.5408,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 8.64,
+        "x": 285.12,
+        "y": 272.16
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-c0de17643c8d",
+      "region": "center"
+    },
+    {
+      "area_pt2": 41.9328,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 10.56,
+        "x": 110.4,
+        "y": 272.16
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-a60935fe2f7d",
+      "region": "left"
+    },
+    {
+      "area_pt2": 38.2464,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.12,
+        "x": 301.92,
+        "y": 275.04
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-1d7c97a374fb",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.8688,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 12.0,
+        "x": 187.68,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-b22278710dbc",
+      "region": "left"
+    },
+    {
+      "area_pt2": 33.6384,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 7.68,
+        "x": 205.92,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-9303bce91251",
+      "region": "center"
+    },
+    {
+      "area_pt2": 33.6384,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 9.6,
+        "x": 244.32,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-5e8beb471af4",
+      "region": "center"
+    },
+    {
+      "area_pt2": 31.7952,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 72.48,
+        "y": 307.2
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-bac09c31aeb5",
+      "region": "left"
+    },
+    {
+      "area_pt2": 31.7952,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 72.48,
+        "y": 350.88
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-315d8c10af78",
+      "region": "left"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 7.68,
+        "x": 216.0,
+        "y": 275.04
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-277be4b237c3",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 108.48,
+        "y": 261.12
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-3e0401dc1b90",
+      "region": "left"
+    },
+    {
+      "area_pt2": 26.7264,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 108.48,
+        "y": 319.2
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-9e4919f73bd2",
+      "region": "left"
+    },
+    {
+      "area_pt2": 26.7264,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.24,
+        "x": 294.72,
+        "y": 273.12
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-a2f54fe25066",
+      "region": "center"
+    },
+    {
+      "area_pt2": 26.496,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 3.84,
+        "x": 162.72,
+        "y": 273.6
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-1014b7b5f56a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.1136,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 108.48,
+        "y": 286.56
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-80a82e10055a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 129.12,
+        "y": 272.64
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-598716a0a2c4",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 5.28,
+        "x": 234.24,
+        "y": 274.56
+      },
+      "disposition": {
+        "issue": "#1685",
+        "kind": "issue",
+        "note": "List items 2-4, their bullets and the closing paragraph sit one extra line lower per item gap: the list line-height defect, independent of contextual spacing."
+      },
+      "id": "p1-25164c36b029",
+      "region": "center"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 190.0,
+        "width": 270.0,
+        "x": 70.0,
+        "y": 70.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Inspected the title, the eight decision and note paragraphs, the Action items heading and the first list item: partial glyph fragments from sub-pixel advance differences, every one below the material-cluster floor; line positions match within 0.12pt."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 17,
+    "duplicate": 0,
+    "total": 17,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
