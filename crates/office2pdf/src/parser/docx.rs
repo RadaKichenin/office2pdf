@@ -19,15 +19,15 @@ use crate::parser::Parser;
 #[cfg(test)]
 use self::contexts::scan_table_headers;
 use self::contexts::{
-    BidiContext, ChartContext, DocxConversionContext, DrawingShapeContext, DrawingTextBoxContext,
-    DrawingTextBoxInfo, FieldContext, MathContext, NoteContent, NoteContext,
-    ParagraphShadingContext, SmallCapsContext, TableHeaderContext, TableStyleContext,
-    VmlTextBoxContext, VmlTextBoxInfo, WordWrapContext, WpgDrawingInfo, WrapContext,
-    build_chart_context_from_xml, build_math_context_from_xml, build_note_context_from_xml,
-    build_wrap_context_from_xml, extract_column_layout_from_section_property,
-    is_note_reference_run, read_zip_text, scan_column_layouts, scan_page_numbering,
-    scan_style_paragraph_shading, scan_style_word_wrap, seq_identifier, toc_caption_identifier,
-    toc_heading_depth,
+    BidiContext, ChartContext, ContextualSpacingContext, DocxConversionContext,
+    DrawingShapeContext, DrawingTextBoxContext, DrawingTextBoxInfo, FieldContext, MathContext,
+    NoteContent, NoteContext, ParagraphContextualSpacing, ParagraphShadingContext,
+    SmallCapsContext, TableHeaderContext, TableStyleContext, VmlTextBoxContext, VmlTextBoxInfo,
+    WordWrapContext, WpgDrawingInfo, WrapContext, build_chart_context_from_xml,
+    build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
+    extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
+    scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading, scan_style_word_wrap,
+    seq_identifier, toc_caption_identifier, toc_heading_depth,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -297,6 +297,10 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 small_caps,
                 paragraph_shading: ParagraphShadingContext::from_xml(doc_xml.as_deref()),
                 word_wraps: WordWrapContext::from_xml(doc_xml.as_deref()),
+                contextual_spacing: ContextualSpacingContext::from_xml(
+                    doc_xml.as_deref(),
+                    styles_xml.as_deref(),
+                ),
                 fields: FieldContext::default(),
                 default_paragraph_style_is_defined: styles_xml
                     .as_deref()
@@ -339,6 +343,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 small_caps: SmallCapsContext::from_xml(None),
                 paragraph_shading: ParagraphShadingContext::from_xml(None),
                 word_wraps: WordWrapContext::from_xml(None),
+                contextual_spacing: ContextualSpacingContext::from_xml(None, None),
                 fields: FieldContext::default(),
                 default_paragraph_style_is_defined: false,
                 paragraph_property_defaults_are_declared: false,
@@ -1071,15 +1076,19 @@ fn process_hyperlink_runs(
 /// shading its style hierarchy paints behind it, and whether its effective
 /// paragraph style is one the document actually defines.
 ///
-/// Resolved once per `<w:p>` because the bidi and shading cursors advance on
-/// read, then handed to every paragraph the `<w:p>` splits into.
+/// Resolved once per `<w:p>` because the paragraph cursors (bidi, shading,
+/// `w:wordWrap`, `w:contextualSpacing`) advance on read, then handed to every
+/// paragraph the `<w:p>` splits into.
 #[derive(Clone, Copy)]
-struct ParagraphFlow {
+struct ParagraphFlow<'a> {
     is_rtl: bool,
     background: Option<Color>,
     /// The paragraph's own `w:wordWrap`, recovered from the raw XML — the
     /// published docx-rs does not parse it (issue #1041).
     word_wrap: Option<bool>,
+    /// What `w:contextualSpacing` takes from this paragraph's `w:spacing`
+    /// gaps (issue #1684).
+    contextual_spacing: ParagraphContextualSpacing<'a>,
     /// Whether the style this paragraph takes its formatting from is
     /// explicitly defined in `word/styles.xml` — a resolvable `w:pStyle`, or
     /// the document's own default-style definition for a bare paragraph.
@@ -1111,6 +1120,9 @@ fn convert_paragraph_blocks(
         is_rtl: ctx.bidi.next_is_bidi(),
         background: ctx.paragraph_shading.next_background(),
         word_wrap: ctx.word_wraps.next_word_wrap(),
+        contextual_spacing: ctx
+            .contextual_spacing
+            .next_paragraph(get_paragraph_style_id(&para.property)),
         // A `w:pStyle` naming a style the document never defines falls back
         // to the default style, the same as carrying no `w:pStyle` at all.
         effective_style_is_defined: match get_paragraph_style_id(&para.property) {
@@ -1205,7 +1217,7 @@ fn convert_paragraph_blocks(
                             out,
                             &mut inline_images,
                             paragraph_alignment(para),
-                            paragraph_image_spacing(para, resolved_style),
+                            paragraph_image_spacing(para, resolved_style, flow.contextual_spacing),
                         );
                         push_paragraph_from_runs(
                             out,
@@ -1221,7 +1233,7 @@ fn convert_paragraph_blocks(
                             out,
                             &mut inline_images,
                             paragraph_alignment(para),
-                            paragraph_image_spacing(para, resolved_style),
+                            paragraph_image_spacing(para, resolved_style, flow.contextual_spacing),
                         );
                     }
                     out.extend(media.text_box_blocks);
@@ -1234,7 +1246,7 @@ fn convert_paragraph_blocks(
                             out,
                             &mut inline_images,
                             paragraph_alignment(para),
-                            paragraph_image_spacing(para, resolved_style),
+                            paragraph_image_spacing(para, resolved_style, flow.contextual_spacing),
                         );
                         push_paragraph_from_runs(
                             out,
@@ -1301,7 +1313,7 @@ fn convert_paragraph_blocks(
         out,
         &mut inline_images,
         paragraph_alignment(para),
-        paragraph_image_spacing(para, resolved_style),
+        paragraph_image_spacing(para, resolved_style, flow.contextual_spacing),
     );
 
     // A paragraph whose remaining content is just the mark left behind by a
@@ -1381,16 +1393,18 @@ fn paragraph_alignment(para: &docx_rs::Paragraph) -> Option<Alignment> {
 fn paragraph_image_spacing(
     para: &docx_rs::Paragraph,
     resolved_style: Option<&ResolvedStyle>,
+    contextual_spacing: ParagraphContextualSpacing<'_>,
 ) -> Option<ImageParagraphSpacing> {
     let style: ParagraphStyle = merge_paragraph_style(
         &extract_paragraph_style(&para.property),
         None,
         resolved_style,
     );
-    let spacing = ImageParagraphSpacing {
+    let mut spacing = ImageParagraphSpacing {
         before: style.space_before,
         after: style.space_after,
     };
+    contextual_spacing.apply(&mut spacing.before, &mut spacing.after);
     (spacing != ImageParagraphSpacing::default()).then_some(spacing)
 }
 
@@ -1398,7 +1412,7 @@ fn push_paragraph_from_runs(
     out: &mut Vec<Block>,
     para: &docx_rs::Paragraph,
     resolved_style: Option<&ResolvedStyle>,
-    flow: ParagraphFlow,
+    flow: ParagraphFlow<'_>,
     runs: &mut Vec<Run>,
     caption_identifier: Option<&str>,
 ) {
@@ -1418,6 +1432,9 @@ fn push_paragraph_from_runs(
         &mut style,
         flow.paragraph_property_defaults_are_declared,
     );
+    // After the fallback gap is in place, so a dropped `w:after` includes it.
+    flow.contextual_spacing
+        .apply(&mut style.space_before, &mut style.space_after);
     // Word's built-in Korean Normal — in force exactly when no document-defined
     // style resolves for the paragraph — breaks Hangul lines at character
     // level, where a document-defined style keeps each eojeol whole. Measured

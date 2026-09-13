@@ -4,6 +4,8 @@ mod bidi;
 mod chart;
 #[path = "docx_context_columns.rs"]
 mod columns;
+#[path = "docx_context_contextual_spacing.rs"]
+mod contextual_spacing;
 #[path = "docx_context_shape.rs"]
 mod docx_context_shape;
 #[path = "docx_context_drawing.rs"]
@@ -34,6 +36,7 @@ mod wrap;
 pub(super) use bidi::BidiContext;
 pub(super) use chart::{ChartContext, build_chart_context_from_xml};
 pub(super) use columns::{extract_column_layout_from_section_property, scan_column_layouts};
+pub(super) use contextual_spacing::{ContextualSpacingContext, ParagraphContextualSpacing};
 pub(super) use docx_context_shape::{DrawingShapeContext, WpgDrawingInfo};
 pub(super) use drawing::{DrawingTextBoxContext, DrawingTextBoxInfo};
 pub(super) use fields::{FieldContext, seq_identifier, toc_caption_identifier, toc_heading_depth};
@@ -54,7 +57,7 @@ pub(super) use wrap::{WrapContext, build_wrap_context_from_xml};
 
 /// Bundled conversion contexts threaded through the recursive DOCX call tree.
 ///
-/// Groups the 7 context types that were previously passed as individual
+/// Groups the context types that were previously passed as individual
 /// parameters, eliminating `#[allow(clippy::too_many_arguments)]` annotations.
 pub(super) struct DocxConversionContext {
     pub(super) notes: NoteContext,
@@ -68,6 +71,9 @@ pub(super) struct DocxConversionContext {
     pub(super) small_caps: SmallCapsContext,
     pub(super) paragraph_shading: ParagraphShadingContext,
     pub(super) word_wraps: WordWrapContext,
+    /// Each paragraph's `w:contextualSpacing`, which drops `w:spacing` gaps
+    /// between paragraphs of the same style (issue #1684).
+    pub(super) contextual_spacing: ContextualSpacingContext,
     pub(super) fields: FieldContext,
     /// Whether `word/styles.xml` explicitly defines the default paragraph
     /// style. Decides the East Asian auto space for paragraphs without a

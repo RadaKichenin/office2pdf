@@ -1048,6 +1048,8 @@ fn build_docx_with_styles_xml(document_xml: &str, styles_xml: &str) -> Vec<u8> {
     zip.finish().unwrap().into_inner()
 }
 
+#[path = "docx_contextual_spacing_tests.rs"]
+mod contextual_spacing_tests;
 #[path = "docx_layout_rtl_tests.rs"]
 mod layout_rtl_tests;
 #[path = "docx_math_chart_metadata_tests.rs"]
