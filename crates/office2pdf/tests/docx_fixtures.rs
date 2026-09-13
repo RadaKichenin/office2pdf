@@ -1377,7 +1377,7 @@ encrypted_docx_tests!(
 );
 
 // --- LibreOffice DOCX fixtures (previously failing due to docx-rs limitations) ---
-// Fixed by patched docx-rs fork (developer0hye/docx-rs, branch fix/parse-tolerance).
+// Fixed by patched docx-rs fork (developer0hye/docx-rs, branch fix/parse-tolerance-0.4.22).
 // See: https://github.com/developer0hye/office2pdf/issues/84
 
 // Previously panicked — Strict OOXML dxa unit suffix in width values

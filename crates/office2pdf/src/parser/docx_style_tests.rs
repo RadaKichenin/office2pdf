@@ -974,6 +974,69 @@ fn test_tracked_insertion_renders_and_tracked_deletion_does_not() {
 }
 
 #[test]
+fn test_tracked_move_keeps_its_destination_and_drops_its_origin() {
+    // A tracked move is both kinds of revision at once: Word's final view
+    // shows the text where it was moved to (w:moveTo) and not where it came
+    // from (w:moveFrom). docx-rs reads both as their own paragraph children,
+    // so falling through the child match dropped the destination as well.
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:moveToRangeStart w:id="905" w:author="Reviewer" w:date="2026-09-13T10:00:00Z" w:name="move1"/>
+      <w:moveTo w:id="906" w:author="Reviewer" w:date="2026-09-13T10:00:00Z">
+        <w:r><w:t xml:space="preserve">Quarterly summary</w:t></w:r>
+      </w:moveTo>
+      <w:moveToRangeEnd w:id="905"/>
+    </w:p>
+    <w:p>
+      <w:r><w:t xml:space="preserve">Revenue grew. </w:t></w:r>
+      <w:moveFromRangeStart w:id="907" w:author="Reviewer" w:date="2026-09-13T10:00:00Z" w:name="move1"/>
+      <w:moveFrom w:id="908" w:author="Reviewer" w:date="2026-09-13T10:00:00Z">
+        <w:r><w:t xml:space="preserve">Quarterly summary</w:t></w:r>
+      </w:moveFrom>
+      <w:moveFromRangeEnd w:id="907"/>
+    </w:p>
+  </w:body>
+</w:document>"#;
+
+    let data = build_docx_with_columns(document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Flow(flow) = &doc.pages[0] else {
+        panic!("expected flow page");
+    };
+    let paragraph_texts: Vec<String> = flow
+        .content
+        .iter()
+        .filter_map(|block| match block {
+            Block::Paragraph(paragraph) => Some(
+                paragraph
+                    .runs
+                    .iter()
+                    .map(|run| run.text.as_str())
+                    .collect::<String>(),
+            ),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        paragraph_texts.len(),
+        2,
+        "both paragraphs remain: {paragraph_texts:?}"
+    );
+    assert_eq!(
+        paragraph_texts[0], "Quarterly summary",
+        "the move destination is final-document text"
+    );
+    assert_eq!(
+        paragraph_texts[1].trim_end(),
+        "Revenue grew.",
+        "the move origin is not in the final document"
+    );
+}
+
+#[test]
 fn test_insertion_that_was_later_deleted_is_dropped() {
     // A w:del nested inside a w:ins is text that was inserted and then
     // deleted again, so the final document does not contain it (issue #583).

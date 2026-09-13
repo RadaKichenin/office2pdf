@@ -215,7 +215,7 @@ office2pdf/
 | `typst` | Layout engine | or `typst-as-lib` |
 | `typst-pdf` | PDF output | |
 | `typst-kit` | Font discovery | |
-| `docx-rs` | DOCX parsing | v0.4.19, actively maintained |
+| `docx-rs` | DOCX parsing | v0.4.22, actively maintained |
 | `umya-spreadsheet` | XLSX parsing (with formatting) | Style/formatting extraction capable |
 | `ppt-rs` | PPTX parsing | Rust port of python-pptx |
 | `clap` | CLI argument parsing | v4 derive |
