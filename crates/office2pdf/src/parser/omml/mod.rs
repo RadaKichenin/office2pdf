@@ -485,7 +485,7 @@ fn map_nary_operator(chr: &str) -> &str {
         "\u{222D}" => "integral.triple",
         "\u{222E}" => "integral.cont",
         "\u{22C3}" => "union.big",
-        "\u{22C2}" => "sect.big",
+        "\u{22C2}" => "inter.big",
         "\u{2210}" => "product.co",
         "\u{22C0}" => "and.big",
         "\u{22C1}" => "or.big",

@@ -70,7 +70,9 @@ pub(crate) fn unicode_to_typst(ch: char) -> Option<&'static str> {
         '⊂' => Some("subset"),
         '⊃' => Some("supset"),
         '∪' => Some("union"),
-        '∩' => Some("sect"),
+        // `inter` and the `.o` names below replace aliases codex 0.3 (typst 0.15)
+        // removed; typst 0.14 already accepts them.
+        '∩' => Some("inter"),
         // Additional operators
         '∠' => Some("angle"),
         '∧' => Some("and"),
@@ -79,9 +81,9 @@ pub(crate) fn unicode_to_typst(ch: char) -> Option<&'static str> {
         '⋅' => Some("dot.op"),
         '∓' => Some("minus.plus"),
         '¬' => Some("not"),
-        '⊕' => Some("plus.circle"),
-        '⊗' => Some("times.circle"),
-        '⊙' => Some("dot.circle"),
+        '⊕' => Some("plus.o"),
+        '⊗' => Some("times.o"),
+        '⊙' => Some("dot.o"),
         '⊢' => Some("tack.r"),
         '⊣' => Some("tack.l"),
         '⊤' => Some("top"),
