@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{Block, Paragraph, ParagraphStyle, Run, TableRow};
@@ -552,7 +553,7 @@ fn read_theme_ui_script_faces(
                     .try_get_attribute("typeface")
                     .ok()
                     .flatten()
-                    .and_then(|attribute| attribute.unescape_value().ok())
+                    .and_then(|attribute| attribute.normalized_value(OOXML_XML_VERSION).ok())
                     .map(|face| face.trim().to_string())
                     .filter(|face| !face.is_empty());
                 match slot {

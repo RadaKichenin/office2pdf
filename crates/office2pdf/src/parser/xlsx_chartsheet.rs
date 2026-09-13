@@ -7,6 +7,7 @@
 //! than from the worksheet stub umya-spreadsheet builds for it, which records
 //! neither (issue #1099).
 
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{Margins, PageSize};
@@ -133,7 +134,7 @@ pub(super) fn parse_chartsheet_print_setup(xml: &str) -> ChartsheetPrintSetup {
                 match element.local_name().as_ref() {
                     b"pageSetup" => {
                         for attr in element.attributes().flatten() {
-                            let Ok(value) = attr.unescape_value() else {
+                            let Ok(value) = attr.normalized_value(OOXML_XML_VERSION) else {
                                 continue;
                             };
                             match attr.key.local_name().as_ref() {
@@ -146,7 +147,7 @@ pub(super) fn parse_chartsheet_print_setup(xml: &str) -> ChartsheetPrintSetup {
                     b"pageMargins" => {
                         for attr in element.attributes().flatten() {
                             let Some(points) = attr
-                                .unescape_value()
+                                .normalized_value(OOXML_XML_VERSION)
                                 .ok()
                                 .and_then(|value| value.parse::<f64>().ok())
                                 .map(|inches| inches * 72.0)

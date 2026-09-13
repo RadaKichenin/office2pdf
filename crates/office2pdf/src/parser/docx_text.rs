@@ -5,6 +5,7 @@ use super::{
 use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, LineJoin, Run};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
 use crate::parser::xml_util;
+use crate::parser::xml_util::OOXML_XML_VERSION;
 
 // Word's fallback for a package that resolves no Latin face at all — no
 // `w:rFonts` in `w:docDefaults`, none on a style, none on a run, and no theme
@@ -455,7 +456,7 @@ pub(super) fn parse_theme_fonts(theme_xml: &str) -> ThemeFonts {
             Ok(Event::Empty(ref e)) if e.local_name().as_ref() == b"latin" => {
                 let typeface: Option<String> = e.attributes().flatten().find_map(|attr| {
                     (attr.key.local_name().as_ref() == b"typeface")
-                        .then(|| attr.unescape_value().ok())
+                        .then(|| attr.normalized_value(OOXML_XML_VERSION).ok())
                         .flatten()
                         .map(|v| v.to_string())
                         .filter(|v| !v.is_empty())

@@ -8,12 +8,20 @@ use quick_xml::events::Event;
 
 use crate::ir::Color;
 
+/// The XML version every OOXML part declares (`<?xml version="1.0"?>`).
+/// quick-xml 0.40 made attribute and text normalization take it explicitly;
+/// OOXML follows the XML 1.0 rules.
+pub(crate) const OOXML_XML_VERSION: quick_xml::XmlVersion = quick_xml::XmlVersion::Explicit1_0;
+
 /// Get a string attribute value from an XML element.
 /// Matches on full qualified name first (e.g. `r:id`), then local name.
 pub(crate) fn get_attr_str(e: &quick_xml::events::BytesStart, key: &[u8]) -> Option<String> {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == key || attr.key.local_name().as_ref() == key {
-            return attr.unescape_value().ok().map(|v| v.to_string());
+            return attr
+                .normalized_value(OOXML_XML_VERSION)
+                .ok()
+                .map(|v| v.to_string());
         }
     }
     None

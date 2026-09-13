@@ -17,6 +17,7 @@
 //! `cdr:grpSp`, `cdr:graphicFrame` or `cdr:cxnSp`. Only `cdr:sp` is read, so
 //! one of the others yields no shape rather than a wrong one.
 
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::io::{Read, Seek};
 
 use quick_xml::Reader;
@@ -153,7 +154,7 @@ pub(crate) fn parse_chart_user_shapes(
             }
             Ok(Event::Text(ref t)) => {
                 if let Some(state) = anchor.as_mut()
-                    && let Ok(text) = t.xml_content()
+                    && let Ok(text) = t.xml_content(OOXML_XML_VERSION)
                 {
                     state.text(&text, theme_fonts);
                 }
