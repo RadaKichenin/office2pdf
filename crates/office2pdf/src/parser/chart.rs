@@ -3,6 +3,7 @@
 //! Parses chart*.xml parts and extracts chart type,
 //! title, category labels, and series data into IR `Chart` structs.
 
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
@@ -1179,7 +1180,7 @@ fn parse_chart_rich_text(
                 _ => {}
             },
             Ok(Event::Text(ref t)) if in_t => {
-                if let Ok(s) = t.xml_content() {
+                if let Ok(s) = t.xml_content(OOXML_XML_VERSION) {
                     text.push_str(s.as_ref());
                 }
             }
@@ -1276,7 +1277,7 @@ fn parse_chart_title(
                 }
             }
             Ok(Event::Text(ref t)) if in_t => {
-                if let Ok(s) = t.xml_content() {
+                if let Ok(s) = t.xml_content(OOXML_XML_VERSION) {
                     text.push_str(s.as_ref());
                 }
             }
@@ -1595,7 +1596,7 @@ fn parse_data_labels(reader: &mut Reader<&[u8]>, scheme: &SchemeColors<'_>) -> D
                 _ => {}
             },
             Ok(Event::Text(ref text)) if in_separator => {
-                if let Ok(value) = text.xml_content() {
+                if let Ok(value) = text.xml_content(OOXML_XML_VERSION) {
                     separator.push_str(value.as_ref());
                 }
             }
@@ -2100,7 +2101,7 @@ fn parse_series_text(reader: &mut Reader<&[u8]>) -> Option<String> {
                 }
             }
             Ok(Event::Text(ref t)) if in_v => {
-                if let Ok(s) = t.xml_content() {
+                if let Ok(s) = t.xml_content(OOXML_XML_VERSION) {
                     text.push_str(s.as_ref());
                 }
             }
@@ -2147,7 +2148,7 @@ fn parse_category_data(reader: &mut Reader<&[u8]>) -> Vec<String> {
             // ` board` — three of six categories doubled, and every bar past the
             // first labelled with a neighbour's word (issue #1183).
             Ok(Event::Text(ref t)) if in_v => {
-                if let Ok(s) = t.xml_content() {
+                if let Ok(s) = t.xml_content(OOXML_XML_VERSION) {
                     current_text.push_str(s.as_ref());
                 }
             }
@@ -2204,7 +2205,7 @@ fn parse_value_data(reader: &mut Reader<&[u8]>) -> (Vec<f64>, Option<String>) {
                 _ => {}
             },
             Ok(Event::Text(ref t)) if in_v || in_format_code => {
-                if let Ok(s) = t.xml_content() {
+                if let Ok(s) = t.xml_content(OOXML_XML_VERSION) {
                     current_text.push_str(s.as_ref());
                 }
             }
@@ -2271,7 +2272,7 @@ pub(crate) fn scan_chart_references(xml: &str) -> Vec<(usize, String)> {
                 if name == b"graphicData" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"uri"
-                            && let Ok(val) = attr.unescape_value()
+                            && let Ok(val) = attr.normalized_value(OOXML_XML_VERSION)
                             && val.contains("chart")
                         {
                             in_graphic_data = true;
@@ -2292,7 +2293,7 @@ pub(crate) fn scan_chart_references(xml: &str) -> Vec<(usize, String)> {
                 if in_graphic_data && name == b"chart" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"id"
-                            && let Ok(val) = attr.unescape_value()
+                            && let Ok(val) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             results.push((body_child_index, val.to_string()));
                         }

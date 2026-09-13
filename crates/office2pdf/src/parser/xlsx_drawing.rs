@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 
@@ -271,12 +272,12 @@ pub(super) fn parse_workbook_sheet_rids(xml: &str) -> Vec<(String, String)> {
                     for attr in e.attributes().flatten() {
                         match attr.key.local_name().as_ref() {
                             b"name" => {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                     name = Some(v.to_string());
                                 }
                             }
                             b"id" => {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                     rid = Some(v.to_string());
                                 }
                             }
@@ -317,12 +318,12 @@ pub(super) fn parse_rels_by_type(xml: &str, type_substring: &str) -> Vec<String>
                     for attr in e.attributes().flatten() {
                         match attr.key.local_name().as_ref() {
                             b"Target" => {
-                                if let Ok(v) = attr.unescape_value() {
+                                if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                     target = Some(v.to_string());
                                 }
                             }
                             b"Type" => {
-                                if let Ok(v) = attr.unescape_value()
+                                if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                                     && v.contains(type_substring)
                                 {
                                     matches_type = true;
@@ -488,7 +489,7 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                 b"graphicData" if in_graphic_frame => {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"uri"
-                            && let Ok(val) = attr.unescape_value()
+                            && let Ok(val) = attr.normalized_value(OOXML_XML_VERSION)
                             && val.contains("chart")
                         {
                             in_chart_graphic_data = true;
@@ -507,7 +508,7 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                     let mut cy: i64 = 0;
                     for attr in e.attributes().flatten() {
                         let value: i64 = attr
-                            .unescape_value()
+                            .normalized_value(OOXML_XML_VERSION)
                             .ok()
                             .and_then(|v| v.parse().ok())
                             .unwrap_or(0);
@@ -524,7 +525,7 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                     // is column 0 / row 0 plus the position as the offset.
                     for attr in e.attributes().flatten() {
                         let value: i64 = attr
-                            .unescape_value()
+                            .normalized_value(OOXML_XML_VERSION)
                             .ok()
                             .and_then(|v| v.parse().ok())
                             .unwrap_or(0);
@@ -538,7 +539,7 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                 if in_chart_graphic_data && local.as_ref() == b"chart" {
                     for attr in e.attributes().flatten() {
                         if (attr.key.as_ref() == b"r:id" || attr.key.local_name().as_ref() == b"id")
-                            && let Ok(val) = attr.unescape_value()
+                            && let Ok(val) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             chart_rid = Some(val.to_string());
                         }
@@ -547,7 +548,7 @@ pub(super) fn parse_drawing_chart_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
             }
             Ok(quick_xml::events::Event::Text(ref t)) => {
                 if let (Some(is_from), Some(field)) = (corner_target, current_field)
-                    && let Ok(text) = t.xml_content()
+                    && let Ok(text) = t.xml_content(OOXML_XML_VERSION)
                     && let Ok(number) = text.trim().parse::<i64>()
                 {
                     let corner: &mut Corner = if is_from {
@@ -769,7 +770,9 @@ pub(super) struct PictureBlip {
 fn blip_embed_rid(element: &quick_xml::events::BytesStart<'_>) -> Option<String> {
     element.attributes().flatten().find_map(|attr| {
         if attr.key.local_name().as_ref() == b"embed" {
-            attr.unescape_value().ok().map(|value| value.to_string())
+            attr.normalized_value(OOXML_XML_VERSION)
+                .ok()
+                .map(|value| value.to_string())
         } else {
             None
         }
@@ -856,7 +859,7 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
                     let mut cy: i64 = 0;
                     for attr in e.attributes().flatten() {
                         let value: i64 = attr
-                            .unescape_value()
+                            .normalized_value(OOXML_XML_VERSION)
                             .ok()
                             .and_then(|v| v.parse().ok())
                             .unwrap_or(0);
@@ -886,7 +889,7 @@ pub(super) fn parse_drawing_image_anchors(xml: &str) -> Vec<(ImageAnchorGeometry
             }
             Ok(quick_xml::events::Event::Text(ref t)) => {
                 if let (Some(is_from), Some(field)) = (corner_target, current_field)
-                    && let Ok(text) = t.xml_content()
+                    && let Ok(text) = t.xml_content(OOXML_XML_VERSION)
                     && let Ok(number) = text.trim().parse::<i64>()
                 {
                     let corner: &mut Corner = if is_from {
@@ -1048,16 +1051,16 @@ pub(in crate::parser) fn apply_run_properties(
     for attr in element.attributes().flatten() {
         match attr.key.local_name().as_ref() {
             b"sz" => {
-                if let Ok(value) = attr.unescape_value()
+                if let Ok(value) = attr.normalized_value(OOXML_XML_VERSION)
                     && let Ok(hundredths_pt) = value.parse::<f64>()
                 {
                     style.font_size = Some(hundredths_pt / 100.0);
                 }
             }
-            b"b" if attr.unescape_value().ok().as_deref() == Some("1") => {
+            b"b" if attr.normalized_value(OOXML_XML_VERSION).ok().as_deref() == Some("1") => {
                 style.bold = Some(true);
             }
-            b"i" if attr.unescape_value().ok().as_deref() == Some("1") => {
+            b"i" if attr.normalized_value(OOXML_XML_VERSION).ok().as_deref() == Some("1") => {
                 style.italic = Some(true);
             }
             _ => {}
@@ -1148,7 +1151,7 @@ pub(super) fn parse_drawing_text_boxes(
                         in_line = true;
                         for attr in e.attributes().flatten() {
                             if attr.key.local_name().as_ref() == b"w"
-                                && let Ok(v) = attr.unescape_value()
+                                && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                                 && let Ok(w) = v.parse::<f64>()
                             {
                                 border_width = w / 12_700.0;
@@ -1202,7 +1205,8 @@ pub(super) fn parse_drawing_text_boxes(
                     b"bodyPr" if in_tx_body || in_sp => {
                         for attr in e.attributes().flatten() {
                             if attr.key.local_name().as_ref() == b"anchor"
-                                && attr.unescape_value().ok().as_deref() == Some("ctr")
+                                && attr.normalized_value(OOXML_XML_VERSION).ok().as_deref()
+                                    == Some("ctr")
                             {
                                 vertical_center = true;
                             }
@@ -1219,7 +1223,7 @@ pub(super) fn parse_drawing_text_boxes(
                     b"pPr" if current_para.is_some() => {
                         for attr in e.attributes().flatten() {
                             if attr.key.local_name().as_ref() == b"algn"
-                                && let Ok(v) = attr.unescape_value()
+                                && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                                 && let Some(para) = current_para.as_mut()
                             {
                                 para.style.alignment = match v.as_ref() {
@@ -1251,7 +1255,7 @@ pub(super) fn parse_drawing_text_boxes(
                         let mut cy: i64 = 0;
                         for attr in e.attributes().flatten() {
                             let value: i64 = attr
-                                .unescape_value()
+                                .normalized_value(OOXML_XML_VERSION)
                                 .ok()
                                 .and_then(|v| v.parse().ok())
                                 .unwrap_or(0);
@@ -1267,7 +1271,7 @@ pub(super) fn parse_drawing_text_boxes(
                 }
             }
             Ok(quick_xml::events::Event::Text(ref t)) => {
-                if in_text && let Ok(text) = t.xml_content() {
+                if in_text && let Ok(text) = t.xml_content(OOXML_XML_VERSION) {
                     if let Some(para) = current_para.as_mut() {
                         let mut style = current_style.clone();
                         // An `<a:rPr>` without `<a:latin>` - how Excel writes
@@ -1285,7 +1289,7 @@ pub(super) fn parse_drawing_text_boxes(
                         });
                     }
                 } else if let (Some(is_from), Some(field)) = (corner_target, current_field)
-                    && let Ok(text) = t.xml_content()
+                    && let Ok(text) = t.xml_content(OOXML_XML_VERSION)
                     && let Ok(number) = text.trim().parse::<i64>()
                 {
                     let corner: &mut Corner = if is_from {

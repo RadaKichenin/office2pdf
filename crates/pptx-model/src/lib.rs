@@ -257,7 +257,7 @@ fn is_in_namespace<R>(
     namespace: &[u8],
     local: &[u8],
 ) -> bool {
-    let (resolve_result, local_name) = reader.resolve_element(name);
+    let (resolve_result, local_name) = reader.resolver().resolve_element(name);
     matches!(resolve_result, ResolveResult::Bound(Namespace(bound)) if bound == namespace)
         && local_name.as_ref() == local
 }
@@ -289,14 +289,14 @@ fn slide_relationship_id(
 ) -> Result<String, PptxError> {
     for attribute in element.attributes() {
         let attribute = attribute.map_err(|error| malformed(part, error))?;
-        let (resolve_result, local_name) = reader.resolve_attribute(attribute.key);
+        let (resolve_result, local_name) = reader.resolver().resolve_attribute(attribute.key);
         let is_relationship_id: bool = matches!(
             resolve_result,
             ResolveResult::Bound(Namespace(bound)) if bound == RELATIONSHIPS_NAMESPACE
         ) && local_name.as_ref() == b"id";
         if is_relationship_id {
             return Ok(attribute
-                .unescape_value()
+                .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                 .map_err(|error| malformed(part, error))?
                 .into_owned());
         }

@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::io::Read;
 
 use quick_xml::Reader;
@@ -60,7 +61,7 @@ pub fn parse_core_xml(xml: &str) -> Metadata {
             }
             Ok(Event::Text(e)) => {
                 if current != Field::None
-                    && let Ok(text) = e.xml_content()
+                    && let Ok(text) = e.xml_content(OOXML_XML_VERSION)
                 {
                     let text = text.to_string();
                     if !text.is_empty() {

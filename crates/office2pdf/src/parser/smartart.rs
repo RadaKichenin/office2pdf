@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use quick_xml::Reader;
 /// SmartArt diagram parser for PPTX files.
 ///
@@ -121,7 +122,7 @@ fn parse_points_and_connections(xml: &str) -> (Vec<RawPoint>, Vec<(String, Strin
                         pt_type = String::from("node");
 
                         for attr in e.attributes().flatten() {
-                            if let Ok(v) = attr.unescape_value() {
+                            if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                 match attr.key.local_name().as_ref() {
                                     b"type" => pt_type = v.to_string(),
                                     b"modelId" => pt_model_id = v.to_string(),
@@ -153,7 +154,7 @@ fn parse_points_and_connections(xml: &str) -> (Vec<RawPoint>, Vec<(String, Strin
                     let mut src_id = String::new();
                     let mut dest_id = String::new();
                     for attr in e.attributes().flatten() {
-                        if let Ok(v) = attr.unescape_value() {
+                        if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                             match attr.key.local_name().as_ref() {
                                 b"type" => cxn_type = v.to_string(),
                                 b"srcId" => src_id = v.to_string(),
@@ -168,7 +169,7 @@ fn parse_points_and_connections(xml: &str) -> (Vec<RawPoint>, Vec<(String, Strin
                 }
             }
             Ok(Event::Text(ref t)) if in_a_t => {
-                if let Ok(text) = t.xml_content() {
+                if let Ok(text) = t.xml_content(OOXML_XML_VERSION) {
                     current_text.push_str(&text);
                 }
             }
@@ -268,12 +269,12 @@ pub(crate) fn scan_smartart_refs(slide_xml: &str) -> Vec<SmartArtRef> {
                         for attr in e.attributes().flatten() {
                             match attr.key.local_name().as_ref() {
                                 b"x" => {
-                                    if let Ok(v) = attr.unescape_value() {
+                                    if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                         gf_x = v.parse().unwrap_or(0);
                                     }
                                 }
                                 b"y" => {
-                                    if let Ok(v) = attr.unescape_value() {
+                                    if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                         gf_y = v.parse().unwrap_or(0);
                                     }
                                 }
@@ -285,12 +286,12 @@ pub(crate) fn scan_smartart_refs(slide_xml: &str) -> Vec<SmartArtRef> {
                         for attr in e.attributes().flatten() {
                             match attr.key.local_name().as_ref() {
                                 b"cx" => {
-                                    if let Ok(v) = attr.unescape_value() {
+                                    if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                         gf_cx = v.parse().unwrap_or(0);
                                     }
                                 }
                                 b"cy" => {
-                                    if let Ok(v) = attr.unescape_value() {
+                                    if let Ok(v) = attr.normalized_value(OOXML_XML_VERSION) {
                                         gf_cy = v.parse().unwrap_or(0);
                                     }
                                 }
@@ -304,7 +305,7 @@ pub(crate) fn scan_smartart_refs(slide_xml: &str) -> Vec<SmartArtRef> {
                         for attr in e.attributes().flatten() {
                             // r:dm is the data model relationship
                             if attr.key.as_ref() == b"r:dm"
-                                && let Ok(v) = attr.unescape_value()
+                                && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                             {
                                 data_rid = Some(v.to_string());
                             }

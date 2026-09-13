@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::HashMap;
 use std::io::Read;
 
@@ -186,7 +187,7 @@ fn build_document_metafile_image_map<R: Read + std::io::Seek>(
                 let mut target: Option<String> = None;
                 let mut is_image: bool = false;
                 for attribute in element.attributes().flatten() {
-                    let Ok(value) = attribute.unescape_value() else {
+                    let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION) else {
                         continue;
                     };
                     match attribute.key.local_name().as_ref() {

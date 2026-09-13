@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::HashMap;
 use std::io::Read;
 
@@ -29,7 +30,7 @@ fn attr_value(reader: &Reader<&[u8]>, element: &BytesStart<'_>, name: &[u8]) -> 
         .find(|attribute| attribute.key.local_name().as_ref() == name)
         .and_then(|attribute| {
             attribute
-                .decode_and_unescape_value(reader.decoder())
+                .decoded_and_normalized_value(OOXML_XML_VERSION, reader.decoder())
                 .ok()
                 .map(|value| value.into_owned())
         })
@@ -103,7 +104,8 @@ pub(crate) fn parse_worksheet_hints(xml: &str) -> RawCondFmtHints {
                 if let (Some(priority), Ok(raw)) = (
                     current_priority,
                     reader.read_text(quick_xml::name::QName(name.as_ref())),
-                ) && let Ok(formula) = quick_xml::escape::unescape(&raw)
+                ) && let Ok(raw) = raw.decode()
+                    && let Ok(formula) = quick_xml::escape::unescape(&raw)
                 {
                     hints
                         .entry(priority)
@@ -239,6 +241,7 @@ pub(crate) fn extract_defined_names(data: &[u8]) -> HashMap<String, String> {
                 // (issue #852).
                 let tag = element.name().to_owned();
                 if let Ok(raw) = reader.read_text(quick_xml::name::QName(tag.as_ref()))
+                    && let Ok(raw) = raw.decode()
                     && let Ok(definition) = quick_xml::escape::unescape(&raw)
                 {
                     names.insert(name.to_ascii_uppercase(), definition.into_owned());

@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::cell::Cell;
 use std::collections::HashMap;
 
@@ -14,7 +15,7 @@ fn attr_value(reader: &Reader<&[u8]>, element: &BytesStart<'_>, name: &[u8]) -> 
         .find(|attribute| attribute.key.local_name().as_ref() == name)
         .and_then(|attribute| {
             attribute
-                .decode_and_unescape_value(reader.decoder())
+                .decoded_and_normalized_value(OOXML_XML_VERSION, reader.decoder())
                 .ok()
                 .map(|value| value.into_owned())
         })

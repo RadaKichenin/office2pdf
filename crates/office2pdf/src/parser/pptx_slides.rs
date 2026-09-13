@@ -4,6 +4,7 @@ use super::package::{
 };
 use super::placeholders::PlaceholderGeometryMap;
 use super::*;
+use crate::parser::xml_util::OOXML_XML_VERSION;
 
 // ── Slide inheritance chain ─────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ fn extract_data_model_ext_rel_id(data_xml: &str) -> Option<String> {
             {
                 return e.attributes().flatten().find_map(|attr| {
                     (attr.key.local_name().as_ref() == b"relId")
-                        .then(|| attr.unescape_value().ok())
+                        .then(|| attr.normalized_value(OOXML_XML_VERSION).ok())
                         .flatten()
                         .map(|v| v.to_string())
                 });

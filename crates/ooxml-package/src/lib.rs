@@ -372,7 +372,7 @@ fn parse_relationship_element(
             message: error.to_string(),
         })?;
         let value: String = attribute
-            .unescape_value()
+            .normalized_value(quick_xml::XmlVersion::Explicit1_0)
             .map_err(|error| PackageError::MalformedXml {
                 part: part.to_string(),
                 message: error.to_string(),
@@ -422,7 +422,7 @@ fn parse_content_types(xml: &[u8], part: &str) -> Result<ContentTypes, PackageEr
                         message: error.to_string(),
                     })?;
                     let value: String = attribute
-                        .unescape_value()
+                        .normalized_value(quick_xml::XmlVersion::Explicit1_0)
                         .map_err(|error| PackageError::MalformedXml {
                             part: part.to_string(),
                             message: error.to_string(),

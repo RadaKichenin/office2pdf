@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
@@ -136,7 +137,7 @@ fn parse_notes_xml(xml: &str) -> HashMap<usize, NoteContent> {
                 (attribute.key.local_name().as_ref() == name)
                     .then(|| {
                         attribute
-                            .unescape_value()
+                            .normalized_value(OOXML_XML_VERSION)
                             .ok()
                             .map(|value| value.to_string())
                     })
@@ -211,7 +212,7 @@ fn parse_notes_xml(xml: &str) -> HashMap<usize, NoteContent> {
                 _ => {}
             },
             Ok(quick_xml::events::Event::Text(ref element)) => {
-                if in_text && let Ok(text) = element.xml_content() {
+                if in_text && let Ok(text) = element.xml_content(OOXML_XML_VERSION) {
                     run.text.push_str(&text);
                 }
             }
@@ -258,7 +259,7 @@ fn scan_note_refs(xml: &str) -> Vec<(NoteKind, usize)> {
                 if let Some(kind) = kind {
                     for attribute in element.attributes().flatten() {
                         if attribute.key.local_name().as_ref() == b"id"
-                            && let Ok(value) = attribute.unescape_value()
+                            && let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION)
                             && let Ok(id) = value.parse::<usize>()
                         {
                             refs.push((kind, id));
