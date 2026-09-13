@@ -1124,6 +1124,23 @@ fn encrypted_xlsx_returns_unsupported_encryption() {
     );
 }
 
+// --- Inline strings --------------------------------------------------------
+
+#[test]
+fn inline_strings_wrapped_in_a_value_keep_their_text() {
+    // SH006 writes every cell as <c t="inlineStr"><v><is><t>…</t></is></v></c>.
+    // The <v> wrapper is non-standard, but it must not hide the inline string.
+    let pages = sheet_pages("SH006-Table-No-SharedStrings.xlsx");
+    let column_a: Vec<String> = pages[0]
+        .table
+        .rows
+        .iter()
+        .map(|row| cell_text(&row.cells[0]))
+        .collect();
+
+    assert_eq!(column_a, ["Names", "Eric", "Jim", "Frank"]);
+}
+
 // --- XML entity bombs -------------------------------------------------------
 
 #[test]
