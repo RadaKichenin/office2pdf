@@ -33,6 +33,16 @@ fn build_docx_with_image(width_px: u32, height_px: u32) -> Vec<u8> {
 }
 
 fn build_docx_with_custom_image_document(document_xml: &str) -> Vec<u8> {
+    build_docx_with_custom_media_document(document_xml, "media/image1.bmp", &make_test_bmp())
+}
+
+/// A DOCX whose `word/document.xml` is `document_xml` and whose only media
+/// part, `word/<media_target>`, is referenced as relationship `rIdImage1`.
+fn build_docx_with_custom_media_document(
+    document_xml: &str,
+    media_target: &str,
+    media_bytes: &[u8],
+) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let options = zip::write::FileOptions::default();
 
@@ -44,6 +54,7 @@ fn build_docx_with_custom_image_document(document_xml: &str) -> Vec<u8> {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Default Extension="bmp" ContentType="image/bmp"/>
+  <Default Extension="emf" ContentType="image/x-emf"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>"#,
     )
@@ -63,18 +74,22 @@ fn build_docx_with_custom_image_document(document_xml: &str) -> Vec<u8> {
         .unwrap();
     std::io::Write::write_all(
         &mut zip,
-        br#"<?xml version="1.0" encoding="UTF-8"?>
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rIdImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.bmp"/>
-</Relationships>"#,
+  <Relationship Id="rIdImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="{media_target}"/>
+</Relationships>"#
+        )
+        .as_bytes(),
     )
     .unwrap();
 
     zip.start_file("word/document.xml", options).unwrap();
     std::io::Write::write_all(&mut zip, document_xml.as_bytes()).unwrap();
 
-    zip.start_file("word/media/image1.bmp", options).unwrap();
-    std::io::Write::write_all(&mut zip, &make_test_bmp()).unwrap();
+    zip.start_file(format!("word/{media_target}"), options)
+        .unwrap();
+    std::io::Write::write_all(&mut zip, media_bytes).unwrap();
 
     zip.finish().unwrap().into_inner()
 }
@@ -302,6 +317,57 @@ fn test_docx_floating_image_square_wrap() {
     assert!(!floating[0].image.data.is_empty());
     assert!((floating[0].image.width.expect("Expected width") - 200.0).abs() < 0.5);
     assert!((floating[0].image.height.expect("Expected height") - 100.0).abs() < 0.5);
+}
+
+#[test]
+fn test_docx_picture_with_unconvertible_emf_is_skipped_not_fatal() {
+    // docx-rs lists an EMF picture with an empty PNG preview and leaves the
+    // conversion to us. When the metafile converter cannot read it either,
+    // the picture must be dropped: handing Typst the empty preview as a PNG
+    // failed the whole document ("failed to decode image").
+    let document_xml = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <w:body>
+        <w:p>
+            <w:r><w:t xml:space="preserve">Quarterly chart: </w:t></w:r>
+            <w:r><w:drawing>
+                <wp:inline distT="0" distB="0" distL="0" distR="0">
+                    <wp:extent cx="914400" cy="457200"/>
+                    <wp:docPr id="1" name="Chart 1"/>
+                    <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                        <pic:pic>
+                            <pic:nvPicPr><pic:cNvPr id="1" name="image1.emf"/><pic:cNvPicPr/></pic:nvPicPr>
+                            <pic:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+                            <pic:spPr>
+                                <a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>
+                                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                            </pic:spPr>
+                        </pic:pic>
+                    </a:graphicData></a:graphic>
+                </wp:inline>
+            </w:drawing></w:r>
+            <w:r><w:t xml:space="preserve"> see the appendix.</w:t></w:r>
+        </w:p>
+        <w:sectPr/>
+    </w:body>
+</w:document>"#;
+    // Truncated inside its header record: no metafile reader can draw it.
+    let truncated_emf: &[u8] = &[1, 0, 0, 0, 108, 0, 0, 0, 0, 0];
+    let data =
+        build_docx_with_custom_media_document(document_xml, "media/image1.emf", truncated_emf);
+
+    let result = crate::convert_bytes(&data, crate::Format::Docx, &ConvertOptions::default())
+        .expect("an unreadable picture must not fail the document");
+    let pdf_text: String =
+        pdf_extract::extract_text_from_mem(&result.pdf).expect("PDF text should extract");
+    assert!(
+        pdf_text.contains("Quarterly chart:") && pdf_text.contains("see the appendix."),
+        "the paragraph around the picture still renders: {pdf_text:?}"
+    );
 }
 
 #[test]
