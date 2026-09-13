@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{Color, PairKerning, ParagraphStyle, TabStop, TextStyle};
@@ -104,7 +105,10 @@ impl PairKerningRules {
                                 .find(|attribute| attribute.key.local_name().as_ref() == b"styleId")
                                 .and_then(|attribute| {
                                     attribute
-                                        .decode_and_unescape_value(reader.decoder())
+                                        .decoded_and_normalized_value(
+                                            OOXML_XML_VERSION,
+                                            reader.decoder(),
+                                        )
                                         .ok()
                                         .map(|value| value.into_owned())
                                 });
@@ -149,7 +153,11 @@ fn read_val_attribute(
         .attributes()
         .flatten()
         .find(|attribute| attribute.key.local_name().as_ref() == b"val")
-        .and_then(|attribute| attribute.decode_and_unescape_value(decoder).ok())
+        .and_then(|attribute| {
+            attribute
+                .decoded_and_normalized_value(OOXML_XML_VERSION, decoder)
+                .ok()
+        })
         .and_then(|value| value.trim().parse::<f64>().ok())
 }
 
@@ -195,7 +203,7 @@ pub(super) fn scan_default_paragraph_style_id(styles_xml: &str) -> Option<String
                 let mut style_id = None;
                 for attribute in element.attributes().flatten() {
                     let value = attribute
-                        .decode_and_unescape_value(reader.decoder())
+                        .decoded_and_normalized_value(OOXML_XML_VERSION, reader.decoder())
                         .ok()
                         .map(|value| value.into_owned());
                     match attribute.key.local_name().as_ref() {
@@ -240,7 +248,7 @@ pub(super) fn scan_defines_default_paragraph_style(styles_xml: &str) -> bool {
                 let mut style_id = None;
                 for attribute in element.attributes().flatten() {
                     let value = attribute
-                        .decode_and_unescape_value(reader.decoder())
+                        .decoded_and_normalized_value(OOXML_XML_VERSION, reader.decoder())
                         .ok()
                         .map(|value| value.into_owned());
                     match attribute.key.local_name().as_ref() {

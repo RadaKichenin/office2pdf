@@ -1,5 +1,6 @@
 use crate::ir::ColumnLayout;
 use crate::parser::units::twips_to_pt;
+use crate::parser::xml_util::OOXML_XML_VERSION;
 
 pub(in super::super) fn scan_column_layouts(xml: &str) -> Vec<Option<ColumnLayout>> {
     let mut reader = quick_xml::Reader::from_str(xml);
@@ -44,7 +45,7 @@ pub(in super::super) fn scan_column_layouts(xml: &str) -> Vec<Option<ColumnLayou
                     in_columns = true;
                     for attribute in element.attributes().flatten() {
                         let key = attribute.key.local_name();
-                        if let Ok(value) = attribute.unescape_value() {
+                        if let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION) {
                             match key.as_ref() {
                                 b"num" => {
                                     if let Ok(parsed) = value.parse::<u32>() {
@@ -65,7 +66,7 @@ pub(in super::super) fn scan_column_layouts(xml: &str) -> Vec<Option<ColumnLayou
                 b"col" if in_columns => {
                     for attribute in element.attributes().flatten() {
                         if attribute.key.local_name().as_ref() == b"w"
-                            && let Ok(value) = attribute.unescape_value()
+                            && let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION)
                             && let Ok(parsed) = value.parse::<f64>()
                         {
                             column_widths.push(twips_to_pt(parsed));
@@ -81,7 +82,7 @@ pub(in super::super) fn scan_column_layouts(xml: &str) -> Vec<Option<ColumnLayou
                     in_columns = false;
                     for attribute in element.attributes().flatten() {
                         let key = attribute.key.local_name();
-                        if let Ok(value) = attribute.unescape_value() {
+                        if let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION) {
                             match key.as_ref() {
                                 b"num" => {
                                     if let Ok(parsed) = value.parse::<u32>() {
@@ -102,7 +103,7 @@ pub(in super::super) fn scan_column_layouts(xml: &str) -> Vec<Option<ColumnLayou
                 b"col" if in_columns => {
                     for attribute in element.attributes().flatten() {
                         if attribute.key.local_name().as_ref() == b"w"
-                            && let Ok(value) = attribute.unescape_value()
+                            && let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION)
                             && let Ok(parsed) = value.parse::<f64>()
                         {
                             column_widths.push(twips_to_pt(parsed));

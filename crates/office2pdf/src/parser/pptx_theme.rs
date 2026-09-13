@@ -1,6 +1,7 @@
 use super::*;
 use crate::ir::{GradientFill, GradientStop};
 use crate::parser::units;
+use crate::parser::xml_util::OOXML_XML_VERSION;
 
 /// Parsed theme data from ppt/theme/theme1.xml.
 #[derive(Debug, Clone, Default)]
@@ -366,7 +367,7 @@ fn line_width_attr(e: &BytesStart<'_>) -> i64 {
     e.attributes()
         .flatten()
         .find(|attr| attr.key.local_name().as_ref() == b"w")
-        .and_then(|attr| attr.unescape_value().ok())
+        .and_then(|attr| attr.normalized_value(OOXML_XML_VERSION).ok())
         .and_then(|value| value.parse::<i64>().ok())
         .unwrap_or(0)
 }

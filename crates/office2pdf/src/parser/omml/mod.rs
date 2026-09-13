@@ -6,6 +6,7 @@
 mod text;
 mod unicode;
 
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
@@ -285,7 +286,7 @@ fn parse_radical_props(reader: &mut Reader<&[u8]>) -> bool {
                 if e.local_name().as_ref() == b"degHide" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             deg_hide = v == "1" || v == "true" || v == "on";
                         }
@@ -351,7 +352,7 @@ fn parse_delimiter_props(reader: &mut Reader<&[u8]>, beg: &mut String, end: &mut
                 b"begChr" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             *beg = v.to_string();
                         }
@@ -360,7 +361,7 @@ fn parse_delimiter_props(reader: &mut Reader<&[u8]>, beg: &mut String, end: &mut
                 b"endChr" => {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             *end = v.to_string();
                         }
@@ -387,7 +388,7 @@ fn parse_math_run(reader: &mut Reader<&[u8]>, out: &mut String) {
                 _ => {}
             },
             Ok(Event::Text(ref t)) if in_text => {
-                if let Ok(s) = t.xml_content() {
+                if let Ok(s) = t.xml_content(OOXML_XML_VERSION) {
                     text_buf.push_str(s.as_ref());
                 }
             }
@@ -462,7 +463,7 @@ fn parse_nary_props(reader: &mut Reader<&[u8]>, chr: &mut String) {
                 if e.local_name().as_ref() == b"chr" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             *chr = v.to_string();
                         }
@@ -595,7 +596,7 @@ fn parse_accent_props(reader: &mut Reader<&[u8]>, chr: &mut String) {
                 if e.local_name().as_ref() == b"chr" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             *chr = v.to_string();
                         }
@@ -658,7 +659,7 @@ fn parse_bar_props(reader: &mut Reader<&[u8]>, pos: &mut String) {
                 if e.local_name().as_ref() == b"pos" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             *pos = v.to_string();
                         }
@@ -704,7 +705,7 @@ fn parse_group_chr_props(reader: &mut Reader<&[u8]>, chr: &mut String) {
                 if e.local_name().as_ref() == b"chr" {
                     for attr in e.attributes().flatten() {
                         if attr.key.local_name().as_ref() == b"val"
-                            && let Ok(v) = attr.unescape_value()
+                            && let Ok(v) = attr.normalized_value(OOXML_XML_VERSION)
                         {
                             *chr = v.to_string();
                         }
@@ -958,7 +959,7 @@ fn capture_element_inner(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> String {
                     content.push(' ');
                     content.push_str(&String::from_utf8_lossy(attr.key.as_ref()));
                     content.push_str("=\"");
-                    if let Ok(val) = attr.unescape_value() {
+                    if let Ok(val) = attr.normalized_value(OOXML_XML_VERSION) {
                         content.push_str(&val);
                     }
                     content.push('"');
@@ -972,7 +973,7 @@ fn capture_element_inner(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> String {
                     content.push(' ');
                     content.push_str(&String::from_utf8_lossy(attr.key.as_ref()));
                     content.push_str("=\"");
-                    if let Ok(val) = attr.unescape_value() {
+                    if let Ok(val) = attr.normalized_value(OOXML_XML_VERSION) {
                         content.push_str(&val);
                     }
                     content.push('"');
@@ -991,7 +992,7 @@ fn capture_element_inner(reader: &mut Reader<&[u8]>, end_tag: &[u8]) -> String {
                 content.push('>');
             }
             Ok(Event::Text(ref t)) => {
-                if let Ok(text) = t.xml_content() {
+                if let Ok(text) = t.xml_content(OOXML_XML_VERSION) {
                     content.push_str(text.as_ref());
                 }
             }
