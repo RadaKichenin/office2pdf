@@ -99,6 +99,45 @@ fn test_page_count_invalid_pdf() {
     assert!(result.is_err());
 }
 
+/// A cross-reference stream declaring a field wider than any integer
+/// (lopdf issue #532, PoC 3). lopdf 0.44 and older sized a buffer from the
+/// width and aborted on a 1 TiB allocation; 0.45 rejects the stream, so a
+/// crafted input to `page_count` or `merge` fails cleanly.
+fn pdf_with_xref_stream_field_width(width: u64) -> Vec<u8> {
+    let mut pdf: Vec<u8> = b"%PDF-1.5\n".to_vec();
+    let xref_offset: usize = pdf.len();
+    pdf.extend_from_slice(
+        format!(
+            "9 0 obj\n<</Type/XRef/Size 1/W [{width} 1 1]/Length 0>>stream\n\nendstream\nendobj\n"
+        )
+        .as_bytes(),
+    );
+    pdf.extend_from_slice(format!("startxref\n{xref_offset}\n%%EOF\n").as_bytes());
+    pdf
+}
+
+#[test]
+fn test_page_count_rejects_an_xref_stream_field_too_wide_to_allocate() {
+    let pdf: Vec<u8> = pdf_with_xref_stream_field_width(1 << 40);
+    let result = page_count(&pdf);
+    assert!(
+        matches!(result, Err(ConvertError::Parse(_))),
+        "a crafted xref stream must fail as a parse error, got {result:?}"
+    );
+}
+
+#[test]
+fn test_merge_rejects_an_xref_stream_field_too_wide_to_allocate() {
+    let valid: Vec<u8> = make_test_pdf(1);
+    let crafted: Vec<u8> = pdf_with_xref_stream_field_width(1 << 40);
+    let result = merge(&[valid.as_slice(), crafted.as_slice()]);
+    assert!(
+        matches!(result, Err(ConvertError::Parse(_))),
+        "merging a crafted PDF must fail as a parse error, got {:?}",
+        result.map(|bytes| bytes.len())
+    );
+}
+
 // --- merge tests ---
 
 #[test]
