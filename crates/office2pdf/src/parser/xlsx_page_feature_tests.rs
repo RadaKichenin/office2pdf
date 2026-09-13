@@ -221,6 +221,122 @@ fn build_xlsx_with_row_breaks(cells: &[(&str, &str)], break_rows: &[u32]) -> Vec
     cursor.into_inner()
 }
 
+/// Build a single-sheet workbook from raw XML fragments, so a test controls
+/// exactly what umya reads: indentation inside a `definedName` and escaped
+/// characters, which quick-xml reports as separate entity events.
+fn build_xlsx_from_raw_parts(
+    sheet_name_xml: &str,
+    defined_names_xml: &str,
+    shared_strings_xml: &str,
+    sheet_data_xml: &str,
+) -> Vec<u8> {
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::FileOptions::default();
+    let mut write = |path: &str, body: &str| {
+        zip.start_file(path, options).unwrap();
+        std::io::Write::write_all(&mut zip, body.as_bytes()).unwrap();
+    };
+
+    write(
+        "[Content_Types].xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>"#,
+    );
+    write(
+        "_rels/.rels",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"#,
+    );
+    write(
+        "xl/workbook.xml",
+        &format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="{sheet_name_xml}" sheetId="1" r:id="rId1"/></sheets>
+{defined_names_xml}
+</workbook>"#
+        ),
+    );
+    write(
+        "xl/_rels/workbook.xml.rels",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>"#,
+    );
+    write(
+        "xl/sharedStrings.xml",
+        &format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">{shared_strings_xml}</sst>"#
+        ),
+    );
+    write(
+        "xl/worksheets/sheet1.xml",
+        &format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData>{sheet_data_xml}</sheetData>
+</worksheet>"#
+        ),
+    );
+
+    zip.finish().unwrap().into_inner()
+}
+
+#[test]
+fn test_indented_print_area_still_limits_output() {
+    // Pretty-printed workbooks indent a definedName's text. It must still
+    // parse as an address, or the whole used range prints instead.
+    let data = build_xlsx_from_raw_parts(
+        "Budget",
+        "<definedNames>\n  <definedName name=\"_xlnm.Print_Area\" localSheetId=\"0\">\n    Budget!$A$1:$B$2\n  </definedName>\n</definedNames>",
+        "",
+        r#"<row r="1"><c r="A1" t="inlineStr"><is><t>In</t></is></c><c r="B1" t="inlineStr"><is><t>In</t></is></c><c r="C1" t="inlineStr"><is><t>Out</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>In</t></is></c><c r="B2" t="inlineStr"><is><t>In</t></is></c></row>
+<row r="3"><c r="A3" t="inlineStr"><is><t>Out</t></is></c></row>"#,
+    );
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(tp.table.rows.len(), 2, "Should have 2 rows from print area");
+    assert_eq!(
+        tp.table.rows[0].cells.len(),
+        2,
+        "Should have 2 columns from print area"
+    );
+}
+
+#[test]
+fn test_escaped_characters_in_cell_text_read_whole() {
+    // quick-xml reports `&amp;` and its kin as separate entity events. Each
+    // string must still read whole, not just the text after the last entity.
+    let data = build_xlsx_from_raw_parts(
+        "R&amp;D",
+        "",
+        r#"<si><t>R&amp;D budget</t></si><si><r><t>Q1 &lt;draft&gt;</t></r><r><rPr><b/></rPr><t xml:space="preserve"> &amp; notes</t></r></si>"#,
+        r#"<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="inlineStr"><is><t>Tom &amp; Jerry</t></is></c></row>"#,
+    );
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    assert_eq!(tp.name, "R&D");
+    assert_eq!(cell_text(&tp.table.rows[0].cells[0]), "R&D budget");
+    assert_eq!(cell_text(&tp.table.rows[0].cells[1]), "Q1 <draft> & notes");
+    assert_eq!(cell_text(&tp.table.rows[0].cells[2]), "Tom & Jerry");
+}
+
 #[test]
 fn test_print_area_limits_output() {
     let data = build_xlsx_with_print_area(
