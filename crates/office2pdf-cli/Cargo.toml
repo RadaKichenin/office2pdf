@@ -25,5 +25,5 @@ rayon = "1"
 tiny_http = { version = "0.12", optional = true }
 
 [dev-dependencies]
-docx-rs = "0.4"
+docx-rs = "0.4.22"
 lopdf = "0.39"

@@ -151,10 +151,17 @@ fn build_hyperlink_map(docx: &docx_rs::Docx) -> HyperlinkMap {
 }
 
 /// Build a lookup map from the DOCX's embedded images.
-/// docx-rs converts all images to PNG; we use the PNG bytes.
+///
+/// docx-rs decodes raster pictures and re-encodes them as PNG previews, and
+/// we use those bytes. A format it cannot decode, such as EMF, arrives with
+/// an empty preview. Those entries are left out: the metafile converter
+/// supplies every EMF/WMF it can draw, and a picture nothing can render is
+/// skipped rather than handed to Typst as an empty PNG, which fails the whole
+/// compilation.
 fn build_image_map(docx: &docx_rs::Docx) -> ImageMap {
     docx.images
         .iter()
+        .filter(|(_id, _path, _image, png)| !png.0.is_empty())
         .map(|(id, _path, _image, png)| {
             (
                 id.clone(),
@@ -1018,6 +1025,10 @@ pub(super) enum ParagraphItem<'a> {
 /// A `w:del` nested inside a `w:ins` is text that was inserted and then
 /// deleted again, so it is absent from the final document too and is dropped
 /// with the rest.
+///
+/// A tracked move is both kinds at once: its destination (`w:moveTo`) is
+/// kept like an insertion and its origin (`w:moveFrom`) is dropped like a
+/// deletion.
 pub(super) fn flatten_tracked_changes(
     children: &[docx_rs::ParagraphChild],
 ) -> Vec<ParagraphItem<'_>> {
@@ -1037,6 +1048,14 @@ pub(super) fn flatten_tracked_changes(
                     }
                 }
             }
+            docx_rs::ParagraphChild::MoveTo(move_to) => {
+                for moved in &move_to.children {
+                    if let docx_rs::MoveToChild::Run(run) = moved {
+                        items.push(ParagraphItem::Run(run));
+                    }
+                }
+            }
+            docx_rs::ParagraphChild::MoveFrom(_) => {}
             _ => {}
         }
     }
