@@ -21,6 +21,8 @@
 use typst::foundations::Bytes;
 use typst::text::Font;
 
+use super::pdf::measured_instance;
+
 /// The tag a GPOS `kern` feature is renamed to.
 ///
 /// `kerm` is not a registered OpenType feature, so no shaper maps it, and it
@@ -50,11 +52,15 @@ pub(crate) fn face_preferring_legacy_kern(font: &Font) -> Option<Font> {
 /// second source. Renaming the GPOS feature for such a face would leave it
 /// with no pairs at all.
 fn kerns_horizontally_from_its_kern_table(font: &Font) -> bool {
-    font.ttf().tables().kern.is_some_and(|kern| {
-        kern.subtables
-            .into_iter()
-            .any(|subtable| subtable.horizontal && !subtable.variable)
-    })
+    measured_instance(font)
+        .ttf()
+        .tables()
+        .kern
+        .is_some_and(|kern| {
+            kern.subtables
+                .into_iter()
+                .any(|subtable| subtable.horizontal && !subtable.variable)
+        })
 }
 
 /// Rewrites `data` so the face at `face_index` offers no GPOS `kern` feature,

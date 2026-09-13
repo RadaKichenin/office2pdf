@@ -330,7 +330,7 @@ fn a_real_face_carrying_both_sources_is_handed_over_kerning_from_the_legacy_tabl
     let data: Vec<u8> = make_face_carrying_both_kern_sources(base);
     let font: Font = Font::new(Bytes::new(data), 0).expect("the rebuilt face parses");
     assert!(states_a_gpos_kern_feature(&font));
-    assert!(font.ttf().tables().kern.is_some());
+    assert!(measured_instance(&font).ttf().tables().kern.is_some());
 
     let handed_over: Font =
         face_preferring_legacy_kern(&font).expect("the face carries both sources");
@@ -340,12 +340,16 @@ fn a_real_face_carrying_both_sources_is_handed_over_kerning_from_the_legacy_tabl
         "the shaper must find no GPOS kern feature"
     );
     assert!(
-        handed_over.ttf().tables().kern.is_some(),
+        measured_instance(&handed_over)
+            .ttf()
+            .tables()
+            .kern
+            .is_some(),
         "the legacy table must be what is left to kern from"
     );
     assert_eq!(
-        handed_over.ttf().number_of_glyphs(),
-        font.ttf().number_of_glyphs(),
+        measured_instance(&handed_over).ttf().number_of_glyphs(),
+        measured_instance(&font).ttf().number_of_glyphs(),
         "the rest of the face must be unchanged"
     );
     assert_eq!(handed_over.info().family, font.info().family);

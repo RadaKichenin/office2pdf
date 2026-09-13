@@ -1,0 +1,33 @@
+{
+  "clusters": [],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 65.0,
+        "width": 310.0,
+        "x": 70.0,
+        "y": 70.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Inspected the full 5% diff: only partial glyph outlines along 'Release checklist', the 28pt 'Quarterly' line and the second bullet item, from sub-point baseline differences of at most 0.04pt; no fragment reaches the 20pt2 material floor, and both bullets sit on their lines' baselines as in the GT."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 0,
+    "duplicate": 0,
+    "total": 0,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

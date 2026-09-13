@@ -218,11 +218,7 @@ fn test_system_fonts_enabled() {
     // more fonts than just the embedded set. On minimal systems, we at least
     // have the embedded fonts.
     let world = MinimalWorld::new("", &[], &[]);
-    let embedded_only_count = {
-        let mut s = FontSearcher::new();
-        s.include_system_fonts(false);
-        s.search().fonts.len()
-    };
+    let embedded_only_count = { embedded_fonts().1.len() };
     // At minimum, we should have the embedded fonts
     assert!(
         world.font_source.len() >= embedded_only_count,
@@ -348,7 +344,8 @@ fn test_in_memory_last_resort_bypasses_process_metric_cache() {
     .expect("the #943 fixture should carry an embedded font");
     let fonts = load_fonts_from_bytes(embedded.font_bytes());
     let font = fonts.first().expect("the fixture font should parse");
-    let ttf = font.ttf();
+    let instance = measured_instance(font);
+    let ttf = instance.ttf();
     let upem = f64::from(ttf.units_per_em()).max(1.0);
     let expected_pitch =
         (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem;
@@ -379,7 +376,8 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
     .expect("the #969 fixture should carry an embedded font");
     let fonts = load_fonts_from_bytes(embedded_data.font_bytes());
     let font = fonts.first().expect("the fixture font should parse");
-    let ttf = font.ttf();
+    let instance = measured_instance(font);
+    let ttf = instance.ttf();
     let upem = f64::from(ttf.units_per_em()).max(1.0);
     let expected = (
         (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem,
@@ -387,7 +385,7 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
         (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem,
     );
     let expected_hhea_ascender = f64::from(ttf.tables().hhea.ascender) / upem;
-    let expected_cap_height = font.metrics().cap_height.get();
+    let expected_cap_height = measured_instance(font).metrics().cap_height.get();
     // PowerPoint measures a line box from OS/2's usWin pair (issue #1176).
     let (ascent, descent) = match ttf.tables().os2 {
         Some(os2) if os2.windows_ascender() > 0 => (
@@ -459,7 +457,7 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
 
 #[test]
 fn test_compile_with_nonexistent_font_path() {
-    // Non-existent font path should not crash — FontSearcher skips invalid dirs
+    // Non-existent font path should not crash — font discovery skips invalid dirs
     let paths = vec![PathBuf::from("/nonexistent/font/path")];
     let result = compile_to_pdf("Hello!", &[], None, &paths, false, false).unwrap();
     assert!(!result.is_empty());
@@ -502,7 +500,7 @@ fn test_embedded_only_world_produces_valid_pdf() {
         "Embedded-only world should have fonts"
     );
 
-    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let warned = typst::compile::<PagedDocument>(&world);
     let document = warned.output.expect("Compilation should succeed");
     let pdf = typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default())
         .expect("PDF export should succeed");
@@ -514,11 +512,7 @@ fn test_embedded_only_world_has_fonts() {
     // The embedded-only constructor (used on WASM) must have at least
     // the embedded fallback fonts (Libertinus, New Computer Modern, DejaVu).
     let world = MinimalWorld::new_embedded_only("", &[]);
-    let embedded_count = {
-        let mut s = FontSearcher::new();
-        s.include_system_fonts(false);
-        s.search().fonts.len()
-    };
+    let embedded_count = { embedded_fonts().1.len() };
     assert_eq!(
         world.font_source.len(),
         embedded_count,
@@ -1221,7 +1215,13 @@ fn the_world_hands_typst_the_face_that_kerns_from_the_legacy_table() {
         !crate::test_support::states_a_gpos_kern_feature(&handed_over),
         "the compiler must be handed the face that kerns from the legacy table"
     );
-    assert!(handed_over.ttf().tables().kern.is_some());
+    assert!(
+        measured_instance(&handed_over)
+            .ttf()
+            .tables()
+            .kern
+            .is_some()
+    );
 }
 
 #[test]
@@ -1329,12 +1329,10 @@ fn justified_auto_space_line_source(demand: &str, tail: &str) -> String {
 
 fn compile_first_line_gaps(source: &str) -> (Vec<CompiledGap>, Vec<CompiledGap>) {
     let world = MinimalWorld::new(source, &[], &[]);
-    let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
-        .output
-        .unwrap();
-    let before: Vec<CompiledGap> = first_line_gaps(&document.pages[0].frame);
+    let mut document = typst::compile::<PagedDocument>(&world).output.unwrap();
+    let before: Vec<CompiledGap> = first_line_gaps(&document.pages()[0].frame);
     apply_completed_frame_passes(&mut document);
-    let after: Vec<CompiledGap> = first_line_gaps(&document.pages[0].frame);
+    let after: Vec<CompiledGap> = first_line_gaps(&document.pages()[0].frame);
     (before, after)
 }
 
@@ -1470,14 +1468,20 @@ fn the_re_spread_line_moves_links_and_underlines_with_their_text() {
         r#"#underline(evade: false)[#link("https://example.com")[iota]] kappa"#,
     );
     let world = MinimalWorld::new(&source, &[], &[]);
-    let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
-        .output
-        .unwrap();
+    let mut document = typst::compile::<PagedDocument>(&world).output.unwrap();
     let mut before = [Vec::new(), Vec::new(), Vec::new()];
-    anchors(&document.pages[0].frame, Transform::identity(), &mut before);
+    anchors(
+        &document.pages()[0].frame,
+        Transform::identity(),
+        &mut before,
+    );
     apply_completed_frame_passes(&mut document);
     let mut after = [Vec::new(), Vec::new(), Vec::new()];
-    anchors(&document.pages[0].frame, Transform::identity(), &mut after);
+    anchors(
+        &document.pages()[0].frame,
+        Transform::identity(),
+        &mut after,
+    );
 
     assert_eq!(before[0].len(), 1, "one `iota` run");
     assert_eq!(after[1].len(), 1, "one link");
@@ -1553,18 +1557,15 @@ fn with_hhea_line_gap(mut font_bytes: Vec<u8>, line_gap: i16) -> Vec<u8> {
 /// Index the given directories in order, the way [`get_fonts_for_extra_paths`]
 /// indexes the Office bundle ahead of the system, without the host's fonts.
 fn font_data_for_dirs(font_dirs: &[PathBuf]) -> CachedFontData {
-    let mut searcher = FontSearcher::new();
-    searcher.include_system_fonts(false);
-    searcher.include_embedded_fonts(false);
-    let font_data = searcher.search_with(font_dirs.iter().map(|path| path.as_path()));
+    let (book, fonts) = discover_fonts(font_dirs, false, false);
     CachedFontData {
-        book: LazyHash::new(font_data.book),
-        fonts: font_data.fonts,
+        book: LazyHash::new(book),
+        fonts,
     }
 }
 
 fn hhea_line_gap(font: &Font) -> i16 {
-    font.ttf().tables().hhea.line_gap
+    measured_instance(font).ttf().tables().hhea.line_gap
 }
 
 const NOTO_SERIF_LINE_GAP: i16 = 0;

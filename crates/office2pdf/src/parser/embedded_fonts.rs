@@ -2,7 +2,7 @@
 //!
 //! OOXML files can embed fonts as obfuscated binary data. Archive parsing and
 //! deobfuscation stay in memory on every target. Native conversion materializes
-//! the faces in a temporary directory for `FontSearcher`, while WASM passes the
+//! the faces in a temporary directory for Typst's font discovery, while WASM passes the
 //! same bytes directly to Typst.
 
 use std::io::Read;

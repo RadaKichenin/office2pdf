@@ -5,14 +5,15 @@
 
 use std::collections::HashMap;
 use typst::introspection::Tag;
-use typst::layout::{Abs, Frame, FrameItem, PagedDocument, Point};
+use typst::layout::{Abs, Frame, FrameItem, Point};
 use typst::model::TableElem;
 use typst::syntax::Span;
 use typst::visualize::Geometry;
+use typst_layout::Page;
 
-pub(super) fn adjust_cell_fills(document: &mut PagedDocument) {
+pub(super) fn adjust_cell_fills(pages: &mut [Page]) {
     let mut tables = HashMap::new();
-    for page in &document.pages {
+    for page in pages.iter() {
         collect_tables(&page.frame, &mut tables);
     }
     if tables.is_empty() {
@@ -22,7 +23,7 @@ pub(super) fn adjust_cell_fills(document: &mut PagedDocument) {
         tables = tables.len(),
         "applying Excel cell background extents"
     );
-    for page in &mut document.pages {
+    for page in pages.iter_mut() {
         adjust_frame(&mut page.frame, &tables);
     }
 }

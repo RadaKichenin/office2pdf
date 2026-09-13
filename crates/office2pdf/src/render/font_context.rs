@@ -9,9 +9,6 @@ use std::path::PathBuf;
 use super::font_subst::TextScript;
 
 #[cfg(not(target_arch = "wasm32"))]
-use typst_kit::fonts::FontSearcher;
-
-#[cfg(not(target_arch = "wasm32"))]
 use tracing::debug;
 
 #[derive(Debug, Clone, Default)]
@@ -359,16 +356,8 @@ struct FamilyIndex {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn index_families_from_paths(paths: &[PathBuf], include_system_fonts: bool) -> FamilyIndex {
-    let mut searcher = FontSearcher::new();
-    searcher.include_system_fonts(include_system_fonts);
-    searcher.include_embedded_fonts(include_system_fonts);
-    let font_data = if paths.is_empty() {
-        searcher.search()
-    } else {
-        searcher.search_with(paths.iter().map(|path| path.as_path()))
-    };
-
-    index_families_from_book(&font_data.book)
+    let book = super::pdf::discover_font_book(paths, include_system_fonts, include_system_fonts);
+    index_families_from_book(&book)
 }
 
 fn index_families_from_book(book: &typst::text::FontBook) -> FamilyIndex {
@@ -380,9 +369,10 @@ fn index_families_from_book(book: &typst::text::FontBook) -> FamilyIndex {
         family_scripts: HashMap::new(),
         family_weights: HashMap::new(),
     };
-    for (family, infos) in book.families() {
+    for (family, indices) in book.families() {
         let key: String = normalize_family_name(family);
-        let infos: Vec<&typst::text::FontInfo> = infos.collect();
+        let infos: Vec<&typst::text::FontInfo> =
+            indices.filter_map(|index| book.info(index)).collect();
         if infos
             .iter()
             .any(|info| info.variant.style != FontStyle::Normal)

@@ -192,6 +192,7 @@ fn typographic_family(family: &str) -> &str {
         "thin", "th", "hairline", "light", "lt", "regular", "medium", "med",
         "md", "bold", "bd", "demi", "extb", "black", "blk", "bk", "heavy",
         "narrow", "condensed", "cond", "cn", "cd", "compressed", "expanded", "exp",
+        "vf", "var", "variable",
     ];
 
     let family: &str = family.trim().trim_start_matches('.');
@@ -267,6 +268,24 @@ pub(crate) fn weight_stated_by_family_name(font_family: &str) -> Option<FontWeig
 /// The base family a weight-suffixed request has to reach for its member:
 /// `Some("Calibri")` for `Calibri Light`, `None` for a name stating no
 /// weight.
+/// The family a variable-font request is filed under: typst 0.15 trims
+/// `Variable`, `Var` and `VF` from a face's family, so `Pretendard Variable` is
+/// indexed as `Pretendard`. Unlike a weight suffix, the suffix names the face
+/// the request means, not another member of its family.
+fn variable_font_base_family(font_family: &str) -> Option<&str> {
+    let requested: &str = font_family.trim();
+    let base_family: &str = typographic_family(requested);
+    if base_family.len() >= requested.len() {
+        return None;
+    }
+    let suffix: String = requested[base_family.len()..]
+        .chars()
+        .filter(|character| !matches!(character, ' ' | '-' | '_'))
+        .map(|character| character.to_ascii_lowercase())
+        .collect();
+    matches!(suffix.as_str(), "variable" | "var" | "vf").then_some(base_family)
+}
+
 fn weight_member_base_family(font_family: &str) -> Option<&str> {
     weight_stated_by_family_name(font_family)?;
     Some(typographic_family(font_family.trim()))
@@ -303,10 +322,14 @@ fn fallback_candidates(
     // face as `Calibri` at 300. The base family follows the request so the
     // weight the run states lands on the member it names; a metrics lookup
     // stays off it, since that resolves the regular variant, which is not the
-    // member the name denotes (issue #1286).
-    if purpose == ChainPurpose::Paint
-        && let Some(base_family) = weight_member_base_family(requested)
-    {
+    // member the name denotes (issue #1286). A variable-font suffix, which
+    // typst 0.15 trims too, names the very face requested, so both follow it.
+    let base_family: Option<&str> = variable_font_base_family(requested).or_else(|| {
+        (purpose == ChainPurpose::Paint)
+            .then(|| weight_member_base_family(requested))
+            .flatten()
+    });
+    if let Some(base_family) = base_family {
         candidates.push(base_family.to_string());
     }
 
@@ -773,6 +796,9 @@ pub fn is_primary_font_available(font_family: &str) -> bool {
         if let Some(weight) = weight_stated_by_family_name(font_family) {
             let base_family: &str = typographic_family(font_family.trim());
             return ctx.has_face_weight(base_family, weight);
+        }
+        if let Some(base_family) = variable_font_base_family(font_family) {
+            return ctx.has_family(base_family);
         }
         false
     })

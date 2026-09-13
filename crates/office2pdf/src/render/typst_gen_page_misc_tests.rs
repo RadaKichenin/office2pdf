@@ -3897,7 +3897,7 @@ fn test_anchored_sheet_picture_paints_above_the_cell_fills() {
         .iter()
         .position(|item| item.kind == PaintedKind::Image)
         .unwrap_or_else(|| panic!("the sheet's picture is painted: {painted:?}"));
-    let picture = painted[picture_at];
+    let picture = painted[picture_at].clone();
     let covering: Vec<usize> = painted
         .iter()
         .enumerate()

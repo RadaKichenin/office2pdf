@@ -56,6 +56,81 @@ fn test_generate_bulleted_list() {
     assert!(output.source.contains("Banana"));
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_list_marker_sits_on_the_baseline_of_a_taller_first_line() {
+    // Word seats a bullet on its item's first baseline even when a larger run
+    // makes that line taller than the marker. typst 0.14 top-aligned native
+    // list markers, leaving an 11pt bullet 15.94pt above a 28pt first line in
+    // the native-Word probe of issue #1686; typst 0.15 keeps it on the line.
+    let run = |text: &str, size: f64| Run {
+        text: text.to_string(),
+        style: TextStyle {
+            font_size: Some(size),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    };
+    let item = |runs: Vec<Run>| ListItem {
+        content: vec![Paragraph {
+            style: ParagraphStyle::default(),
+            runs,
+        }],
+        level: 0,
+        start_at: None,
+    };
+    let list = crate::ir::List {
+        kind: ListKind::Unordered,
+        items: vec![
+            item(vec![run("Quarterly", 28.0), run(" targets met", 11.0)]),
+            item(vec![run("Second item", 11.0)]),
+        ],
+        level_styles: BTreeMap::new(),
+    };
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content: vec![Block::List(list)],
+        header: None,
+        footer: None,
+        columns: None,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+    let output = generate_typst(&doc).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0).unwrap();
+    let body = |needle: &str| {
+        runs.iter()
+            .find(|run| run.text.contains(needle))
+            .unwrap_or_else(|| panic!("no {needle} run in {runs:?}"))
+    };
+    let (first_line, second_line) = (body("Quarterly"), body("Second"));
+    // A marker sits in the hanging indent, left of the item's text.
+    let mut markers: Vec<f64> = runs
+        .iter()
+        .filter(|run| !run.text.trim().is_empty() && run.left_pt < first_line.left_pt - 1.0)
+        .map(|run| run.baseline_pt)
+        .collect();
+    markers.sort_by(f64::total_cmp);
+    assert_eq!(markers.len(), 2, "one marker per item: {runs:?}");
+    assert!(
+        (markers[0] - first_line.baseline_pt).abs() < 0.01,
+        "the bullet must sit on the taller first line's baseline: marker {} vs line {}",
+        markers[0],
+        first_line.baseline_pt
+    );
+    assert!(
+        (markers[1] - second_line.baseline_pt).abs() < 0.01,
+        "the control item's bullet stays on its own baseline: marker {} vs line {}",
+        markers[1],
+        second_line.baseline_pt
+    );
+}
+
 #[test]
 fn test_generate_numbered_list() {
     use crate::ir::List;

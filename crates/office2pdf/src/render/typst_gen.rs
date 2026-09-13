@@ -1622,7 +1622,7 @@ fn centre_pivot_shift(
 /// exact DrawingML coordinate when Typst converts geometry to `f32`.
 ///
 /// At a 324pt top and 183.6pt height on a 540pt slide, the exact bottom is
-/// 32.4pt. Typst 0.14/krilla emits 32.399994pt, putting the source's bottom
+/// 32.4pt. Typst emits 32.399994pt through krilla, 0.14 and 0.15 alike, putting the source's bottom
 /// hairline halfway into a second device row at 150 DPI. Moving the top to the
 /// preceding `f32` only when that subtraction rounds downward makes the PDF
 /// matrix land above the exact edge without a visible point-space offset

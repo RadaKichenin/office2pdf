@@ -6,7 +6,8 @@
 use std::collections::VecDeque;
 use typst::foundations::Value;
 use typst::introspection::{MetadataElem, Tag};
-use typst::layout::{Abs, Frame, FrameItem, PagedDocument, Point, Transform};
+use typst::layout::{Abs, Frame, FrameItem, Point, Transform};
+use typst_layout::Page;
 
 const START: &str = "office2pdf-pptx-paragraph-mark";
 const END: &str = "office2pdf-pptx-paragraph-end";
@@ -15,8 +16,8 @@ const LIST_START: &str = "office2pdf-pptx-list-start";
 const LIST_END: &str = "office2pdf-pptx-list-end";
 const LINE_EPSILON_PT: f64 = 0.001;
 
-pub(super) fn adjust_paragraph_marks(document: &mut PagedDocument) {
-    for page in &mut document.pages {
+pub(super) fn adjust_paragraph_marks(pages: &mut [Page]) {
+    for page in pages.iter_mut() {
         adjust_frame(&mut page.frame);
     }
 }

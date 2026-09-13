@@ -564,7 +564,7 @@ fn write_crisp_open_path_shadow(
 }
 
 /// Write one filtered SVG whose alpha is the silhouette convolved with a
-/// Gaussian. Typst 0.14 rasterises SVG filters at four samples per output
+/// Gaussian. Typst (0.14 and 0.15 alike) rasterises SVG filters at four samples per output
 /// point, so the PDF receives a continuous 288-DPI ramp instead of one flat
 /// alpha plateau per duplicate (issue #1309).
 pub(super) fn write_blurred_shadow_asset(
@@ -1543,7 +1543,7 @@ fn write_zigzag_motif(out: &mut String, color: &Color, tile_size: f64) {
     let size = format_f64(tile_size);
     let _ = write!(
         out,
-        "#place(path((0pt, {half}pt), ({half}pt, 0pt), ({size}pt, {half}pt), stroke: 0.75pt + {}, fill: none))",
+        "#place(curve(stroke: 0.75pt + {}, fill: none, curve.move((0pt, {half}pt)), curve.line(({half}pt, 0pt)), curve.line(({size}pt, {half}pt))))",
         rgb(color),
     );
 }

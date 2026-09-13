@@ -11,12 +11,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use web_time::{SystemTime, UNIX_EPOCH};
 
 use typst::diag::FileResult;
-use typst::foundations::{Bytes, Datetime};
-use typst::syntax::{FileId, Source, VirtualPath};
+use typst::foundations::{Bytes, Datetime, Duration};
+use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::Font;
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
-use typst_kit::fonts::FontSearcher;
+use typst_layout::{Page, PagedDocument};
 
 use crate::config::PdfStandard;
 use crate::error::ConvertError;
@@ -28,12 +28,113 @@ use super::typst_gen::ImageAsset;
 /// lifetime, so we cache it in a global `OnceLock`.
 struct CachedFontData {
     book: LazyHash<typst::text::FontBook>,
-    fonts: Vec<typst_kit::fonts::FontSlot>,
+    fonts: Vec<FontSlot>,
+}
+
+/// A discovered face, read from disk on first use.
+///
+/// typst-kit 0.15 keeps its own slots private, and [`line_metric_face_in`]
+/// needs a face's file to tell an Office bundle's copy from the system's.
+struct FontSlot {
+    path: Option<std::path::PathBuf>,
+    index: u32,
+    font: OnceLock<Option<Font>>,
+}
+
+impl FontSlot {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_disk(found: typst_kit::fonts::FontPath) -> Self {
+        Self {
+            path: Some(found.path),
+            index: found.index,
+            font: OnceLock::new(),
+        }
+    }
+
+    fn loaded(font: Font) -> Self {
+        Self {
+            path: None,
+            index: font.index(),
+            font: OnceLock::from(Some(font)),
+        }
+    }
+
+    /// The file holding the face, or `None` for one embedded in the binary.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    fn path(&self) -> Option<&std::path::Path> {
+        self.path.as_deref()
+    }
+
+    /// The face, read from its file the first time it is asked for.
+    fn get(&self) -> Option<Font> {
+        self.font
+            .get_or_init(|| {
+                let data: Vec<u8> = std::fs::read(self.path.as_ref()?).ok()?;
+                Font::new(Bytes::new(data), self.index)
+            })
+            .clone()
+    }
+}
+
+/// Faces in the priority order typst-kit 0.14's `FontSearcher` gave them:
+/// `font_dirs` in order, then the system's fonts, then typst's embedded ones.
+/// typst-kit 0.15 hands out the three sources as separate iterators.
+#[cfg(not(target_arch = "wasm32"))]
+fn discover_fonts(
+    font_dirs: &[PathBuf],
+    include_system_fonts: bool,
+    include_embedded_fonts: bool,
+) -> (typst::text::FontBook, Vec<FontSlot>) {
+    let mut book = typst::text::FontBook::new();
+    let mut fonts: Vec<FontSlot> = Vec::new();
+    for dir in font_dirs {
+        for (found, info) in typst_kit::fonts::scan(dir) {
+            book.push(info);
+            fonts.push(FontSlot::on_disk(found));
+        }
+    }
+    if include_system_fonts {
+        for (found, info) in typst_kit::fonts::system() {
+            book.push(info);
+            fonts.push(FontSlot::on_disk(found));
+        }
+    }
+    if include_embedded_fonts {
+        push_embedded_fonts(&mut book, &mut fonts);
+    }
+    (book, fonts)
+}
+
+/// The book [`discover_fonts`] builds, for callers that only index families.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn discover_font_book(
+    font_dirs: &[PathBuf],
+    include_system_fonts: bool,
+    include_embedded_fonts: bool,
+) -> typst::text::FontBook {
+    discover_fonts(font_dirs, include_system_fonts, include_embedded_fonts).0
+}
+
+/// Only the faces embedded in typst-assets: the WASM build's whole font set.
+fn embedded_fonts() -> (typst::text::FontBook, Vec<FontSlot>) {
+    let mut book = typst::text::FontBook::new();
+    let mut fonts: Vec<FontSlot> = Vec::new();
+    push_embedded_fonts(&mut book, &mut fonts);
+    (book, fonts)
+}
+
+/// Appends the faces embedded in typst-assets, which rank below every
+/// discovered face.
+fn push_embedded_fonts(book: &mut typst::text::FontBook, fonts: &mut Vec<FontSlot>) {
+    for (font, info) in typst_kit::fonts::embedded() {
+        book.push(info);
+        fonts.push(FontSlot::loaded(font));
+    }
 }
 
 /// Document- or caller-provided in-memory faces followed by cached fallback
 /// slots. The combined book preserves the same priority order that native
-/// `FontSearcher` gives an explicit font directory without eagerly loading all
+/// `discover_fonts` gives an explicit font directory without eagerly loading all
 /// fallback font bytes.
 struct InMemoryFontData {
     book: LazyHash<typst::text::FontBook>,
@@ -151,12 +252,10 @@ impl Drop for TypstCompilationGuard {
 #[cfg(not(target_arch = "wasm32"))]
 fn get_system_fonts() -> &'static CachedFontData {
     SYSTEM_FONTS.get_or_init(|| {
-        let mut searcher = FontSearcher::new();
-        searcher.include_system_fonts(true);
-        let font_data = searcher.search();
+        let (book, fonts) = discover_fonts(&[], true, true);
         CachedFontData {
-            book: LazyHash::new(font_data.book),
-            fonts: font_data.fonts,
+            book: LazyHash::new(book),
+            fonts,
         }
     })
 }
@@ -174,12 +273,10 @@ fn get_fonts_for_extra_paths(font_paths: &[PathBuf]) -> Arc<CachedFontData> {
         }
     }
 
-    let mut searcher = FontSearcher::new();
-    searcher.include_system_fonts(true);
-    let font_data = searcher.search_with(font_paths.iter().map(|path| path.as_path()));
+    let (book, fonts) = discover_fonts(font_paths, true, true);
     let cached = Arc::new(CachedFontData {
-        book: LazyHash::new(font_data.book),
-        fonts: font_data.fonts,
+        book: LazyHash::new(book),
+        fonts,
     });
 
     let mut cache_guard = cache
@@ -194,14 +291,26 @@ fn get_fonts_for_extra_paths(font_paths: &[PathBuf]) -> Arc<CachedFontData> {
 /// Get or initialize cached embedded-only fonts.
 fn get_embedded_fonts() -> &'static CachedFontData {
     EMBEDDED_FONTS.get_or_init(|| {
-        let mut searcher = FontSearcher::new();
-        searcher.include_system_fonts(false);
-        let font_data = searcher.search();
+        let (book, fonts) = embedded_fonts();
         CachedFontData {
-            book: LazyHash::new(font_data.book),
-            fonts: font_data.fonts,
+            book: LazyHash::new(book),
+            fonts,
         }
     })
+}
+
+/// The instance of `font` whose tables the metric helpers read.
+///
+/// typst 0.15 moved a face's tables onto a [`typst::text::FontInstance`] fixed
+/// to variation coordinates. Instantiating at the face's own variant reads a
+/// static face exactly as typst 0.14's `Font::ttf` did; Typst's 11pt default
+/// text size stands in for the size an `opsz` axis would follow.
+pub(crate) fn measured_instance(font: &Font) -> typst::text::FontInstance {
+    font.clone().instantiate(
+        font.info().variant,
+        typst::layout::Abs::pt(11.0),
+        &typst::text::FontVariations::default(),
+    )
 }
 
 /// Parse standalone font or font-collection bytes into Typst faces.
@@ -339,7 +448,7 @@ pub(crate) fn compile_page_count_with_fonts(
         MinimalWorld::new_embedded_with_fonts(typst_source, images, in_memory_fonts)
     };
     let _compilation_guard = TypstCompilationGuard::begin();
-    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let warned = typst::compile::<PagedDocument>(&world);
     let document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors
             .iter()
@@ -347,7 +456,7 @@ pub(crate) fn compile_page_count_with_fonts(
             .collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
-    Ok(document.pages.len() as u32)
+    Ok(document.pages().len() as u32)
 }
 
 /// The passes that move Typst's completed line paint into place.
@@ -355,10 +464,15 @@ pub(crate) fn compile_page_count_with_fonts(
 /// Typst supplies the shaping, wrapping and line boxes; each pass reads its
 /// own codegen marker and leaves every other frame alone, so their order only
 /// has to be the same wherever a compiled document is inspected or exported.
-fn apply_completed_frame_passes(document: &mut typst::layout::PagedDocument) {
-    super::powerpoint_line_paint::adjust_paragraph_marks(document);
-    super::excel_fill_paint::adjust_cell_fills(document);
-    super::word_justified_gap_phases::spread_justified_gaps_as_word_does(document);
+fn apply_completed_frame_passes(document: &mut PagedDocument) {
+    // typst 0.15 hands pages out read-only, so the edited pages make a new
+    // document, whose introspector is rebuilt from them.
+    let mut pages: Vec<Page> = document.pages().to_vec();
+    super::powerpoint_line_paint::adjust_paragraph_marks(&mut pages);
+    super::excel_fill_paint::adjust_cell_fills(&mut pages);
+    super::word_justified_gap_phases::spread_justified_gaps_as_word_does(&mut pages);
+    let info: typst::model::DocumentInfo = typst::model::Document::info(document).clone();
+    *document = PagedDocument::new(pages.into_iter().collect(), info);
 }
 
 fn compile_to_pdf_inner(
@@ -374,7 +488,7 @@ fn compile_to_pdf_inner(
     // overlapping conversions, whose live layout entries may still be in use.
     let _compilation_guard = TypstCompilationGuard::begin();
 
-    let warned = typst::compile::<typst::layout::PagedDocument>(world);
+    let warned = typst::compile::<PagedDocument>(world);
     let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
@@ -393,8 +507,9 @@ fn compile_to_pdf_inner(
     let standards = if pdf_standards.is_empty() {
         typst_pdf::PdfStandards::default()
     } else {
-        typst_pdf::PdfStandards::new(&pdf_standards)
-            .map_err(|e| ConvertError::Render(format!("PDF standard configuration error: {e}")))?
+        typst_pdf::PdfStandards::new(&pdf_standards).map_err(|e| {
+            ConvertError::Render(format!("PDF standard configuration error: {}", e.message()))
+        })?
     };
 
     // PDF/A and PDF/UA require a document creation timestamp
@@ -414,7 +529,7 @@ fn compile_to_pdf_inner(
         tagged: enable_tagged,
         ..Default::default()
     };
-    let page_count = document.pages.len() as u32;
+    let page_count = document.pages().len() as u32;
     let pdf = typst_pdf::pdf(&document, &options).map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("PDF export failed: {}", messages.join("; ")))
@@ -510,7 +625,7 @@ fn compiled_text_runs_with_line_seating(
     // the faces `font_hhea_ascender_em` measured rather than a substitute.
     let font_paths: &[PathBuf] = super::font_context::default_font_search_paths();
     let world = MinimalWorld::new_with_in_memory_fonts(typst_source, &[], font_paths, fonts);
-    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let warned = typst::compile::<PagedDocument>(&world);
     let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
@@ -518,10 +633,10 @@ fn compiled_text_runs_with_line_seating(
     if apply_line_seating {
         apply_completed_frame_passes(&mut document);
     }
-    let page = document.pages.get(page_index).ok_or_else(|| {
+    let page = document.pages().get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
-            document.pages.len()
+            document.pages().len()
         ))
     })?;
     let mut runs: Vec<PlacedTextRun> = Vec::new();
@@ -586,16 +701,16 @@ pub(crate) fn compiled_image_boxes(
     }
 
     let world = MinimalWorld::new(typst_source, images, &[]);
-    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let warned = typst::compile::<PagedDocument>(&world);
     let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
     apply_completed_frame_passes(&mut document);
-    let page = document.pages.get(page_index).ok_or_else(|| {
+    let page = document.pages().get(page_index).ok_or_else(|| {
         ConvertError::Render(format!(
             "page {page_index} is past the document's {} pages",
-            document.pages.len()
+            document.pages().len()
         ))
     })?;
     let mut boxes: Vec<PlacedImageBox> = Vec::new();
@@ -617,7 +732,7 @@ pub(crate) enum PaintedKind {
 
 /// One primitive a compiled page paints, and the box it covers.
 #[cfg(all(test, not(target_arch = "wasm32")))]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct PaintedPrimitive {
     pub kind: PaintedKind,
     /// Page-space bounding box in points, as `(min x, min y, max x, max y)`.
@@ -629,7 +744,7 @@ pub(crate) struct PaintedPrimitive {
 
 /// Stroke geometry after compilation, before the enclosing frame transform.
 #[cfg(all(test, not(target_arch = "wasm32")))]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct PaintedStroke {
     pub color: Option<typst::visualize::Color>,
     pub thickness_pt: f64,
@@ -739,7 +854,7 @@ pub(crate) fn compiled_page_paint_sequences(
                             transformed_bounds(at, size.x.to_pt(), size.y.to_pt())
                         }
                         Geometry::Curve(curve) => {
-                            let box_ = curve.bbox();
+                            let box_ = curve.bbox(None);
                             let min: (f64, f64) = place(at, box_.min.x.to_pt(), box_.min.y.to_pt());
                             let max: (f64, f64) = place(at, box_.max.x.to_pt(), box_.max.y.to_pt());
                             (
@@ -754,14 +869,14 @@ pub(crate) fn compiled_page_paint_sequences(
                         kind: PaintedKind::Shape,
                         rectangle_fill: match (&shape.geometry, &shape.fill) {
                             (Geometry::Rect(_), Some(typst::visualize::Paint::Solid(color))) => {
-                                Some(*color)
+                                Some(color.clone())
                             }
                             _ => None,
                         },
                         bounds,
                         stroke: shape.stroke.as_ref().map(|stroke| PaintedStroke {
                             color: match &stroke.paint {
-                                typst::visualize::Paint::Solid(color) => Some(*color),
+                                typst::visualize::Paint::Solid(color) => Some(color.clone()),
                                 _ => None,
                             },
                             thickness_pt: stroke.thickness.to_pt(),
@@ -796,14 +911,14 @@ pub(crate) fn compiled_page_paint_sequences(
     }
 
     let world = MinimalWorld::new(typst_source, images, &[]);
-    let warned = typst::compile::<typst::layout::PagedDocument>(&world);
+    let warned = typst::compile::<PagedDocument>(&world);
     let mut document = warned.output.map_err(|errors| {
         let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
         ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
     })?;
     apply_completed_frame_passes(&mut document);
     Ok(document
-        .pages
+        .pages()
         .iter()
         .map(|page| {
             let mut painted: Vec<PaintedPrimitive> = Vec::new();
@@ -856,14 +971,20 @@ fn powerpoint_line_seating_keeps_links_and_underlines_with_text() {
             source.to_owned()
         };
         let world = MinimalWorld::new(&source, &[], &[]);
-        let mut document = typst::compile::<typst::layout::PagedDocument>(&world)
-            .output
-            .unwrap();
+        let mut document = typst::compile::<PagedDocument>(&world).output.unwrap();
         let mut before = [Vec::new(), Vec::new(), Vec::new()];
-        positions(&document.pages[0].frame, Transform::identity(), &mut before);
+        positions(
+            &document.pages()[0].frame,
+            Transform::identity(),
+            &mut before,
+        );
         apply_completed_frame_passes(&mut document);
         let mut after = [Vec::new(), Vec::new(), Vec::new()];
-        positions(&document.pages[0].frame, Transform::identity(), &mut after);
+        positions(
+            &document.pages()[0].frame,
+            Transform::identity(),
+            &mut after,
+        );
         assert!(before[0].len() > 1, "the paragraph must wrap");
         for kind in 0..2 {
             assert_eq!(before[kind].len(), before[0].len());
@@ -1007,7 +1128,7 @@ impl MinimalWorld {
             FontSource::Shared(get_fonts_for_extra_paths(font_paths))
         };
 
-        let main_id = FileId::new(None, VirtualPath::new("main.typ"));
+        let main_id = main_file_id();
         let source = Source::new(main_id, source_text.to_string());
 
         let image_map: HashMap<String, Bytes> = images
@@ -1089,7 +1210,7 @@ impl MinimalWorld {
         images: &[ImageAsset],
         font_source: FontSource,
     ) -> Self {
-        let main_id = FileId::new(None, VirtualPath::new("main.typ"));
+        let main_id = main_file_id();
         let source = Source::new(main_id, source_text.to_string());
 
         let image_map: HashMap<String, Bytes> = images
@@ -1105,6 +1226,12 @@ impl MinimalWorld {
             shaped_faces: Mutex::new(HashMap::new()),
         }
     }
+}
+
+/// The id each compilation registers its single source file under.
+fn main_file_id() -> FileId {
+    let path = VirtualPath::new("main.typ").expect("`main.typ` is a valid virtual path");
+    FileId::new(RootedPath::new(VirtualRoot::Project, path))
 }
 
 impl World for MinimalWorld {
@@ -1124,9 +1251,9 @@ impl World for MinimalWorld {
         if id == self.source.id() {
             Ok(self.source.clone())
         } else {
-            Err(typst::diag::FileError::NotFound(
-                id.vpath().as_rootless_path().into(),
-            ))
+            Err(typst::diag::FileError::NotFound(std::path::PathBuf::from(
+                id.vpath().get_without_slash(),
+            )))
         }
     }
 
@@ -1135,13 +1262,13 @@ impl World for MinimalWorld {
             Ok(Bytes::new(self.source.text().as_bytes().to_vec()))
         } else {
             // Check if it's an embedded image file
-            let path = id.vpath().as_rootless_path().to_string_lossy();
-            if let Some(data) = self.images.get(path.as_ref()) {
+            let path: &str = id.vpath().get_without_slash();
+            if let Some(data) = self.images.get(path) {
                 Ok(data.clone()) // Bytes::clone is cheap (reference-counted)
             } else {
-                Err(typst::diag::FileError::NotFound(
-                    id.vpath().as_rootless_path().into(),
-                ))
+                Err(typst::diag::FileError::NotFound(std::path::PathBuf::from(
+                    id.vpath().get_without_slash(),
+                )))
             }
         }
     }
@@ -1168,7 +1295,7 @@ impl World for MinimalWorld {
         Some(font)
     }
 
-    fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
+    fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
         None
     }
 }
@@ -1314,7 +1441,8 @@ fn line_metric_face_in(
 #[cfg(not(target_arch = "wasm32"))]
 fn postscript_name(font: &typst::text::Font) -> Option<String> {
     const POST_SCRIPT_NAME_ID: u16 = 6;
-    font.ttf()
+    measured_instance(font)
+        .ttf()
         .names()
         .into_iter()
         .filter(|name| name.name_id == POST_SCRIPT_NAME_ID)
@@ -1418,7 +1546,8 @@ fn cached_family_metric(
 pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
     static ASCENDER_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
     cached_family_metric(&ASCENDER_CACHE, family, line_metric_face, |font| {
-        let ttf = font.ttf();
+        let instance = measured_instance(font);
+        let ttf = instance.ttf();
         Some(f64::from(ttf.tables().hhea.ascender) / f64::from(ttf.units_per_em()).max(1.0))
     })
 }
@@ -1426,7 +1555,8 @@ pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
     let font = best_face(family)?;
-    let ttf = font.ttf();
+    let instance = measured_instance(&font);
+    let ttf = instance.ttf();
     Some(f64::from(ttf.tables().hhea.ascender) / f64::from(ttf.units_per_em()).max(1.0))
 }
 
@@ -1447,13 +1577,13 @@ pub(crate) fn font_hhea_ascender_em(family: &str) -> Option<f64> {
 pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
     static CAP_HEIGHT_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
     cached_family_metric(&CAP_HEIGHT_CACHE, family, best_face, |font| {
-        Some(font.metrics().cap_height.get())
+        Some(measured_instance(font).metrics().cap_height.get())
     })
 }
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
-    best_face(family).map(|font| font.metrics().cap_height.get())
+    best_face(family).map(|font| measured_instance(&font).metrics().cap_height.get())
 }
 
 /// The bare `hhea` line gap of the face Word measures `family` by, in em
@@ -1470,7 +1600,8 @@ pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
     use std::sync::Mutex;
     static LINE_GAP_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
     cached_family_metric(&LINE_GAP_CACHE, family, line_metric_face, |font| {
-        let ttf = font.ttf();
+        let instance = measured_instance(font);
+        let ttf = instance.ttf();
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         Some(f64::from(ttf.line_gap()) / upem)
     })
@@ -1479,7 +1610,8 @@ pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
     let font = best_face(family)?;
-    let ttf = font.ttf();
+    let instance = measured_instance(&font);
+    let ttf = instance.ttf();
     let upem = f64::from(ttf.units_per_em()).max(1.0);
     Some(f64::from(ttf.line_gap()) / upem)
 }
@@ -1507,7 +1639,8 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     static METRICS_CACHE: OnceLock<Mutex<HashMap<String, LineMetricsEm>>> = OnceLock::new();
 
     let metrics_for = |font: &typst::text::Font| {
-        let ttf = font.ttf();
+        let instance = measured_instance(font);
+        let ttf = instance.ttf();
         let upem = f64::from(ttf.units_per_em()).max(1.0);
         let hhea_pitch_em = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
             + f64::from(ttf.line_gap()))
@@ -1557,7 +1690,8 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     let font = best_face(family)?;
-    let ttf = font.ttf();
+    let instance = measured_instance(&font);
+    let ttf = instance.ttf();
     let upem = f64::from(ttf.units_per_em()).max(1.0);
     let hhea_pitch_em =
         (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem;
@@ -1582,7 +1716,8 @@ pub(crate) fn max_digit_advance_em(family: &str) -> Option<f64> {
     static ADVANCE_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
 
     face_advance_em(family, &ADVANCE_CACHE, |font| {
-        let ttf = font.ttf();
+        let instance = measured_instance(font);
+        let ttf = instance.ttf();
         let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
         ('0'..='9')
             .filter_map(|digit| {
@@ -1617,7 +1752,8 @@ pub(crate) fn space_advance_em(family: &str) -> Option<f64> {
     static ADVANCE_CACHE: OnceLock<Mutex<HashMap<String, Option<f64>>>> = OnceLock::new();
 
     face_advance_em(family, &ADVANCE_CACHE, |font| {
-        let ttf = font.ttf();
+        let instance = measured_instance(font);
+        let ttf = instance.ttf();
         let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
         ttf.glyph_index(' ')
             .and_then(|glyph| ttf.glyph_hor_advance(glyph))
@@ -1881,9 +2017,10 @@ fn select_typst_font_advances(
         // A run needing several faces has per-segment shaping and kerning that
         // this hmtx-only helper cannot reproduce safely. Basic Latin absent
         // from a selected face can still continue to Typst's fallback below.
+        let instance = measured_instance(&font);
         if text
             .chars()
-            .any(|character| font.ttf().glyph_index(character).is_some())
+            .any(|character| instance.ttf().glyph_index(character).is_some())
         {
             return None;
         }
@@ -1896,7 +2033,8 @@ fn select_typst_font_advances(
 }
 
 fn font_glyph_advances_em(font: &typst::text::Font, text: &str) -> Option<Vec<f64>> {
-    let ttf = font.ttf();
+    let instance = measured_instance(font);
+    let ttf = instance.ttf();
     let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
     let mut advances_em: Vec<f64> = Vec::with_capacity(text.chars().count());
     for character in text.chars() {
@@ -2027,7 +2165,8 @@ where
 /// positive em fractions: OS/2's `usWin*` pair, falling back to hhea's for a
 /// face carrying no `OS/2` table at all.
 fn powerpoint_face_metrics_em(font: &typst::text::Font) -> (f64, f64) {
-    let ttf = font.ttf();
+    let instance = measured_instance(font);
+    let ttf = instance.ttf();
     let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
     if let Some(os2) = ttf.tables().os2 {
         let ascent: f64 = f64::from(os2.windows_ascender()).max(0.0);

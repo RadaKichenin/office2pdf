@@ -533,6 +533,10 @@ fn parse_lim_low(reader: &mut Reader<&[u8]>, out: &mut String) {
         }
     }
 
+    if let Some(annotated) = annotate_group_chr(&base, "underbrace", &lim) {
+        out.push_str(&annotated);
+        return;
+    }
     out.push_str(&base);
     let _ = std::fmt::Write::write_fmt(out, format_args!("_{}", wrap_if_needed(&lim)));
 }
@@ -555,6 +559,10 @@ fn parse_lim_upp(reader: &mut Reader<&[u8]>, out: &mut String) {
         }
     }
 
+    if let Some(annotated) = annotate_group_chr(&base, "overbrace", &lim) {
+        out.push_str(&annotated);
+        return;
+    }
     out.push_str(&base);
     let _ = std::fmt::Write::write_fmt(out, format_args!("^{}", wrap_if_needed(&lim)));
 }
@@ -779,6 +787,84 @@ fn parse_eq_array(reader: &mut Reader<&[u8]>, out: &mut String) {
         }
         out.push_str(eq);
     }
+}
+
+/// `func(body, lim)` when `base` is exactly one `func(body)` call.
+///
+/// Word centres a limit under an underbrace, or over an overbrace, and Typst
+/// draws such a limit as the brace's annotation. Attached as `_lim`, it hangs
+/// off the brace's corner in typst 0.14 and off the body's last glyph in
+/// typst 0.15. Only the brace's own side qualifies, since an annotation is
+/// drawn where the brace is.
+fn annotate_group_chr(base: &str, func: &str, lim: &str) -> Option<String> {
+    let body: &str = base
+        .trim()
+        .strip_prefix(func)?
+        .strip_prefix('(')?
+        .strip_suffix(')')?;
+    if !closes_every_parenthesis(body) {
+        return None;
+    }
+    Some(format!(
+        "{func}({body}, {})",
+        escape_top_level_commas(lim.trim())
+    ))
+}
+
+/// Whether `argument` closes every parenthesis it opens without dipping below
+/// its own level, so the call around it ends at its last character. Escaped
+/// characters and string literals do not count.
+fn closes_every_parenthesis(argument: &str) -> bool {
+    let mut depth: i32 = 0;
+    let mut in_string: bool = false;
+    let mut characters = argument.chars();
+    while let Some(character) = characters.next() {
+        match character {
+            '\\' => {
+                characters.next();
+            }
+            '"' => in_string = !in_string,
+            '(' if !in_string => depth += 1,
+            ')' if !in_string => {
+                depth -= 1;
+                if depth < 0 {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    depth == 0 && !in_string
+}
+
+/// `argument` with every comma outside a nested call escaped, so it stays a
+/// single argument of the call it is placed in.
+fn escape_top_level_commas(argument: &str) -> String {
+    let mut escaped: String = String::with_capacity(argument.len());
+    let mut depth: i32 = 0;
+    let mut in_string: bool = false;
+    let mut characters = argument.chars();
+    while let Some(character) = characters.next() {
+        match character {
+            '\\' => {
+                escaped.push(character);
+                if let Some(next) = characters.next() {
+                    escaped.push(next);
+                }
+                continue;
+            }
+            '"' => in_string = !in_string,
+            '(' if !in_string => depth += 1,
+            ')' if !in_string => depth -= 1,
+            ',' if !in_string && depth == 0 => {
+                escaped.push_str("\\,");
+                continue;
+            }
+            _ => {}
+        }
+        escaped.push(character);
+    }
+    escaped
 }
 
 fn wrap_if_needed(s: &str) -> String {
