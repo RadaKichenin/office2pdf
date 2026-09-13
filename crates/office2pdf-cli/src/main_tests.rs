@@ -335,12 +335,8 @@ fn fixed_raster_image_does_not_round_below_the_exact_bottom_edge() {
     let pdf = office2pdf::render_document(&document).expect("fixed raster should render");
     let parsed = lopdf::Document::load_mem(&pdf).expect("rendered PDF should parse");
     let page_id = parsed.get_pages()[&1];
-    let content = Content::decode(
-        &parsed
-            .get_page_content(page_id)
-            .expect("page content should load"),
-    )
-    .expect("page content should decode");
+    let content =
+        Content::decode(&parsed.get_page_content(page_id)).expect("page content should decode");
     let matrices = content
         .operations
         .windows(2)
@@ -379,12 +375,8 @@ fn rotated_preset_keeps_explicit_vertical_body_direction_and_top_anchor() {
     let rendered = office2pdf::convert(&fixture).expect("fixture should render");
     let parsed = lopdf::Document::load_mem(&rendered.pdf).expect("rendered PDF should parse");
     let page_id = parsed.get_pages()[&1];
-    let content = Content::decode(
-        &parsed
-            .get_page_content(page_id)
-            .expect("page content should load"),
-    )
-    .expect("page content should decode");
+    let content =
+        Content::decode(&parsed.get_page_content(page_id)).expect("page content should decode");
     let number = |object: &Object| match object {
         Object::Integer(value) => *value as f64,
         Object::Real(value) => f64::from(*value),

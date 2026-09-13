@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::cell::Cell;
 
 use crate::ir::WrapMode;
@@ -84,7 +85,7 @@ fn scan_anchor_wrap_types(xml: &str) -> Vec<AnchorWrapInfo> {
                         current_wrap = WrapMode::None;
                         for attribute in element.attributes().flatten() {
                             if attribute.key.local_name().as_ref() == b"behindDoc"
-                                && let Ok(value) = attribute.unescape_value()
+                                && let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION)
                                 && (value == "1" || value == "true")
                             {
                                 behind_doc = true;

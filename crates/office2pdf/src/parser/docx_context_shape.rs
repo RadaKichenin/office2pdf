@@ -12,6 +12,7 @@
 //! canvas picture offsets. Cursors keep that metadata aligned with the main
 //! docx-rs drawing walk.
 
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::cell::Cell;
 use std::collections::HashMap;
 
@@ -413,7 +414,7 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
             Ok(Event::Text(ref text)) => {
                 if in_position_offset
                     && let Some(builder) = builder.as_mut()
-                    && let Ok(raw) = text.xml_content()
+                    && let Ok(raw) = text.xml_content(OOXML_XML_VERSION)
                     && let Ok(emu) = raw.trim().parse::<i64>()
                 {
                     let pt: f64 = (emu as f64) / EMU_PER_POINT;
@@ -862,7 +863,7 @@ fn scan_wpg_drawings(xml: &str, theme_xml: Option<&str>) -> Vec<Option<WpgDrawin
             Ok(Event::Text(ref text)) => {
                 if let Some(drawing) = drawings.last_mut()
                     && drawing.in_position_offset
-                    && let Ok(raw) = text.xml_content()
+                    && let Ok(raw) = text.xml_content(OOXML_XML_VERSION)
                     && let Ok(emu) = raw.trim().parse::<f64>()
                 {
                     match drawing.position_axis {

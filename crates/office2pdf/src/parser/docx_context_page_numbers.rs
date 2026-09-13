@@ -1,4 +1,5 @@
 use crate::ir::{PageNumberFormat, PageNumbering};
+use crate::parser::xml_util::OOXML_XML_VERSION;
 
 /// Scan every `w:sectPr/w:pgNumType` in document order.
 ///
@@ -52,7 +53,7 @@ fn read_page_num_type(element: &quick_xml::events::BytesStart) -> PageNumbering 
     let mut start: Option<u32> = None;
     let mut format = PageNumberFormat::Decimal;
     for attribute in element.attributes().flatten() {
-        let Ok(value) = attribute.unescape_value() else {
+        let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION) else {
             continue;
         };
         match attribute.key.local_name().as_ref() {

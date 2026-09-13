@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};
 
@@ -220,7 +221,7 @@ fn simple_field_kind(element: &quick_xml::events::BytesStart<'_>) -> Option<Simp
         .attributes()
         .flatten()
         .find(|attribute| attribute.key.local_name().as_ref() == b"instr")?
-        .unescape_value()
+        .normalized_value(OOXML_XML_VERSION)
         .ok()?;
     let field_name = instruction.split_whitespace().next()?;
     if field_name.eq_ignore_ascii_case("page") {
@@ -293,7 +294,7 @@ fn build_part_image_map<R: Read + Seek>(
                 let mut target: Option<String> = None;
                 let mut is_image: bool = false;
                 for attribute in element.attributes().flatten() {
-                    let Ok(value) = attribute.unescape_value() else {
+                    let Ok(value) = attribute.normalized_value(OOXML_XML_VERSION) else {
                         continue;
                     };
                     match attribute.key.local_name().as_ref() {
@@ -1369,7 +1370,10 @@ fn scan_hf_anchors(xml: &str, theme_colors: &HashMap<String, Color>) -> Vec<HfAn
                 b"align" | b"posOffset" => {
                     let is_align = element.local_name().as_ref() == b"align";
                     let name = element.name().to_owned();
-                    let Ok(text) = reader.read_text(quick_xml::name::QName(name.as_ref())) else {
+                    let Ok(raw) = reader.read_text(quick_xml::name::QName(name.as_ref())) else {
+                        continue;
+                    };
+                    let Ok(text) = raw.decode() else {
                         continue;
                     };
                     let (Some(anchor), Some(horizontal)) = (current.as_mut(), axis) else {

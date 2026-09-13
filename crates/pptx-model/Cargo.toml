@@ -14,7 +14,7 @@ publish = false
 ooxml-package = { path = "../ooxml-package" }
 thiserror = "2"
 tracing = "0.1"
-quick-xml = "0.38"
+quick-xml = "0.41"
 
 [dev-dependencies]
 # Projection tests render the round-tripped package through the existing

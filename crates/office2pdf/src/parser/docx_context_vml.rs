@@ -1,3 +1,4 @@
+use crate::parser::xml_util::OOXML_XML_VERSION;
 use std::cell::Cell;
 
 use crate::ir::{Block, Paragraph, ParagraphStyle, Run, TextStyle, WrapMode};
@@ -102,7 +103,7 @@ fn scan_vml_text_boxes(xml: &str) -> Vec<VmlTextBoxInfo> {
                 _ => {}
             },
             Ok(quick_xml::events::Event::Text(ref element)) => {
-                if in_paragraph && let Ok(text) = element.xml_content() {
+                if in_paragraph && let Ok(text) = element.xml_content(OOXML_XML_VERSION) {
                     current_paragraph_text.push_str(&text);
                 }
             }
