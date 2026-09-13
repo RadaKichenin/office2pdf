@@ -1124,6 +1124,48 @@ fn encrypted_xlsx_returns_unsupported_encryption() {
     );
 }
 
+// --- Inline strings --------------------------------------------------------
+
+#[test]
+fn inline_strings_wrapped_in_a_value_keep_their_text() {
+    // SH006 writes every cell as <c t="inlineStr"><v><is><t>…</t></is></v></c>.
+    // The <v> wrapper is non-standard, but it must not hide the inline string.
+    let pages = sheet_pages("SH006-Table-No-SharedStrings.xlsx");
+    let column_a: Vec<String> = pages[0]
+        .table
+        .rows
+        .iter()
+        .map(|row| cell_text(&row.cells[0]))
+        .collect();
+
+    assert_eq!(column_a, ["Names", "Eric", "Jim", "Frank"]);
+}
+
+// --- XML entity bombs -------------------------------------------------------
+
+#[test]
+fn xml_entity_bomb_converts_without_expanding_the_entities() {
+    // POI bug 54764: sharedStrings.xml and docProps/core.xml declare the
+    // "billion laughs" chain lol..lol9 and use &lol9; in their text. A reader
+    // that expanded it would allocate gigabytes, and one that panicked on the
+    // undeclared-to-it reference failed the whole workbook. The reference must
+    // stay unexpanded while the rest of the workbook still converts.
+    for name in ["poi/54764.xlsx", "poi/54764-2.xlsx"] {
+        let result = office2pdf::convert(fixture_path(name))
+            .unwrap_or_else(|error| panic!("{name} should convert: {error:?}"));
+        let text: String = common::extract_pdf_text(&result.pdf);
+
+        assert!(
+            text.contains("Test number 1"),
+            "{name}: ordinary cells still render: {text:?}"
+        );
+        assert!(
+            !text.contains("lollol"),
+            "{name}: the entity chain must not be expanded: {text:?}"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Worksheet drawings (issue #238)
 // ---------------------------------------------------------------------------
