@@ -55,6 +55,13 @@ fn test_data_bar_codegen() {
         "DataBar should be a gradient in the bar color. Got: {}",
         output.source,
     );
+    assert!(
+        output
+            .source
+            .contains("rgb(99, 142, 198).lighten(83%), space: rgb)"),
+        "DataBar gradient should interpolate in sRGB. Got: {}",
+        output.source,
+    );
     // Excel's data-bar track has its own 2pt left / 1pt right inset, not the
     // cell text's 3pt per side. In a 100pt column the track is therefore
     // 97pt wide, and Excel quantises a 50% bar to 49 whole PDF points.

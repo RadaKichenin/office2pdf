@@ -508,6 +508,12 @@ fn test_gradient_background_codegen() {
         "Should contain gradient.linear. Got: {}",
         output.source,
     );
+    assert_eq!(
+        output.source.matches("gradient.linear(").count(),
+        output.source.matches("space: rgb").count(),
+        "Every gradient should interpolate in sRGB. Got: {}",
+        output.source,
+    );
     assert!(
         output.source.contains("(rgb(255, 0, 0), 0%)"),
         "Should contain first stop. Got: {}",
@@ -980,6 +986,12 @@ fn test_rectangle_top_bevel_draws_four_lit_rim_faces() {
     assert!(
         output.source.contains("(5pt, 5pt)") && output.source.contains("(195pt, 95pt)"),
         "the four faces must meet on the requested 5pt inset: {}",
+        output.source,
+    );
+    assert_eq!(
+        output.source.matches("gradient.linear(").count(),
+        output.source.matches("space: rgb").count(),
+        "Every gradient should interpolate in sRGB. Got: {}",
         output.source,
     );
 }
