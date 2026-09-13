@@ -512,6 +512,30 @@ fn test_convert_bytes_with_pdf_ua_option() {
 }
 
 #[test]
+fn test_convert_bytes_with_pdf_a_and_pdf_ua_together() {
+    // typst 0.14 took a single PDF substandard, so asking for both failed with
+    // "Typst currently only supports one PDF substandard at a time"; typst
+    // 0.15 targets compatible standards together.
+    let data = build_docx_with_title("PDF/A and PDF/UA Test Document");
+
+    let options = ConvertOptions {
+        pdf_standard: Some(crate::config::PdfStandard::PdfA2b),
+        pdf_ua: true,
+        ..Default::default()
+    };
+    let result = convert_bytes(&data, Format::Docx, &options).unwrap();
+    let pdf_str = String::from_utf8_lossy(&result.pdf);
+    assert!(
+        pdf_str.contains("pdfaid"),
+        "the output should declare PDF/A conformance"
+    );
+    assert!(
+        pdf_str.contains("pdfuaid"),
+        "the output should declare PDF/UA conformance"
+    );
+}
+
+#[test]
 fn test_convert_bytes_tagged_pdf_with_heading() {
     use std::io::Cursor;
 

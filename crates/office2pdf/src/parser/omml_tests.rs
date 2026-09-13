@@ -295,6 +295,36 @@ fn test_group_chr_default_underbrace() {
     assert_eq!(omml_to_typst(xml), "underbrace(z)");
 }
 
+#[test]
+fn test_lim_low_under_a_brace_becomes_the_brace_annotation() {
+    // Word centres a lower limit under the brace it sits beneath; Typst draws
+    // that as the brace's annotation. Attached as `_k`, the limit hangs off
+    // the brace's corner in typst 0.14 and off the body's last glyph in 0.15.
+    let xml = r#"<m:limLow><m:e><m:groupChr><m:groupChrPr><m:chr m:val="⏟"/><m:pos m:val="bot"/></m:groupChrPr><m:e><m:r><m:t>a+b+c</m:t></m:r></m:e></m:groupChr></m:e><m:lim><m:r><m:t>k</m:t></m:r></m:lim></m:limLow>"#;
+    assert_eq!(omml_to_typst(xml), "underbrace(a+b+c, k)");
+}
+
+#[test]
+fn test_lim_upp_over_a_brace_becomes_the_brace_annotation() {
+    let xml = r#"<m:limUpp><m:e><m:groupChr><m:groupChrPr><m:chr m:val="⏞"/><m:pos m:val="top"/></m:groupChrPr><m:e><m:r><m:t>x+y</m:t></m:r></m:e></m:groupChr></m:e><m:lim><m:r><m:t>2</m:t></m:r></m:lim></m:limUpp>"#;
+    assert_eq!(omml_to_typst(xml), "overbrace(x+y, 2)");
+}
+
+#[test]
+fn test_brace_annotation_escapes_a_comma_in_the_limit() {
+    // A bare comma would end the annotation argument and pass a third one.
+    let xml = r#"<m:limLow><m:e><m:groupChr><m:groupChrPr><m:chr m:val="⏟"/><m:pos m:val="bot"/></m:groupChrPr><m:e><m:r><m:t>a+b</m:t></m:r></m:e></m:groupChr></m:e><m:lim><m:r><m:t>i,j</m:t></m:r></m:lim></m:limLow>"#;
+    assert_eq!(omml_to_typst(xml), "underbrace(a+b, i\\,j)");
+}
+
+#[test]
+fn test_limit_on_the_far_side_of_a_brace_stays_an_attachment() {
+    // An annotation is drawn on the brace's own side, so a limit below an
+    // overbrace cannot become one.
+    let xml = r#"<m:limLow><m:e><m:groupChr><m:groupChrPr><m:chr m:val="⏞"/><m:pos m:val="top"/></m:groupChrPr><m:e><m:r><m:t>x+y</m:t></m:r></m:e></m:groupChr></m:e><m:lim><m:r><m:t>k</m:t></m:r></m:lim></m:limLow>"#;
+    assert_eq!(omml_to_typst(xml), "overbrace(x+y)_k");
+}
+
 // --- US-311: subscript/superscript parentheses tests ---
 
 #[test]

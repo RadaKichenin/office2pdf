@@ -112,10 +112,10 @@ pub(super) fn write_powerpoint_ligature_state(out: &mut String) {
 /// widths. Pair kerning therefore remains part of the shaped word instead of
 /// being lost to one-box-per-glyph output. Spaces remain real text characters
 /// and carry their grid and neighboring pair adjustments in one weak correction,
-/// so both disappear at a line boundary while extraction stays intact. The
-/// word box measures and restores the active text edge below
-/// the baseline, so it occupies the same line box as unboxed text and cannot
-/// disturb vertical centring.
+/// so both disappear at a line boundary while extraction stays intact. Since
+/// typst 0.15 a box keeps its content's baseline, so the word box sits on the
+/// line's baseline and occupies the same line box as unboxed text without
+/// the seat measurement 0.14 needed (upstream typst#8150).
 pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
     let _ = writeln!(
         out,
@@ -125,10 +125,8 @@ pub(super) fn write_powerpoint_advance_grid_helpers(out: &mut String) {
   let nominal = glyphs.map(glyph => measure(glyph).width).sum()
   let snapped = glyphs.map(glyph => calc.round(measure(glyph).width / o2p-pptx-advance-grid) * o2p-pptx-advance-grid).sum()
   let target = natural + snapped - nominal
-  let baseline-body = text(bottom-edge: "baseline", body)
-  let seat = measure(body).height - measure(baseline-body).height
   if natural == 0pt {{ body }} else {{
-    box(inset: (bottom: seat), baseline: seat)[#text(bottom-edge: "baseline")[#scale(x: target / natural * 100%, origin: left, body)]] + h(target - natural)
+    box[#scale(x: target / natural * 100%, origin: left, body)] + h(target - natural)
   }}
 }}
 #let o2p-pptx-space(left, right) = context {{
@@ -440,7 +438,7 @@ pub(super) fn generate_paragraph(
 /// The space belongs to the last run that puts a glyph on the line, because
 /// that run's `a:rPr/@spc` is the one PowerPoint applies after it.
 ///
-/// [`track_and_space`]: https://github.com/typst/typst/blob/v0.14.2/crates/typst-layout/src/inline/shaping.rs
+/// [`track_and_space`]: https://github.com/typst/typst/blob/v0.15.1/crates/typst-layout/src/inline/shaping.rs
 pub(super) fn powerpoint_trailing_letter_space_pt(
     style: &ParagraphStyle,
     runs: &[Run],
@@ -3319,8 +3317,8 @@ pub(super) enum EojeolWrap {
     #[default]
     Syllable,
     /// Emit each eojeol inside an inline `#box`. A frame is a single object to
-    /// UAX #14, so no break opportunity survives inside it. Typst 0.14 offers
-    /// no other lever for *removing* one: `text(lang: "ko")`,
+    /// UAX #14, so no break opportunity survives inside it. Typst 0.15 still
+    /// offers no other lever for *removing* one: `text(lang: "ko")`,
     /// `par(linebreaks:)` and `text(costs:)` were each measured to leave the
     /// breakpoints untouched, because typst-layout builds its ICU4X segmenters
     /// with default options and never consults `Lang::KOREAN`.
@@ -3980,16 +3978,16 @@ fn eojeol_advance_pt(token: &[EojeolPiece]) -> Option<f64> {
 
 /// Opens an eojeol's frame.
 ///
-/// Under Word's fixed line box (issues #354, #508) a bare `#box` seats its
-/// baseline on its own *bottom* edge, which would drop the framed text by the
-/// descent while the spaces around it stayed put. The frame therefore restores
-/// the paragraph's edges inside itself and shifts its baseline back up by the
-/// descent.
+/// Since typst 0.15 a box sits on its content's baseline, but its height still
+/// follows the text edges inside it, so under Word's fixed line box (issues
+/// #354, #508) the frame restores the paragraph's edges inside itself and
+/// occupies exactly the line box the spaces around it do. typst 0.14 seated a
+/// box on its bottom edge and needed a matching `baseline` shift as well.
 ///
 /// Those edges are re-emitted in points rather than the `em` the paragraph
 /// declares: an `em` resolves against each run's own size, so a size change
-/// inside one eojeol would leave the frame's height and its baseline shift
-/// disagreeing. Resolving them at the token's own largest size reproduces
+/// inside one eojeol would give the frame a different line box from the text
+/// around it. Resolving them at the token's own largest size reproduces
 /// exactly what the same text contributes to the line unframed.
 fn write_eojeol_frame_open(
     out: &mut String,
@@ -4006,8 +4004,7 @@ fn write_eojeol_frame_open(
     let bottom_pt: f64 = bottom_em * font_size_pt;
     let _ = write!(
         out,
-        "#box(baseline: {}pt)[#text(top-edge: {}pt, bottom-edge: -{}pt)[",
-        format_f64(bottom_pt),
+        "#box[#text(top-edge: {}pt, bottom-edge: -{}pt)[",
         format_f64(top_pt),
         format_f64(bottom_pt)
     );
@@ -4741,24 +4738,19 @@ fn write_synthetic_oblique_content(
                 // Three details keep the box from moving the text it slants.
                 //
                 // `bottom-edge: "baseline"` makes the box end at the baseline,
-                // and an inline box sits on the line by its bottom edge, so
-                // the glyphs keep their seat: with the paragraph's own bottom
-                // edge they came out a descent high. `origin: bottom + left`
-                // then pivots the shear on that same baseline, so the glyphs
-                // lean without sliding — the default centre pivot moved a 11pt
+                // so `origin: bottom + left` pivots the shear on it and the
+                // glyphs lean without sliding — the default centre pivot moved a 11pt
                 // Malgun Gothic syllable 1.34pt left, and a descender pivot
                 // moved it 0.88pt right.
                 //
-                // A stated seat adds the descent back as padding below the
-                // box and shifts the box down by the same amount, which
-                // cancels for the glyphs and leaves the box occupying exactly
-                // what the unslanted text did. An eojeol frame needs that: it
-                // shifts its own baseline up by the descent it expects its
-                // content to carry (issue #626), and a box that ended at the
-                // baseline dropped every framed Korean italic 3.97pt.
+                // A stated seat adds the frame's descent back as padding below
+                // the box, so it occupies exactly what the unslanted text did
+                // inside an eojeol frame (issue #626). Since typst 0.15 a box
+                // sits on its content's baseline whatever its inset, so the
+                // padding needs none of the matching `baseline` shift 0.14 did.
                 let seat: String = match seat_bottom_pt {
                     Some(bottom_pt) => format!(
-                        "inset: (bottom: {bottom}pt), baseline: {bottom}pt, ",
+                        "inset: (bottom: {bottom}pt), ",
                         bottom = format_f64(bottom_pt)
                     ),
                     None => String::new(),
@@ -5331,15 +5323,16 @@ fn powerpoint_advance_grid_is_active() -> bool {
 /// Run `operation` with the RTL kerning exemption in the given state, then
 /// restore whatever it was.
 ///
-/// TODO(typst 0.14.2 mis-orders RTL glyph ranges without `kern`; report
-/// upstream): shaping a right-to-left segment of two or more characters with
+/// TODO(typst mis-orders RTL glyph ranges without `kern`, still in 0.15.1;
+/// report upstream): shaping a right-to-left segment of two or more characters with
 /// the feature disabled walks `infos` backwards from index 0 and hands the
 /// first glyph the whole segment's text range, leaving the next glyph an
 /// inverted one. A debug build trips `assert_glyph_ranges_in_order` in
 /// `typst-layout`'s `inline/shaping.rs`; a release build keeps the broken
 /// ranges, which are what krilla writes `ActualText` from — krilla 0.6.0 then
 /// panics with "byte range starts at 3 but ends at 0", which is how
-/// FDO76312.docx failed the bulk gate. Measured on Arabic and Hebrew at two
+/// FDO76312.docx failed the bulk gate; typst 0.15.1's krilla 0.8.2 panics on
+/// the same ranges. Measured on Arabic and Hebrew at two
 /// characters and up; a single character, Latin, Hangul, Han, Thai and
 /// Devanagari all shape correctly, and every one of them is fine with the
 /// feature left on. Word's own kerning rule is therefore honoured everywhere

@@ -1922,7 +1922,7 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
             let origin = paints
                 .iter()
                 .find(|paint| {
-                    paint.rectangle_fill == Some(pale_paint)
+                    paint.rectangle_fill.as_ref() == Some(&pale_paint)
                         && paint.bounds.2 - paint.bounds.0 > 20.0
                         && paint.bounds.3 - paint.bounds.1 > 20.0
                 })
@@ -1939,7 +1939,7 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
                             && paint.bounds.1 < y
                             && y < paint.bounds.3
                     })
-                    .and_then(|paint| paint.rectangle_fill)
+                    .and_then(|paint| paint.rectangle_fill.clone())
             };
             let x = origin.0;
             let y = origin.1;
@@ -1951,25 +1951,25 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
                         "before column boundary",
                         x + width - 0.5 * scale,
                         y + height / 2.0,
-                        pale_paint,
+                        pale_paint.clone(),
                     ),
                     (
                         "after column boundary",
                         x + width + 0.5 * scale,
                         y + height / 2.0,
-                        rose_paint,
+                        rose_paint.clone(),
                     ),
                     (
                         "outer right extension",
                         x + 2.0 * width + 0.5 * scale,
                         y + height / 2.0,
-                        rose_paint,
+                        rose_paint.clone(),
                     ),
                     (
                         "outer bottom extension",
                         x + width + 10.0 * scale,
                         y + height + 0.5 * scale,
-                        rose_paint,
+                        rose_paint.clone(),
                     ),
                 ]
             } else {
@@ -1978,31 +1978,31 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
                         "before row boundary",
                         x + width / 2.0,
                         y + height - 0.5 * scale,
-                        pale_paint,
+                        pale_paint.clone(),
                     ),
                     (
                         "after row boundary",
                         x + width / 2.0,
                         y + height + 0.5 * scale,
-                        rose_paint,
+                        rose_paint.clone(),
                     ),
                     (
                         "outer bottom extension",
                         x + width / 2.0,
                         y + 2.0 * height + 0.5 * scale,
-                        rose_paint,
+                        rose_paint.clone(),
                     ),
                     (
                         "outer right extension",
                         x + width + 0.5 * scale,
                         y + height + 10.0 * scale,
-                        rose_paint,
+                        rose_paint.clone(),
                     ),
                 ]
             };
             for (label, px, py, expected) in probes {
                 let actual = visible_color(px, py);
-                if actual != Some(expected) {
+                if actual.as_ref() != Some(&expected) {
                     failures.push(format!("scale={scale}, horizontal={horizontal}, merged={merged}, {label}: {actual:?} != {expected:?}"));
                 }
             }
@@ -2059,7 +2059,8 @@ fn a_later_fill_preserves_the_merged_cells_winning_bottom_border() {
         .find(|paint| {
             paint
                 .stroke
-                .is_some_and(|stroke| stroke.color == Some(dark_paint))
+                .as_ref()
+                .is_some_and(|stroke| stroke.color.as_ref() == Some(&dark_paint))
         })
         .expect("the declared 3pt border paints");
     let point_y = (border.bounds.1 + border.bounds.3) / 2.0;
@@ -2067,24 +2068,24 @@ fn a_later_fill_preserves_the_merged_cells_winning_bottom_border() {
         let point_x = border.bounds.0 + fraction * (border.bounds.2 - border.bounds.0);
         let color = paints.iter().rev().find_map(|paint| {
             let (x0, y0, x1, y1) = paint.bounds;
-            if let Some(stroke) = paint.stroke {
+            if let Some(stroke) = &paint.stroke {
                 let half = stroke.thickness_pt / 2.0;
                 if point_x > x0 - half
                     && point_x < x1 + half
                     && point_y > y0 - half
                     && point_y < y1 + half
                 {
-                    return stroke.color;
+                    return stroke.color.clone();
                 }
             }
             if point_x > x0 && point_x < x1 && point_y > y0 && point_y < y1 {
-                return paint.rectangle_fill;
+                return paint.rectangle_fill.clone();
             }
             None
         });
         assert_eq!(
             color,
-            Some(dark_paint),
+            Some(dark_paint.clone()),
             "both lower cells preserve the resolved band"
         );
     }
@@ -2131,7 +2132,7 @@ fn row_order_determines_the_visible_fill_at_shared_corners() {
                     && p.bounds.1 < y
                     && y < p.bounds.3
             })
-            .and_then(|p| p.rectangle_fill);
+            .and_then(|p| p.rectangle_fill.clone());
         let expected = if lower_filled {
             PaintColor::from_u8(40, 120, 60, 255)
         } else {
@@ -2183,7 +2184,7 @@ fn automatic_row_fill_has_continuous_single_alpha_coverage() {
                 && x < paint.bounds.2
                 && paint.bounds.1 < y
                 && y < paint.bounds.3
-                && let Some(fill) = paint.rectangle_fill
+                && let Some(fill) = &paint.rectangle_fill
             {
                 let color = fill.to_rgb();
                 for (out, channel) in rgb.iter_mut().zip([color.red, color.green, color.blue]) {

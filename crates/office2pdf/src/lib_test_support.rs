@@ -343,9 +343,13 @@ pub(crate) fn make_face_with_legacy_kern_table(data: &[u8], kern: &[u8]) -> Vec<
 /// Whether a face still offers the GPOS `kern` feature a shaper would take its
 /// pair adjustments from.
 pub(crate) fn states_a_gpos_kern_feature(font: &typst::text::Font) -> bool {
-    font.ttf().tables().gpos.is_some_and(|gpos| {
-        gpos.features
-            .into_iter()
-            .any(|feature| feature.tag.to_bytes() == *b"kern")
-    })
+    crate::render::pdf::measured_instance(font)
+        .ttf()
+        .tables()
+        .gpos
+        .is_some_and(|gpos| {
+            gpos.features
+                .into_iter()
+                .any(|feature| feature.tag.to_bytes() == *b"kern")
+        })
 }

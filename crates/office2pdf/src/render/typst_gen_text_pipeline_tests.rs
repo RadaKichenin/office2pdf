@@ -1363,14 +1363,13 @@ fn a_framed_eojeol_keeps_the_paragraphs_baseline() {
     let top_pt: f64 = top_em * 10.5;
     let bottom_pt: f64 = bottom_em * 10.5;
     let expected: String = format!(
-        "#box(baseline: {}pt)[#text(top-edge: {}pt, bottom-edge: -{}pt)[",
-        format_f64(bottom_pt),
+        "#box[#text(top-edge: {}pt, bottom-edge: -{}pt)[",
         format_f64(top_pt),
         format_f64(bottom_pt)
     );
     assert!(
         result.contains(&expected),
-        "the frame should restore the line box and shift the baseline back by the descent\n\
+        "the frame should restore the line box it sits in\n\
          expected: {expected}\nin: {result}"
     );
     assert_eq!(
@@ -1380,15 +1379,16 @@ fn a_framed_eojeol_keeps_the_paragraphs_baseline() {
     );
 }
 
-/// Triangulation: the shift is the paragraph's own descent, not a constant.
+/// Triangulation: the frame's bottom edge is the paragraph's own descent, not
+/// a constant.
 #[test]
-fn the_frames_baseline_shift_scales_with_the_font_size() {
-    // Same premise as the test above: the shift is the fixed line box's own
+fn the_frames_bottom_edge_scales_with_the_font_size() {
+    // Same premise as the test above: the edge is the fixed line box's own
     // descent, and that box needs the Korean face's measured metrics.
     if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
         return; // no Korean face available (e.g. a runner with no CJK fonts)
     }
-    let mut shifts: Vec<String> = Vec::new();
+    let mut edges: Vec<String> = Vec::new();
     for size in [10.5_f64, 20.0_f64] {
         let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -1406,16 +1406,16 @@ fn the_frames_baseline_shift_scales_with_the_font_size() {
         })])]);
         let result = generate_typst(&doc).unwrap().source;
         let (_top_em, bottom_em) = emitted_line_box_em(&result).expect("fixed line box");
-        let expected: String = format!("#box(baseline: {}pt)", format_f64(bottom_em * size));
+        let expected: String = format!("pt, bottom-edge: -{}pt)[", format_f64(bottom_em * size));
         assert!(
             result.contains(&expected),
-            "a {size}pt paragraph should shift by {expected}: {result}"
+            "a {size}pt paragraph's frame should end at {expected}: {result}"
         );
-        shifts.push(expected);
+        edges.push(expected);
     }
     assert_ne!(
-        shifts[0], shifts[1],
-        "the shift must not be a single measured constant"
+        edges[0], edges[1],
+        "the edge must not be a single measured constant"
     );
 }
 
@@ -2019,7 +2019,8 @@ fn test_unkerned_run_states_the_decision_on_itself_not_document_wide() {
     // its nominal advance. The decision travels on the run rather than as a
     // document-wide `#set text(kerning: false)`: that rule would also reach
     // the list markers and header fields whose text the emitter cannot name,
-    // and RTL text under it loses glyphs to typst 0.14.2's shaping defect
+    // and RTL text under it loses glyphs to typst's shaping defect (0.14.2 and
+    // 0.15.1)
     // (issue #628 review, defect 1).
     let doc = make_doc_with_default_text(
         vec![make_flow_page(vec![styled_paragraph(
@@ -2162,7 +2163,7 @@ fn test_format_without_kerning_model_emits_no_kerning_parameter() {
 
 #[test]
 fn test_rtl_run_keeps_kerning_despite_the_word_rule() {
-    // typst 0.14.2 mis-orders RTL glyph ranges when the `kern` feature is
+    // typst (0.14.2 and 0.15.1) mis-orders RTL glyph ranges when the `kern` feature is
     // off, so Word's rule is not applied to a document that shapes
     // right-to-left — see `with_rtl_shaping_exemption`.
     let doc = make_doc_with_default_text(
@@ -2754,7 +2755,7 @@ fn test_synthetic_oblique_inside_an_eojeol_frame_keeps_the_frame_s_descent() {
 
     // 0.44121em at the run's 14pt.
     assert!(
-        source.contains("inset: (bottom: 6.17694pt), baseline: 6.17694pt"),
+        source.contains("#box(inset: (bottom: 6.17694pt), skew("),
         "a framed slant box must claim the frame's own descent, got:\n{source}"
     );
 }
@@ -2775,8 +2776,8 @@ fn test_synthetic_oblique_outside_a_frame_states_no_seat() {
     );
 }
 
-/// The RTL exemption outranks the tracking rule of issue #864: typst 0.14.2
-/// mis-orders RTL glyph ranges when the `kern` feature is off, and losing
+/// The RTL exemption outranks the tracking rule of issue #864: typst (0.14.2
+/// and 0.15.1) mis-orders RTL glyph ranges when the `kern` feature is off, and losing
 /// glyphs is worse than the spurious word break the rule exists to prevent.
 #[test]
 fn test_rtl_run_keeps_kerning_despite_tracking() {

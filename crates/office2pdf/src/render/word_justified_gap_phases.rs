@@ -22,8 +22,9 @@ use std::ops::Range;
 
 use typst::foundations::Value;
 use typst::introspection::{MetadataElem, Tag};
-use typst::layout::{Abs, Em, Frame, FrameItem, PagedDocument, Point};
+use typst::layout::{Abs, Em, Frame, FrameItem, Point};
 use typst::visualize::Geometry;
+use typst_layout::Page;
 
 use super::typst_gen::{
     EAST_ASIAN_AUTO_SPACE_EM, EAST_ASIAN_AUTO_SPACE_GLYPH, EAST_ASIAN_JUSTIFIED_GAP_CEILING_EM,
@@ -115,8 +116,8 @@ fn fill_equally(gaps: &[GapBudget], widths: &mut [f64], members: &[usize], amoun
 }
 
 /// Re-spread every stretched justified line that carries the auto space.
-pub(super) fn spread_justified_gaps_as_word_does(document: &mut PagedDocument) {
-    for page in &mut document.pages {
+pub(super) fn spread_justified_gaps_as_word_does(pages: &mut [Page]) {
+    for page in pages.iter_mut() {
         adjust_frame(&mut page.frame);
     }
 }
@@ -174,7 +175,7 @@ fn item_width(item: &FrameItem) -> Abs {
         FrameItem::Shape(shape, _) => match &shape.geometry {
             Geometry::Line(to) => to.x.max(Abs::zero()),
             Geometry::Rect(size) => size.x,
-            Geometry::Curve(curve) => curve.bbox_size().x,
+            Geometry::Curve(curve) => curve.bbox(None).size().x,
         },
         FrameItem::Tag(_) => Abs::zero(),
     }

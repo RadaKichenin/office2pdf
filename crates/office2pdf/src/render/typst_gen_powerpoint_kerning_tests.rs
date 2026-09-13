@@ -9,12 +9,13 @@ const PAIRS: [(char, char, i16); 3] = [(' ', 'A', -100), ('A', ' ', -60), ('Y', 
 fn space_kern_font() -> Font {
     let data = include_bytes!("../../fonts/NotoSansCJKsc-GB2312.otf");
     let base = Font::new(Bytes::new(data.to_vec()), 0).unwrap();
+    let base_face = crate::render::pdf::measured_instance(&base);
     let mut pairs: Vec<(u16, u16, i16)> = PAIRS
         .iter()
         .map(|&(left, right, value)| {
             (
-                base.ttf().glyph_index(left).unwrap().0,
-                base.ttf().glyph_index(right).unwrap().0,
+                base_face.ttf().glyph_index(left).unwrap().0,
+                base_face.ttf().glyph_index(right).unwrap().0,
                 value,
             )
         })
@@ -52,7 +53,8 @@ fn space_kern_font() -> Font {
 }
 
 fn grid_width(font: &Font, text: &str, size: f64, kerning: bool) -> f64 {
-    let face = font.ttf();
+    let instance = crate::render::pdf::measured_instance(font);
+    let face = instance.ttf();
     let units = f64::from(face.units_per_em());
     let nominal: f64 = text
         .chars()

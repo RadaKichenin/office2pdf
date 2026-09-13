@@ -4818,14 +4818,10 @@ fn generate_chart_axis(
             })
             .collect();
         if points.len() >= 2 {
-            let coords: String = points
-                .iter()
-                .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let segments: String = polyline_curve_segments(&points);
             let _ = writeln!(
                 out,
-                "#place(top + left, path(stroke: {}, {coords}))",
+                "#place(top + left, curve(stroke: {}, {segments}))",
                 series_stroke(s, &color)
             );
         }
@@ -5475,14 +5471,10 @@ fn generate_chart_line_plot(
             .map(|(index, value)| (point_x(index), point_y(s, *value)))
             .collect();
         if points.len() >= 2 {
-            let coords: String = points
-                .iter()
-                .map(|(x, y)| format!("({}pt, {}pt)", format_f64(*x), format_f64(*y)))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let segments: String = polyline_curve_segments(&points);
             let _ = writeln!(
                 out,
-                "#place(top + left, path(stroke: {}, {coords}))",
+                "#place(top + left, curve(stroke: {}, {segments}))",
                 series_stroke(s, &color)
             );
         }
@@ -5691,7 +5683,7 @@ fn generate_chart_radar_plot(
             .join(", ");
         let _ = writeln!(
             out,
-            "#place(top + left, path(closed: true, stroke: {}, {ring}))",
+            "#place(top + left, polygon(stroke: {}, {ring}))",
             CHART_AUTOMATIC_LINE
         );
     }
@@ -5746,7 +5738,7 @@ fn generate_chart_radar_plot(
             .join(", ");
         let _ = writeln!(
             out,
-            "#place(top + left, path(closed: true, stroke: {}, {coords}))",
+            "#place(top + left, polygon(stroke: {}, {coords}))",
             series_stroke(series, &color)
         );
         for (x, y) in &points {
@@ -6045,13 +6037,83 @@ fn generate_chart_pie_plot(
     write_chart_area_end(out, wraps_title);
 }
 
+/// `curve.move(first), curve.line(next), ...` tracing an open polyline.
+///
+/// typst 0.15 removed the `path` element these polylines used to be; a `curve`
+/// of straight segments draws the same PDF path.
+fn polyline_curve_segments(points: &[(f64, f64)]) -> String {
+    points
+        .iter()
+        .enumerate()
+        .map(|(index, (x, y))| {
+            let verb: &str = if index == 0 { "move" } else { "line" };
+            format!("curve.{verb}(({}pt, {}pt))", format_f64(*x), format_f64(*y))
+        })
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+/// A curve vertex with its incoming and outgoing Bézier handles, both relative
+/// to the vertex, as typst 0.14's removed `path` element took them.
+struct BezierVertex {
+    point: (f64, f64),
+    control_in: (f64, f64),
+    control_out: (f64, f64),
+}
+
+impl BezierVertex {
+    fn corner(point: (f64, f64)) -> Self {
+        Self {
+            point,
+            control_in: (0.0, 0.0),
+            control_out: (0.0, 0.0),
+        }
+    }
+}
+
+/// Emit a filled, closed Typst `curve` through `vertices`.
+///
+/// Each edge is a cubic whose controls sit at the handles of the two vertices
+/// it joins, or a straight line where both handles are zero: the rule typst
+/// 0.14's `path` element drew by, the closing edge included.
+fn write_closed_bezier_curve(out: &mut String, color: &str, vertices: &[BezierVertex]) {
+    let Some(first) = vertices.first() else {
+        return;
+    };
+    let point = |(x, y): (f64, f64)| format!("({}pt, {}pt)", format_f64(x), format_f64(y));
+    let mut curve: String = format!(
+        "#place(top + left, curve(fill: {color}, stroke: none, curve.move({})",
+        point(first.point)
+    );
+    let ends = vertices.iter().skip(1).chain(std::iter::once(first));
+    for (from, to) in vertices.iter().zip(ends) {
+        if from.control_out == (0.0, 0.0) && to.control_in == (0.0, 0.0) {
+            let _ = write!(curve, ", curve.line({})", point(to.point));
+        } else {
+            let control_start = (
+                from.point.0 + from.control_out.0,
+                from.point.1 + from.control_out.1,
+            );
+            let control_end = (to.point.0 + to.control_in.0, to.point.1 + to.control_in.1);
+            let _ = write!(
+                curve,
+                ", curve.cubic({}, {}, {})",
+                point(control_start),
+                point(control_end),
+                point(to.point)
+            );
+        }
+    }
+    curve.push_str(", curve.close(mode: \"straight\")))");
+    let _ = writeln!(out, "{curve}");
+}
+
 /// Emit one filled wedge from `start` through `sweep` radians.
 ///
 /// A cubic Bézier tracks a circular arc closely up to a quarter turn, so the
 /// sweep is split into at most quarter-turn segments. Each arc vertex carries
 /// handles of `4/3 * tan(step/4) * radius` along the tangent — the standard
-/// construction — as Typst's `(point, control-in, control-out)` triple, both
-/// controls relative to the vertex.
+/// construction — as a [`BezierVertex`], both controls relative to the vertex.
 fn write_pie_wedge(
     out: &mut String,
     centre_x: f64,
@@ -6074,13 +6136,9 @@ fn write_pie_wedge(
     // Unit tangent in the sweep direction, which the handles run along.
     let tangent = |angle: f64| -> (f64, f64) { (-angle.sin(), angle.cos()) };
 
-    // The wedge starts at the centre; `closed: true` draws the final radius
+    // The wedge starts at the centre; the closing edge draws the final radius
     // back to it, so the last vertex leaves no outgoing handle to curve it.
-    let mut path = format!(
-        "#place(top + left, path(fill: {color}, stroke: none, closed: true, ({}pt, {}pt)",
-        format_f64(centre_x),
-        format_f64(centre_y)
-    );
+    let mut vertices: Vec<BezierVertex> = vec![BezierVertex::corner((centre_x, centre_y))];
     for segment in 0..=segments {
         let angle: f64 = start + step * segment as f64;
         let (x, y) = point(angle);
@@ -6097,19 +6155,13 @@ fn write_pie_wedge(
         } else {
             (tx * handle, ty * handle)
         };
-        let _ = write!(
-            path,
-            ", (({}pt, {}pt), ({}pt, {}pt), ({}pt, {}pt))",
-            format_f64(x),
-            format_f64(y),
-            format_f64(in_dx),
-            format_f64(in_dy),
-            format_f64(out_dx),
-            format_f64(out_dy)
-        );
+        vertices.push(BezierVertex {
+            point: (x, y),
+            control_in: (in_dx, in_dy),
+            control_out: (out_dx, out_dy),
+        });
     }
-    path.push_str("))");
-    let _ = writeln!(out, "{path}");
+    write_closed_bezier_curve(out, color, &vertices);
 }
 
 /// Where the first wedge begins, in radians clockwise of twelve o'clock.
@@ -6172,7 +6224,7 @@ fn write_doughnut_segment(
     let segments: usize = (sweep / std::f64::consts::FRAC_PI_2).ceil().max(1.0) as usize;
     let step: f64 = sweep / segments as f64;
 
-    let mut path = format!("#place(top + left, path(fill: {color}, stroke: none, closed: true");
+    let mut vertices: Vec<BezierVertex> = Vec::new();
 
     let mut arc = |radius: f64, forward: bool| {
         let handle: f64 = 4.0 / 3.0 * (step / 4.0).tan() * radius;
@@ -6198,23 +6250,17 @@ fn write_doughnut_segment(
             } else {
                 (tx * handle, ty * handle)
             };
-            let _ = write!(
-                path,
-                ", (({}pt, {}pt), ({}pt, {}pt), ({}pt, {}pt))",
-                format_f64(x),
-                format_f64(y),
-                format_f64(in_dx),
-                format_f64(in_dy),
-                format_f64(out_dx),
-                format_f64(out_dy)
-            );
+            vertices.push(BezierVertex {
+                point: (x, y),
+                control_in: (in_dx, in_dy),
+                control_out: (out_dx, out_dy),
+            });
         }
     };
     arc(outer_radius, true);
     arc(inner_radius, false);
 
-    path.push_str("))");
-    let _ = writeln!(out, "{path}");
+    write_closed_bezier_curve(out, color, &vertices);
 }
 
 fn generate_chart_pie(out: &mut String, chart: &Chart) {

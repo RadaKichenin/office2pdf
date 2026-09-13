@@ -1682,6 +1682,35 @@ fn typographic_family_trims_the_suffixes_typst_trims() {
 }
 
 #[test]
+fn typographic_family_trims_variable_font_suffixes_as_typst_0_15_does() {
+    // typst 0.15 files a variable face under its family with a `Variable`,
+    // `Var` or `VF` suffix trimmed: `Pretendard Variable` is `Pretendard`.
+    assert_eq!(typographic_family("Pretendard Variable"), "Pretendard");
+    assert_eq!(typographic_family("Inter Var"), "Inter");
+    assert_eq!(typographic_family("Roboto Flex VF"), "Roboto Flex");
+    assert_eq!(typographic_family("Noto Sans KR Variable"), "Noto Sans KR");
+}
+
+#[test]
+fn a_variable_font_request_paints_and_measures_through_its_trimmed_family() {
+    // The book holds `Pretendard Variable` as `Pretendard` since typst 0.15,
+    // and the suffix names that very face, so both chains must reach it.
+    for purpose in [ChainPurpose::Paint, ChainPurpose::Metrics] {
+        let candidates: Vec<String> = fallback_candidates("Pretendard Variable", None, purpose);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some("Pretendard"),
+            "{purpose:?}: {candidates:?}"
+        );
+    }
+    assert_eq!(variable_font_base_family("Inter Var"), Some("Inter"));
+    // A stretch suffix is not a variable-font one, and a name that merely ends
+    // in the letters has no separator before them.
+    assert_eq!(variable_font_base_family("Arial Narrow"), None);
+    assert_eq!(variable_font_base_family("Kovar"), None);
+}
+
+#[test]
 fn a_weight_suffix_states_the_weight_of_the_member_it_names() {
     use typst::text::FontWeight;
     assert_eq!(

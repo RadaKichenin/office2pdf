@@ -140,7 +140,7 @@ just the pages a screenshot shows.
 
 1. **Check the reference's provenance first.** `pdfinfo x.pdf | grep -Ei
    'producer|creator'`. A PDF attached beside a source file is often *our own*
-   output — office2pdf reports `Creator: Typst 0.14.x`, LibreOffice reports
+   output — office2pdf reports `Creator: Typst 0.15.x`, LibreOffice reports
    `Producer: LibreOffice`. Two PDFs sharing embedded font subset tags came from
    the same producer. Generate a real reference with `soffice --headless
    --convert-to pdf` when in doubt.

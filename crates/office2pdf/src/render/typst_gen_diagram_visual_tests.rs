@@ -256,7 +256,7 @@ fn test_codegen_chart_pie_draws_a_pie() {
         output.source
     );
     assert_eq!(
-        output.source.matches("path(fill:").count(),
+        output.source.matches("curve(fill:").count(),
         2,
         "one wedge per slice, got:\n{}",
         output.source
@@ -341,8 +341,8 @@ fn test_codegen_chart_line_trend_indicators() {
         output.source
     );
     assert!(
-        output.source.contains("path(stroke:"),
-        "Expected polyline path for the line chart, got:\n{}",
+        output.source.contains("curve(stroke:"),
+        "Expected polyline curve for the line chart, got:\n{}",
         output.source
     );
     assert!(
@@ -827,8 +827,8 @@ fn test_codegen_chart_line_plot() {
 
     let output = generate_typst(&doc).unwrap();
     assert!(
-        output.source.contains("path(stroke:"),
-        "line chart must draw polyline paths; got:\n{}",
+        output.source.contains("curve(stroke:"),
+        "line chart must draw polyline curves; got:\n{}",
         output.source
     );
     assert!(
@@ -1923,7 +1923,7 @@ fn a_pie_chart_draws_wedges_not_a_table() {
     let source = chart_source(pie_chart(vec![115.0, 92.0, 138.0]));
 
     assert_eq!(
-        source.matches("path(fill:").count(),
+        source.matches("curve(fill:").count(),
         3,
         "one wedge per slice, got:\n{source}"
     );
@@ -1938,7 +1938,7 @@ fn a_pie_skips_slices_with_no_value() {
     // A zero slice has no wedge to draw, but keeps its legend entry.
     let source = chart_source(pie_chart(vec![115.0, 0.0, 138.0]));
 
-    assert_eq!(source.matches("path(fill:").count(), 2);
+    assert_eq!(source.matches("curve(fill:").count(), 2);
     assert!(source.contains("PPTX"), "the legend still lists it");
 }
 
@@ -1949,7 +1949,7 @@ fn an_empty_pie_falls_back_to_the_table() {
     let source = chart_source(pie_chart(vec![0.0, 0.0, 0.0]));
 
     assert!(
-        !source.contains("path(fill:"),
+        !source.contains("curve(fill:"),
         "no wedges without values, got:\n{source}"
     );
     assert!(source.contains("Pie Chart"), "the fallback still runs");
@@ -1962,30 +1962,20 @@ fn the_first_wedge_starts_at_twelve_oclock() {
     let source = chart_source(pie_chart(vec![115.0, 92.0, 138.0]));
     let first_path: &str = source
         .lines()
-        .find(|line| line.contains("path(fill:"))
+        .find(|line| line.contains("curve(fill:"))
         .expect("a wedge is drawn");
 
-    // `closed: true, (cx, cy), ((cx, cy - r), …` — the centre, then the top.
-    let after_centre: &str = first_path.split_once("closed: true, (").unwrap().1;
-    let (centre, rest) = after_centre.split_once("), ((").unwrap();
-    let centre: Vec<f64> = centre
-        .split(", ")
-        .map(|value| value.trim_end_matches("pt").parse().unwrap())
-        .collect();
-    let start: Vec<f64> = rest
-        .split_once(')')
-        .unwrap()
-        .0
-        .split(", ")
-        .map(|value| value.trim_end_matches("pt").parse().unwrap())
-        .collect();
+    // `curve.move((cx, cy)), curve.line((cx, cy - r)), …` — the centre, then
+    // the top.
+    let (points, _) = curve_vertices(first_path);
+    let (centre, start): ((f64, f64), (f64, f64)) = (points[0], points[1]);
 
     assert!(
-        (start[0] - centre[0]).abs() < 0.01,
+        (start.0 - centre.0).abs() < 0.01,
         "the first vertex sits directly above the centre: {start:?} vs {centre:?}"
     );
     assert!(
-        start[1] < centre[1],
+        start.1 < centre.1,
         "and above it, not below: {start:?} vs {centre:?}"
     );
 }
@@ -3528,13 +3518,16 @@ fn a_line_legend_key_draws_the_series_line_and_its_marker() {
     );
 }
 
-/// The weight of every `path(... stroke: Npt + ...)` the source strokes, in
-/// emission order.
+/// The weight of every polyline `curve(stroke: Npt + ...)` and radar
+/// `polygon(stroke: Npt + ...)` the source strokes, in emission order.
 fn emitted_path_stroke_widths(source: &str) -> Vec<f64> {
     let mut widths: Vec<f64> = Vec::new();
-    // One `#place(…, path(…))` per line, so the line bounds each match and a
-    // path without a stroke cannot borrow the next one's.
-    for line in source.lines().filter(|line| line.contains("path(")) {
+    // One `#place(…)` per line, so the line bounds each match and a shape
+    // without a stroke cannot borrow the next one's.
+    for line in source
+        .lines()
+        .filter(|line| line.contains("curve(stroke:") || line.contains("polygon(stroke:"))
+    {
         let Some(open) = line.find("stroke: ") else {
             continue;
         };
@@ -4214,7 +4207,7 @@ fn a_radar_chart_draws_a_plot_rather_than_a_data_table() {
         "the type-label caption belongs to the table fallback, got:\n{source}"
     );
     assert!(
-        source.contains("path(closed: true"),
+        source.contains("polygon(stroke:"),
         "a radar is drawn as closed rings and polygons, got:\n{source}"
     );
 }
@@ -4223,7 +4216,7 @@ fn a_radar_chart_draws_a_plot_rather_than_a_data_table() {
 fn a_radar_draws_one_closed_polygon_per_series() {
     // Two series over five categories: five web rings plus two series rings.
     let source: String = chart_source(radar_chart());
-    let closed: usize = source.matches("path(closed: true").count();
+    let closed: usize = source.matches("polygon(stroke:").count();
     assert!(
         closed > 2,
         "expected a ring per major unit plus one polygon per series, got {closed} in:\n{source}"
@@ -4231,7 +4224,7 @@ fn a_radar_draws_one_closed_polygon_per_series() {
     // Each series polygon carries the series stroke width; the web does not.
     let series_rings: usize = source
         .matches(&format!(
-            "path(closed: true, stroke: {}pt + ",
+            "polygon(stroke: {}pt + ",
             format_f64(SERIES_LINE_PT)
         ))
         .count();
@@ -7311,7 +7304,7 @@ fn combo_budget_chart() -> Chart {
 fn emitted_path_points(source: &str) -> Vec<(f64, f64)> {
     let line: &str = source
         .lines()
-        .find(|line| line.contains("path(stroke:"))
+        .find(|line| line.contains("curve(stroke:"))
         .unwrap_or_default();
     line.match_indices("(")
         .filter_map(|(index, _)| {
@@ -7553,7 +7546,7 @@ fn a_one_point_scatter_series_draws_its_marker_and_no_polyline() {
     // Its single point is a marker on the selected month, not a segment: a
     // polyline needs two points and the workbook caches `#N/A` for the rest.
     assert_eq!(
-        source.matches("path(stroke:").count(),
+        source.matches("curve(stroke:").count(),
         1,
         "only the line family's series draws a polyline; got:\n{source}"
     );
@@ -8548,7 +8541,7 @@ fn a_line_point_below_zero_dips_under_the_category_axis() {
 
     let path_line: &str = source
         .lines()
-        .find(|line| line.contains("path(stroke:"))
+        .find(|line| line.contains("curve(stroke:"))
         .unwrap_or_else(|| panic!("no series polyline in:\n{source}"));
     let point_ys: Vec<f64> = path_line
         .split("pt, ")
@@ -9796,7 +9789,7 @@ fn declared_series_stroke_geometry_reaches_plots_and_legends() {
     {
         let strokes: Vec<_> = paints
             .iter()
-            .filter_map(|paint| paint.stroke)
+            .filter_map(|paint| paint.stroke.clone())
             .filter(|stroke| (stroke.thickness_pt - width).abs() < 1e-9)
             .collect();
         assert_eq!(
@@ -9877,7 +9870,7 @@ fn emitted_value_labels(source: &str) -> Vec<(f64, String)> {
 fn emitted_path_points_of(source: &str, index: usize) -> Vec<(f64, f64)> {
     let line: &str = source
         .lines()
-        .filter(|line| line.contains("path(stroke:"))
+        .filter(|line| line.contains("curve(stroke:"))
         .nth(index)
         .unwrap_or_default();
     line.match_indices("(")
@@ -10110,23 +10103,60 @@ fn quartered_pie_chart(chart_type: ChartType) -> Chart {
 /// first pair of each triple is a point on the drawn outline. The circle is
 /// read back from those points alone, which keeps the assertion on what the
 /// chart draws rather than on how the generator arrived at it.
+/// Every `(Xpt, Ypt)` pair in `text`, in order.
+fn coordinate_pairs(text: &str) -> Vec<(f64, f64)> {
+    text.match_indices('(')
+        .filter_map(|(start, _)| {
+            let body: &str = text[start + 1..].split_once(')')?.0;
+            let (x, y) = body.split_once(", ")?;
+            Some((
+                x.strip_suffix("pt")?.parse().ok()?,
+                y.strip_suffix("pt")?.parse().ok()?,
+            ))
+        })
+        .collect()
+}
+
+/// The vertices an emitted `curve(...)` passes through: its `curve.move`
+/// start, then the end of every segment but the closing one back to it. Also
+/// whether the first segment is straight, which marks a start vertex with no
+/// handles, such as a pie wedge's centre.
+fn curve_vertices(line: &str) -> (Vec<(f64, f64)>, bool) {
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    let mut first_segment_is_straight: bool = false;
+    for (index, segment) in line.split("curve.").skip(1).enumerate() {
+        let pairs: Vec<(f64, f64)> = coordinate_pairs(segment);
+        let end: Option<&(f64, f64)> = if segment.starts_with("cubic(") {
+            pairs.get(2)
+        } else if segment.starts_with("move(") || segment.starts_with("line(") {
+            pairs.first()
+        } else {
+            None
+        };
+        if index == 1 {
+            first_segment_is_straight = segment.starts_with("line(");
+        }
+        points.extend(end);
+    }
+    if points.len() > 1 && points.last() == points.first() {
+        points.pop();
+    }
+    (points, first_segment_is_straight)
+}
+
+/// A wedge's outline vertices, without the bare centre a pie wedge starts at.
+fn wedge_outline(line: &str) -> Vec<(f64, f64)> {
+    let (mut points, starts_at_a_bare_centre) = curve_vertices(line);
+    if starts_at_a_bare_centre && !points.is_empty() {
+        points.remove(0);
+    }
+    points
+}
+
 fn emitted_ring_geometry(source: &str) -> ((f64, f64), f64, f64) {
     let mut points: Vec<(f64, f64)> = Vec::new();
-    for line in source.lines().filter(|line| line.contains("path(fill:")) {
-        for triple in line.split("((").skip(1) {
-            let Some((pair, _)) = triple.split_once("),") else {
-                continue;
-            };
-            let Some((x, y)) = pair.split_once(", ") else {
-                continue;
-            };
-            if let (Ok(x), Ok(y)) = (
-                x.trim_end_matches("pt").parse::<f64>(),
-                y.trim_end_matches("pt").parse::<f64>(),
-            ) {
-                points.push((x, y));
-            }
-        }
+    for line in source.lines().filter(|line| line.contains("curve(fill:")) {
+        points.extend(wedge_outline(line));
     }
     assert!(!points.is_empty(), "no wedge path in:\n{source}");
     let min_x: f64 = points.iter().map(|(x, _)| *x).fold(f64::MAX, f64::min);
@@ -10251,22 +10281,8 @@ fn a_stated_plot_rectangle_keeps_a_pie_off_the_automatic_inset() {
 /// wedge starts from.
 fn emitted_wedge_outlines(source: &str) -> Vec<Vec<(f64, f64)>> {
     let mut wedges: Vec<Vec<(f64, f64)>> = Vec::new();
-    for line in source.lines().filter(|line| line.contains("path(fill:")) {
-        let mut outline: Vec<(f64, f64)> = Vec::new();
-        for triple in line.split("((").skip(1) {
-            let Some((pair, _)) = triple.split_once("),") else {
-                continue;
-            };
-            let Some((x, y)) = pair.split_once(", ") else {
-                continue;
-            };
-            if let (Ok(x), Ok(y)) = (
-                x.trim_end_matches("pt").parse::<f64>(),
-                y.trim_end_matches("pt").parse::<f64>(),
-            ) {
-                outline.push((x, y));
-            }
-        }
+    for line in source.lines().filter(|line| line.contains("curve(fill:")) {
+        let outline: Vec<(f64, f64)> = wedge_outline(line);
         if !outline.is_empty() {
             wedges.push(outline);
         }
