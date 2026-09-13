@@ -210,7 +210,7 @@ fn test_map_math_text_set_symbols() {
     assert_eq!(map_math_text("⊂"), "subset");
     assert_eq!(map_math_text("⊃"), "supset");
     assert_eq!(map_math_text("∪"), "union");
-    assert_eq!(map_math_text("∩"), "sect");
+    assert_eq!(map_math_text("∩"), "inter");
 }
 
 #[test]
@@ -530,9 +530,9 @@ fn test_additional_operators() {
     assert_eq!(unicode_to_typst('⋅'), Some("dot.op"));
     assert_eq!(unicode_to_typst('∓'), Some("minus.plus"));
     assert_eq!(unicode_to_typst('¬'), Some("not"));
-    assert_eq!(unicode_to_typst('⊕'), Some("plus.circle"));
-    assert_eq!(unicode_to_typst('⊗'), Some("times.circle"));
-    assert_eq!(unicode_to_typst('⊙'), Some("dot.circle"));
+    assert_eq!(unicode_to_typst('⊕'), Some("plus.o"));
+    assert_eq!(unicode_to_typst('⊗'), Some("times.o"));
+    assert_eq!(unicode_to_typst('⊙'), Some("dot.o"));
     assert_eq!(unicode_to_typst('⊢'), Some("tack.r"));
     assert_eq!(unicode_to_typst('⊣'), Some("tack.l"));
     assert_eq!(unicode_to_typst('⊤'), Some("top"));
@@ -599,6 +599,7 @@ fn test_additional_nary_operators() {
     assert_eq!(map_nary_operator("\u{2210}"), "product.co");
     assert_eq!(map_nary_operator("\u{22C0}"), "and.big");
     assert_eq!(map_nary_operator("\u{22C1}"), "or.big");
+    assert_eq!(map_nary_operator("\u{22C2}"), "inter.big");
 }
 
 #[test]
