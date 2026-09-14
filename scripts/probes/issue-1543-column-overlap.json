@@ -1,0 +1,13 @@
+{
+  "name": "issue-1543-column-overlap",
+  "base": "../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+  "part": "xl/charts/chart1.xml",
+  "factor": "c:overlap val",
+  "page": 2,
+  "noise_floor": 0.5,
+  "variants": [
+    {"value": "0", "find": "<c:overlap val=\"100\"/>", "replace": "<c:overlap val=\"0\"/>", "count": 1},
+    {"value": "50", "find": "<c:overlap val=\"100\"/>", "replace": "<c:overlap val=\"50\"/>", "count": 1},
+    {"value": "-27", "find": "<c:overlap val=\"100\"/>", "replace": "<c:overlap val=\"-27\"/>", "count": 1}
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "issue": "#1543",
+  "source_url": "https://github.com/user-attachments/files/30941041/Gift.Budget.and.Tracker1.xlsx",
+  "fixture": "tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+  "baseline_commit": "197252d7e748e977d0d49b5cdb8a36b3f76a9c74",
+  "native_exporter": "Microsoft Excel for Mac 16.112, macOS 26.6.2 (build 25G83), staged in the Excel container, both sheets concatenated with pdfunite",
+  "font_path": "/Applications/Microsoft Excel.app/Contents/Resources/DFonts",
+  "dpi": 300,
+  "sha256": {
+    "source": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613",
+    "native": "5bcac518c0beb927463ddeafd37f9b646b4a75eca9419cc07f47490bf66df93b",
+    "before": "9c3f40fd90747908cb5f24ce11efda68ba8a72b8f3a9beb01407e814c5011b4e",
+    "after": "688695d5579870b4b45623f953e7f9fa72a32617e9e99d4bfac809ed23e85ad8",
+    "cargo_lock": "3e4f699ce7fd56921980c71be149887272060d455789f4e6affead3a3a5e6986",
+    "probe_sheet2_pdfs": {
+      "issue-1543-column-gap-width": {
+        "control": "40b2bac48d900b33c64302d742812ee49ca150781a95324c0b3b0ca368b33a3d",
+        "variant-0": "ec12d039772bdf0371e7ce3b75fee99e911a8fbced1a2c642e2b3fa696c4d1bb",
+        "variant-50": "6ba04b096b273befa532e3582922ad89128a519988d25d7f658883b1fee893fb",
+        "variant-100": "b278fdcc3730c0a0299007d8e0f07a734cd936ca6a5f0471ac795bff2aa83faf",
+        "variant-219": "800331df8089a60bfccf1a44a9b6e9486ee6c5e6e2ff3fc307774592f0a3139d",
+        "variant-300": "2fcded74ba9191aa4a79e57e64c53245e02c36e196f4023b9236f2b41c2e94a1",
+        "variant-500": "9d83a15e384a00f060696d59fcc31f4ab7bbd4f4f32c22501e39b6da21e26168"
+      },
+      "issue-1543-column-overlap": {
+        "control": "fbce6fa0dbf9a59741ea3fc5e2e2cae90f7abb91c5f0f7f80a10859420e8b74a",
+        "variant-0": "2d065f129df9579193ac5dd7f0f2bae6412090150f3a7d085afe1c833b865a1b",
+        "variant-50": "037b740c0e8a684843cd985064f899378dbb7f5f65649e4c0cd0071286209f5a",
+        "variant--27": "ab629d5c48ba1057748b1f8327bec9bf6819860a4792e4a739ff2d61c7aa9e6e"
+      }
+    }
+  },
+  "page1_before_after_exact_AE": 0,
+  "page2_before_after_exact_AE": 2183,
+  "text_layer_before_after_identical": true,
+  "native_column_edges_sheet_pt": {
+    "control_gap150_overlap100": [
+      [
+        412,
+        445
+      ],
+      [
+        655,
+        687
+      ],
+      [
+        816,
+        849
+      ],
+      [
+        816,
+        849
+      ],
+      [
+        897,
+        930
+      ]
+    ],
+    "rule": "each column edge = round(continuous edge in unscaled sheet points), then clipped to the plot rectangle; 50 painted columns across 10 native exports, one clipped edge (gapWidth 0, first column left = plot left 388.109)"
+  },
+  "layout_audit": {
+    "page2_rect_geometry_before": 1,
+    "page2_rect_geometry_after": 0,
+    "page2_fine_text_shifts_before_and_after": 16,
+    "fine_text_shift_issue": "#1600"
+  }
+}

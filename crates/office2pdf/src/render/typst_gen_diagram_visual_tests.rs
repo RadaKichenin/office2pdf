@@ -5322,6 +5322,236 @@ fn excel_value_label_snap_follows_the_sheet_phase_instead_of_the_tick_value() {
     }
 }
 
+/// Every column edge Excel for Mac 16.112 paints on the public gift workbook
+/// lands on a whole unscaled sheet point. Re-zip-controlled native exports
+/// through `scripts/probes/issue-1543-column-gap-width.json` and
+/// `scripts/probes/issue-1543-column-overlap.json` paint 50 columns whose
+/// every edge but one is `round(continuous edge)`; the one exception is the
+/// gapWidth-0 first column's left edge, which stops at the plot's exact left
+/// edge instead of the rounded point beyond it (#1543).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn gift_budget_compiled_columns_land_on_native_whole_sheet_points() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx");
+    /// One native probe export: its band factors and the sheet-point edges of
+    /// every painted column, left to right, with `true` marking a left edge
+    /// that native clips to the plot rather than rounds.
+    struct NativeColumnProbe {
+        gap_width_percent: f64,
+        overlap_percent: f64,
+        native_edges: &'static [(f64, f64, bool)],
+    }
+    let probe = |gap_width_percent: f64,
+                 overlap_percent: f64,
+                 native_edges: &'static [(f64, f64, bool)]| NativeColumnProbe {
+        gap_width_percent,
+        overlap_percent,
+        native_edges,
+    };
+    let cases: [NativeColumnProbe; 7] = [
+        probe(
+            150.0,
+            100.0,
+            &[
+                (412.0, 445.0, false),
+                (655.0, 687.0, false),
+                (816.0, 849.0, false),
+                (816.0, 849.0, false),
+                (897.0, 930.0, false),
+            ],
+        ),
+        probe(
+            0.0,
+            100.0,
+            &[
+                (388.109, 469.0, true),
+                (631.0, 711.0, false),
+                (792.0, 873.0, false),
+                (792.0, 873.0, false),
+                (873.0, 954.0, false),
+            ],
+        ),
+        probe(
+            50.0,
+            100.0,
+            &[
+                (402.0, 455.0, false),
+                (644.0, 698.0, false),
+                (806.0, 860.0, false),
+                (806.0, 860.0, false),
+                (887.0, 940.0, false),
+            ],
+        ),
+        probe(
+            219.0,
+            100.0,
+            &[
+                (416.0, 441.0, false),
+                (658.0, 684.0, false),
+                (820.0, 845.0, false),
+                (820.0, 845.0, false),
+                (901.0, 926.0, false),
+            ],
+        ),
+        probe(
+            500.0,
+            100.0,
+            &[
+                (422.0, 435.0, false),
+                (664.0, 678.0, false),
+                (826.0, 839.0, false),
+                (826.0, 839.0, false),
+                (907.0, 920.0, false),
+            ],
+        ),
+        probe(
+            150.0,
+            0.0,
+            &[
+                (402.0, 420.0, false),
+                (680.0, 698.0, false),
+                (806.0, 824.0, false),
+                (842.0, 860.0, false),
+                (904.0, 922.0, false),
+            ],
+        ),
+        probe(
+            150.0,
+            -27.0,
+            &[
+                (400.0, 416.0, false),
+                (683.0, 699.0, false),
+                (804.0, 820.0, false),
+                (845.0, 861.0, false),
+                (905.0, 921.0, false),
+            ],
+        ),
+    ];
+    let series_paints = [
+        typst::visualize::Color::from_u8(0x3D, 0x2B, 0x2D, 255),
+        typst::visualize::Color::from_u8(0x7A, 0x63, 0x69, 255),
+        typst::visualize::Color::from_u8(0x5D, 0x37, 0x54, 255),
+    ];
+    for NativeColumnProbe {
+        gap_width_percent,
+        overlap_percent,
+        native_edges,
+    } in cases
+    {
+        let (mut doc, _) = crate::parser::Parser::parse(
+            &crate::parser::xlsx::XlsxParser,
+            data,
+            &crate::config::ConvertOptions::default(),
+        )
+        .expect("the public gift-budget fixture parses");
+        let mut patched: usize = 0;
+        for page in &mut doc.pages {
+            if let crate::ir::Page::Sheet(sheet) = page {
+                for anchored in &mut sheet.charts {
+                    anchored.chart.bar_band_layout.gap_width_percent = gap_width_percent;
+                    anchored.chart.bar_band_layout.overlap_percent = overlap_percent;
+                    patched += 1;
+                }
+            }
+        }
+        assert_eq!(patched, 1, "the workbook anchors one chart");
+        let output = generate_typst(&doc).unwrap();
+        let pages =
+            crate::render::pdf::compiled_page_paint_sequences(&output.source, &output.images)
+                .expect("the gift-budget column variant compiles");
+        assert_eq!(pages.len(), 2);
+        let mut columns: Vec<(f64, f64)> = pages[1]
+            .iter()
+            .filter(|paint| {
+                let (left, top, right, bottom) = paint.bounds;
+                paint
+                    .rectangle_fill
+                    .as_ref()
+                    .is_some_and(|fill| series_paints.contains(fill))
+                    && left > 300.0
+                    && right < 1125.0
+                    && top > 120.0
+                    && bottom < 335.0
+                    && bottom - top > 1.0
+            })
+            .map(|paint| (paint.bounds.0, paint.bounds.2))
+            .collect();
+        columns.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        assert_eq!(
+            columns.len(),
+            native_edges.len(),
+            "gapWidth {gap_width_percent} overlap {overlap_percent}: painted columns {columns:?}"
+        );
+        for (index, ((left, right), (native_left, native_right, clipped_to_plot))) in
+            columns.iter().zip(native_edges).enumerate()
+        {
+            let expected_left: f64 = native_left * EXCEL_GIFT_PRINT_SCALE;
+            let expected_right: f64 = native_right * EXCEL_GIFT_PRINT_SCALE;
+            // A rounded edge reproduces exactly; the plot-clipped edge follows
+            // our own plot edge, which is held to the 0.5pt Excel gate.
+            let tolerance: f64 = if *clipped_to_plot { 0.5 } else { 0.01 };
+            assert!(
+                (left - expected_left).abs() <= tolerance && (right - expected_right).abs() <= 0.01,
+                "gapWidth {gap_width_percent} overlap {overlap_percent} column {index}: \
+                 native {expected_left:.4}..{expected_right:.4}pt, got {left:.4}..{right:.4}pt"
+            );
+        }
+    }
+}
+
+/// The whole-point rule is a property of anchored worksheet columns, not of
+/// the gift workbook's data: at every gap width the generator's column widths
+/// and the spacing between column starts are whole sheet points, while a
+/// column the rounding would push past the plot stops at the plot edge.
+#[test]
+fn an_anchored_excel_worksheet_chart_rounds_column_edges_to_whole_sheet_points() {
+    for gap_width_percent in [0.0, 50.0, 100.0, 150.0, 219.0, 300.0, 500.0] {
+        let mut chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+        chart.bar_band_layout.gap_width_percent = gap_width_percent;
+        chart.bar_band_layout.overlap_percent = 100.0;
+        let (plot_left, _, plot_right, _) = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false);
+        let source: String =
+            anchored_excel_gift_chart_source(chart, EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
+        // The plot's rectangles, one per category and series, are the only
+        // rectangles above the legend band.
+        let columns: Vec<PlacedRect> = emitted_rects(&source)
+            .into_iter()
+            .filter(|rect| rect.dy < 270.0)
+            .collect();
+        assert_eq!(
+            columns.len(),
+            24,
+            "gapWidth {gap_width_percent}: twelve categories of two column series; got:\n{source}"
+        );
+        let whole = |value: f64| (value - value.round()).abs() <= 1e-6;
+        let first: PlacedRect = columns[0];
+        let last: PlacedRect = columns[columns.len() - 1];
+        if gap_width_percent == 0.0 {
+            assert!(
+                (first.dx - plot_left).abs() <= 1e-6
+                    && (last.dx + last.width - plot_right).abs() <= 1e-6,
+                "gapWidth 0: the outer columns stop at the plot edges {plot_left}..{plot_right}; \
+                 got {first:?} and {last:?} in:\n{source}"
+            );
+        }
+        // The second category's column is interior at every gap width, so its
+        // rounded left edge is the reference the other edges must be whole
+        // sheet points away from.
+        let reference: f64 = columns[2].dx;
+        for (index, rect) in columns.iter().enumerate() {
+            let is_outer: bool = gap_width_percent == 0.0 && !(2..22).contains(&index);
+            if is_outer {
+                continue;
+            }
+            assert!(
+                whole(rect.width) && whole(rect.dx - reference),
+                "gapWidth {gap_width_percent} column {index}: {rect:?} is not on whole sheet points \
+                 relative to the second category's {reference}pt; got:\n{source}"
+            );
+        }
+    }
+}
+
 #[test]
 fn an_excel_worksheet_plot_top_follows_the_native_value_size_probes() {
     // Re-zip-controlled native Excel exports with only c:valAx text size
