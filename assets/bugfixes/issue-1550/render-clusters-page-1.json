@@ -1,0 +1,679 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 152.064,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 23.52,
+        "x": 336.96,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-58fbce2e7161",
+      "region": "top"
+    },
+    {
+      "area_pt2": 149.76,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 23.04,
+        "x": 262.56,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-831d4686bca3",
+      "region": "top"
+    },
+    {
+      "area_pt2": 137.3184,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 24.0,
+        "x": 216.96,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-62078ff02840",
+      "region": "top"
+    },
+    {
+      "area_pt2": 69.12,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 13.44,
+        "x": 199.2,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-dc2c53bf6077",
+      "region": "top"
+    },
+    {
+      "area_pt2": 56.9088,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 12.48,
+        "x": 298.56,
+        "y": 272.16
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-9b5a0bcbe702",
+      "region": "center"
+    },
+    {
+      "area_pt2": 51.84,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 10.56,
+        "x": 110.4,
+        "y": 96.96
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Single-line body cells whose run origins match to 0.00pt: mid-string glyphs drift a fraction of a point from Excel's whole-point advances."
+      },
+      "id": "p1-a94d20cfe3d4",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 47.6928,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.64,
+        "x": 154.08,
+        "y": 259.68
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-fb18c4afced9",
+      "region": "left"
+    },
+    {
+      "area_pt2": 43.5456,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 9.6,
+        "x": 313.92,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-eca24d05fe17",
+      "region": "top"
+    },
+    {
+      "area_pt2": 37.0944,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 7.68,
+        "x": 292.8,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-e128880e28e4",
+      "region": "top"
+    },
+    {
+      "area_pt2": 33.1776,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 7.68,
+        "x": 363.36,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-a1ad2364d0b1",
+      "region": "top"
+    },
+    {
+      "area_pt2": 29.0304,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 8.64,
+        "x": 161.76,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-11da9e2c6be6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.8,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 4.32,
+        "x": 188.64,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-4feb1513b9ea",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 8.16,
+        "x": 301.92,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-4262346b856c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 27.1872,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 7.2,
+        "x": 169.44,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-0978bf6ec8b7",
+      "region": "left"
+    },
+    {
+      "area_pt2": 25.8048,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 4.8,
+        "x": 281.76,
+        "y": 273.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-b10b6b95d62c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 7.68,
+        "x": 324.48,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-7de635581964",
+      "region": "top"
+    },
+    {
+      "area_pt2": 24.4224,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 7.68,
+        "x": 148.32,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-ecb7f18c4364",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 294.24,
+        "y": 63.84
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-2734be1fe40e",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 8.64,
+        "x": 304.8,
+        "y": 62.88
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-aab17a286b68",
+      "region": "top"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 4.8,
+        "x": 154.08,
+        "y": 189.6
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Single-line body cells whose run origins match to 0.00pt: mid-string glyphs drift a fraction of a point from Excel's whole-point advances."
+      },
+      "id": "p1-a417ec3bb43c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 6.72,
+        "x": 88.8,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-d874fca1d982",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.5008,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.32,
+        "x": 166.56,
+        "y": 156.96
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Single-line body cells whose run origins match to 0.00pt: mid-string glyphs drift a fraction of a point from Excel's whole-point advances."
+      },
+      "id": "p1-13c2d1b98b38",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 4.8,
+        "x": 128.64,
+        "y": 260.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-21c4b8e4568f",
+      "region": "left"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 12.0,
+        "width": 5.76,
+        "x": 193.44,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-98512f428566",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.84,
+        "x": 115.2,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-e3cf5205f8f4",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 4.32,
+        "x": 286.56,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-877dbda85297",
+      "region": "top"
+    },
+    {
+      "area_pt2": 22.8096,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 4.8,
+        "x": 408.0,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-7dfef0424ff2",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 9.12,
+        "x": 87.84,
+        "y": 262.08
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-6a8178faae34",
+      "region": "left"
+    },
+    {
+      "area_pt2": 21.4272,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 4.32,
+        "x": 173.76,
+        "y": 129.6
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Single-line body cells whose run origins match to 0.00pt: mid-string glyphs drift a fraction of a point from Excel's whole-point advances."
+      },
+      "id": "p1-c6335b468f13",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.9664,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 4.8,
+        "x": 168.48,
+        "y": 249.12
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-17d2f05d9e0a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.84,
+        "x": 84.48,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-1f91b186372d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 2.88,
+        "x": 241.92,
+        "y": 59.04
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-6c4573e4f040",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.16,
+        "x": 180.0,
+        "y": 64.32
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-e15397fa423d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.84,
+        "x": 108.0,
+        "y": 246.24
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-4a8913fe1e09",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 2.88,
+        "x": 192.0,
+        "y": 246.72
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-8f12bea101f1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 4.32,
+        "x": 101.76,
+        "y": 99.36
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Single-line body cells whose run origins match to 0.00pt: mid-string glyphs drift a fraction of a point from Excel's whole-point advances."
+      },
+      "id": "p1-392d8642c17f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 5.76,
+        "x": 121.92,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-7c4733ac7ea8",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.72,
+        "x": 95.52,
+        "y": 261.6
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-6644d8b65b25",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.5056,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 3.36,
+        "x": 300.96,
+        "y": 159.36
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "Single-line body cells whose run origins match to 0.00pt: mid-string glyphs drift a fraction of a point from Excel's whole-point advances."
+      },
+      "id": "p1-f9638bdc7836",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.2752,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 4.32,
+        "x": 397.92,
+        "y": 246.24
+      },
+      "disposition": {
+        "issue": "#1551",
+        "kind": "issue",
+        "note": "Three-line wrapped Trebuchet MS 10 note: the first two lines advance 11.89pt instead of Excel's 13pt, so their glyph outlines double."
+      },
+      "id": "p1-3dc4bdeddb2c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 6.72,
+        "x": 164.64,
+        "y": 66.24
+      },
+      "disposition": {
+        "issue": "#1721",
+        "kind": "issue",
+        "note": "Arial Bold 18 title glyphs: the 23pt track now matches, but the tight-row gate centres the bottom-aligned cell one point above Excel's descender seat (#1721); the same clusters carry the one-point leftward centred start of #1600."
+      },
+      "id": "p1-4798a32187a7",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 41,
+    "duplicate": 0,
+    "total": 41,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

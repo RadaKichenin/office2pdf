@@ -2517,6 +2517,143 @@ fn an_auto_row_whose_cell_size_is_unmeasured_keeps_the_recomputed_default() {
     );
 }
 
+/// A cell naming its face outright, so the row it sits in is auto-sized
+/// against that face's own series rather than the Normal font's.
+fn sheet_with_one_named_cell_font(
+    row_idx: u32,
+    family: &str,
+    size_pt: f64,
+    is_bold: bool,
+) -> umya_spreadsheet::Spreadsheet {
+    let mut book = umya_spreadsheet::new_file();
+    let sheet = book.get_sheet_mut(&0).unwrap();
+    sheet
+        .get_sheet_format_properties_mut()
+        .set_default_row_height(15.0);
+    let cell = sheet.get_cell_mut((2u32, row_idx));
+    cell.set_value("ABOUT THIS TEMPLATE");
+    let font = cell.get_style_mut().get_font_mut();
+    font.set_name(family).set_size(size_pt).set_bold(is_bold);
+    book
+}
+
+/// The Normal font of `issue_1181_fit_to_height.xlsx`: Trebuchet MS 10
+/// deferring to a minor scheme whose theme names no per-script faces, so it
+/// resolves to Trebuchet MS itself — a face with no measured series.
+fn bare_theme_trebuchet_normal_font() -> NormalFont {
+    NormalFont {
+        family: "Trebuchet MS".to_string(),
+        size_pt: 10.0,
+        color: None,
+        theme_scheme: Some(ThemeFontSlot::Minor),
+        theme_ui_script_faces: ThemeUiScriptFaces::default(),
+    }
+}
+
+/// Excel sizes an auto row from the series of the face its tallest cell
+/// *names*, not from the Normal font's series at that cell's size. Native
+/// Excel-for-Mac one-factor exports of `issue_1181_fit_to_height.xlsx`
+/// (Trebuchet MS 10 Normal over a bare theme; its title row holds one
+/// Arial Bold 18 cell and records `ht="23.25"` without `customHeight`) print
+/// a 23pt title track — Arial's own 18pt series entry — where the UI face's
+/// 27pt entry used to be taken (issue #1550). The cell face sweep at 18pt
+/// reproduces each face's series: Courier New 24, Segoe UI 26, Georgia 23.
+#[test]
+fn an_auto_row_is_sized_by_the_series_of_the_face_its_cell_names() {
+    for (family, size_pt, is_bold, expected) in [
+        ("Arial", 18.0, true, 23.0),
+        ("Arial", 18.0, false, 23.0),
+        ("Arial", 24.0, true, 30.0),
+        ("Courier New", 18.0, true, 24.0),
+        ("Segoe UI", 18.0, true, 26.0),
+        ("Georgia", 16.0, false, 21.0),
+    ] {
+        let book = sheet_with_one_named_cell_font(1, family, size_pt, is_bold);
+        let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+        for normal_font in [theme_scheme_normal_font(11.0), bare_theme_trebuchet_normal_font()] {
+            assert_eq!(
+                xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&normal_font), None),
+                expected,
+                "a row of {family} {size_pt}pt (bold: {is_bold}) under {} {}pt",
+                normal_font.family,
+                normal_font.size_pt
+            );
+        }
+    }
+}
+
+/// A cell font that itself defers to the theme scheme resolves the way the
+/// Normal font does: through the theme's UI-script face where the theme
+/// names one, and to its declared family over a bare theme.
+#[test]
+fn a_scheme_cell_font_resolves_its_series_through_the_theme() {
+    let mut book = sheet_with_one_named_cell_font(1, "Calibri", 18.0, false);
+    book.get_sheet_mut(&0)
+        .unwrap()
+        .get_cell_mut((2u32, 1u32))
+        .get_style_mut()
+        .get_font_mut()
+        .set_scheme("minor");
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&theme_scheme_normal_font(11.0)),
+            None
+        ),
+        27.0,
+        "an Office theme resolves the scheme cell to the UI face"
+    );
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&bare_theme_trebuchet_normal_font()),
+            None
+        ),
+        24.0,
+        "a bare theme leaves the scheme cell on Calibri's own series"
+    );
+}
+
+/// A cell that names a face with no measured series, taller than the Normal
+/// font, still falls back to the row's cached `ht` — Excel's own last
+/// measurement of that very text — rather than to the Normal font's series.
+#[test]
+fn an_auto_row_of_an_unmeasured_named_face_keeps_its_cached_height() {
+    let mut book = sheet_with_one_named_cell_font(1, "Trebuchet MS", 18.0, true);
+    let row = book.get_sheet_mut(&0).unwrap().get_row_dimension_mut(&1);
+    // umya's `set_height` flags `customHeight` on its own; this row records a
+    // cached auto height, not a declared one.
+    row.set_height(25.5).set_custom_height(false);
+    let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
+
+    assert_eq!(
+        xlsx_cells::printed_grid_row_height_pt(
+            sheet,
+            1,
+            Some(&bare_theme_trebuchet_normal_font()),
+            None
+        ),
+        25.0
+    );
+}
+
+/// The reported workbook end to end: the instruction sheet's Arial Bold 18
+/// title row prints Excel's 23pt track (a 24pt band once the fill bleeds its
+/// point), not the 27pt of the UI face's series (issue #1550).
+#[test]
+fn the_instruction_sheets_arial_title_row_prints_its_faces_track() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx");
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+
+    let table = &get_sheet_page(&doc, 0).table;
+    assert_eq!(table.rows[0].height, Some(23.0));
+}
+
 /// A recorded `ht` is the row's current worksheet height whatever its cells
 /// hold, so it still outranks the auto-size recompute.
 #[test]
