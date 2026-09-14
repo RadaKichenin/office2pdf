@@ -2853,17 +2853,81 @@ fn table_bottom_aligned_descent_floor_pt(data: &[u8]) -> f64 {
 
 /// The script-face theme family in the native floor probe matrix holds a
 /// bottom-aligned cell's baseline 4pt clear of the row boundary
-/// (issue #1097). This test does not generalize that floor to every face whose
-/// row track remains whole.
+/// (issue #1097). umya writes a `<scheme val="minor"/>` Normal font over the
+/// full Office theme, which is the configuration those probes were built in.
 #[test]
-fn a_kept_normal_font_floors_the_bottom_aligned_seat_at_four_points() {
+fn a_script_face_theme_font_floors_the_bottom_aligned_seat_at_four_points() {
+    assert_eq!(
+        table_bottom_aligned_descent_floor_pt(&build_xlsx_with_theme_scheme_normal_font(
+            "Calibri", 11.0,
+        )),
+        4.0
+    );
+}
+
+/// A Normal font Excel neither remaps nor resolves by script — a face the
+/// reference machine has, named outright or reached through a theme that
+/// lists no script faces — takes no floor at all: the seat is the bare
+/// rounded descent. Native one-factor exports of the budget workbook of
+/// issue #1545 (Trebuchet MS 10 Normal) rest 8, 10, 12, 14 and 16pt cells
+/// 2, 2, 3, 3 and 4pt above their fixed row's bottom boundary, one and two
+/// points under the 3pt and 4pt floors of the other two families.
+#[test]
+fn a_named_face_the_reference_machine_keeps_takes_no_bottom_seat_floor() {
     assert_eq!(
         table_bottom_aligned_descent_floor_pt(&build_xlsx_with_normal_font_and_row_heights(
             "Segoe UI",
             10.0,
             &[40.0]
         )),
-        4.0
+        0.0
+    );
+}
+
+/// A row flagged `thickBot="1"` seats every bottom-aligned line in it one
+/// sheet point higher than an unflagged row (issue #1545); the parser hands
+/// the renderer the flag, row by row, so a custom-height row carries it too.
+#[test]
+fn a_thick_bottom_row_flag_reaches_every_cell_of_that_row() {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        for row in 1..=3u32 {
+            sheet
+                .get_cell_mut(format!("A{row}").as_str())
+                .set_value("Cash flow");
+            sheet
+                .get_cell_mut(format!("B{row}").as_str())
+                .set_value("169");
+            let dimension = sheet.get_row_dimension_mut(&row);
+            dimension.set_height(19.5);
+            dimension.set_custom_height(true);
+        }
+        sheet.get_row_dimension_mut(&2).set_thick_bot(true);
+        sheet.get_row_dimension_mut(&3).set_thick_top(true);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser
+        .parse(&cursor.into_inner(), &ConvertOptions::default())
+        .unwrap();
+    let flags: Vec<Vec<bool>> = get_sheet_page(&doc, 0)
+        .table
+        .rows
+        .iter()
+        .map(|row| {
+            row.cells
+                .iter()
+                .map(|cell| cell.row_has_thick_bottom)
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        flags,
+        vec![vec![false, false], vec![true, true], vec![false, false]],
+        "only the thickBot row's cells carry the lift; thickTop does not"
     );
 }
 

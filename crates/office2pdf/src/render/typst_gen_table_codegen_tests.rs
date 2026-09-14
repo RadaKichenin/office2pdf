@@ -973,12 +973,17 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
     };
     let font_size: f64 = 10.0;
     // Excel rests the descent on the row's own bottom boundary, one cell inset
-    // below the box's bottom edge (issue #1063), so the single line spans the
-    // ascent plus that shortened descent at the run's own size.
+    // below the box's bottom edge (issue #1063). Here that seat falls inside
+    // the 5pt inset, and Typst clamps a box's `bottom-edge` at the baseline,
+    // so the single line spans the ascent alone at the run's own size and the
+    // placed clip box is translated down by the remainder (issue #1545).
     let default_padding_bottom_pt: f64 = 5.0;
-    let seated_bottom_em: f64 =
-        ((descender * font_size).round() - default_padding_bottom_pt) / font_size;
-    let line_box_height_pt: f64 = (ascender + seated_bottom_em) * font_size;
+    let seat_shortfall_pt: f64 = default_padding_bottom_pt - (descender * font_size).round();
+    assert!(
+        seat_shortfall_pt > 0.0,
+        "the control needs a seat inside the inset, descent {descender}"
+    );
+    let line_box_height_pt: f64 = ascender * font_size;
     let cell = TableCell {
         content: vec![Block::Paragraph(Paragraph {
             style: ParagraphStyle::default(),
@@ -1016,10 +1021,12 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
     let result = generate_typst(&doc).unwrap().source;
     assert!(
         result.contains(&format!(
-            "place(left + bottom, box(width: 195pt, height: {}pt, clip: true)",
+            "place(left + bottom, dx: 0pt, dy: {}pt, box(width: 195pt, height: {}pt, clip: true)",
+            crate::render::typst_gen::tables::format_geometry(seat_shortfall_pt),
             format_f64(line_box_height_pt)
         )),
-        "bottom cell's spill box must anchor at the bottom, sized to its own line: {result}"
+        "bottom cell's spill box must anchor at the bottom, sized to its own line and \
+         dropped by the seat's remainder: {result}"
     );
     assert!(
         result.contains(&format!(

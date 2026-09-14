@@ -2205,52 +2205,63 @@ pub(super) fn native_excel_pdf_row_height(height: f64, normal_font: Option<&Norm
     }
 }
 
-/// Whether this Normal font takes the 3pt bottom-aligned descent floor.
-///
-/// Keep this separate from [`measured_printed_grid_row_height`]. The older
-/// issues #1097/#1199 probe matrix measured Calibri/Aptos compaction and the
-/// descent seat together, but the issue #1224 Arial/Courier face sweep
-/// measured row tracks only. Borrowing its new face set for the text seat
-/// would move baselines on evidence that says nothing about them.
-fn uses_compacted_bottom_aligned_descent_floor(normal_font: Option<&NormalFont>) -> bool {
-    match normal_font {
-        None => true,
-        Some(font) if font.resolves_through_theme_script_faces() => false,
-        Some(font) => {
-            font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT && names_a_substituted_family(font)
-        }
-    }
-}
-
 /// How far above its row's bottom boundary Excel holds a bottom-aligned
 /// cell's baseline in this workbook, however small the font, in points
-/// (issues #1097, #1199).
+/// (issues #1097, #1199, #1545).
 ///
-/// The older floor probe matrix measured this together with its Calibri/Aptos
-/// track split. Six purpose-built workbooks print their declared tracks whole
-/// and floor the seat at 4pt; the compacting corpus workbooks floor it at 3pt,
-/// read off a ruled re-export of `10_kpi_tracker_en`'s note cell over an
-/// eleven-size sweep. Issue #1224 added row-only measurements for Arial and
-/// Courier New, so those faces affect the track without being guessed into
-/// this separately measured floor.
+/// Three families, each measured on native Excel-for-Mac exports:
+///
+/// - The script-face theme family — a scheme Normal font over a theme naming
+///   per-script faces, which the reference machine resolves to its UI face —
+///   floors at [`crate::render::typst_gen::SHEET_CELL_MIN_DESCENT_SEAT_PT`]:
+///   six purpose-built probe workbooks print their declared tracks whole and
+///   rest every 8-11pt Arial cell 4pt above the boundary (issue #1063).
+/// - The remapped Calibri/Aptos family, which compacts its printed grid,
+///   floors at [`crate::render::typst_gen::COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT`],
+///   read off a ruled re-export of `10_kpi_tracker_en`'s note cell over an
+///   eleven-size sweep (issue #1199).
+/// - A Normal font Excel neither remaps nor resolves by script — a face the
+///   reference machine has, named outright or reached through a theme that
+///   lists no script faces — takes no floor at all. One-factor exports of
+///   the budget workbook of issue #1545 (Trebuchet MS 10 Normal, theme
+///   without script faces) rest 8, 10, 12, 14 and 16pt cells 2, 2, 3, 3 and
+///   4pt above their fixed row's bottom boundary: the bare rounded `hhea`
+///   descent, one and two points under the other families' floors. Dropping
+///   the font's `<scheme>` and moving the Normal size to 14, 20 and 30pt
+///   left every seat where it was, so the family is the resolved face, not
+///   the flag or the size.
 ///
 /// Issue #1097 read the compacting family as having no floor, from the one
 /// sample then available — `09_expense_report_en`'s Arial Bold 14 title, whose
 /// bare `round(0.211914 x 14)` is already 3 and so cannot tell a 3pt floor
 /// from none. The sizes at or under 11pt can, and #1199 measured them.
 ///
-/// The mechanism behind the split is the open part. A workbook cannot be
-/// pushed from one family to the other by anything the probes varied — the
-/// title's row height, its spill, the cell's border, or the workbook's Normal
-/// font *family and size*, which is Calibri 11 on both sides of the divide.
-/// Within that floor probe matrix, what differs is whether the Normal font
-/// resolves through a theme that names per-script faces (issues #1068,
-/// #1094). That statement does not extend to the row-only face sweep.
+/// Keep this separate from [`measured_printed_grid_row_height`]. The issue
+/// #1224 Arial/Courier face sweep measured row tracks only, so borrowing its
+/// face set here would move baselines on evidence that says nothing about
+/// them. The mechanism behind the script-face split is the open part: a
+/// workbook cannot be pushed from one family to the other by anything the
+/// probes varied except whether the Normal font resolves through a theme
+/// that names per-script faces (issues #1068, #1094).
 pub(super) fn bottom_aligned_descent_floor_pt(normal_font: Option<&NormalFont>) -> f64 {
-    if uses_compacted_bottom_aligned_descent_floor(normal_font) {
-        crate::render::typst_gen::COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT
-    } else {
-        crate::render::typst_gen::SHEET_CELL_MIN_DESCENT_SEAT_PT
+    match normal_font {
+        // Excel's own Normal font is Calibri/Aptos 11; a workbook we cannot
+        // read a stylesheet from is laid out against it.
+        None => crate::render::typst_gen::COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT,
+        Some(font) if font.resolves_through_theme_script_faces() => {
+            crate::render::typst_gen::SHEET_CELL_MIN_DESCENT_SEAT_PT
+        }
+        Some(font) if names_a_substituted_family(font) => {
+            if font.size_pt >= REMAPPED_NORMAL_MIN_SIZE_PT {
+                crate::render::typst_gen::COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT
+            } else {
+                // Below the remap's size the printed grid stays whole and no
+                // probe has read the seat; the script-face floor stands in
+                // until one does.
+                crate::render::typst_gen::SHEET_CELL_MIN_DESCENT_SEAT_PT
+            }
+        }
+        Some(_) => 0.0,
     }
 }
 
@@ -2801,6 +2812,12 @@ pub(super) fn build_rows_for_range(
             let (cell_alignment, cell_vertical_align) = umya_cell
                 .map(extract_cell_alignment)
                 .unwrap_or((None, None));
+            // Excel rests every bottom-aligned line of a `thickBot` row one
+            // sheet point higher; the flag belongs to the row, so every cell
+            // in it carries the lift (issue #1545).
+            let row_has_thick_bottom: bool = sheet
+                .get_row_dimension(&row_idx)
+                .is_some_and(|row| *row.get_thick_bot());
             let mut background = umya_cell
                 .and_then(|cell| extract_cell_background(cell, ctx.theme.as_ref()))
                 .or(if umya_cell.is_none() {
@@ -3011,6 +3028,7 @@ pub(super) fn build_rows_for_range(
                 spill_continuation_offset_pt: None,
                 spill_line_width_pt,
                 vertical_align: cell_vertical_align,
+                row_has_thick_bottom,
             });
         }
 

@@ -1473,6 +1473,12 @@ pub struct TableCell {
     pub vertical_align: Option<CellVerticalAlign>,
     /// Optional cell padding override in points.
     pub padding: Option<Insets>,
+    /// Whether the worksheet row this cell sits in carries Excel's
+    /// `thickBot="1"` flag. Excel rests every bottom-aligned line of such a
+    /// row one sheet point higher than in an unflagged row, whatever the
+    /// cell's own bottom border weighs (issue #1545). Never set on
+    /// Word/PowerPoint cells.
+    pub row_has_thick_bottom: bool,
 }
 
 impl Default for TableCell {
@@ -1494,6 +1500,7 @@ impl Default for TableCell {
             spill_line_width_pt: None,
             vertical_align: None,
             padding: None,
+            row_has_thick_bottom: false,
         }
     }
 }
