@@ -1,8 +1,9 @@
 use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::{
-    AxisTickMark, Block, HFInline, HeaderFooter, HeaderFooterParagraph, Margins, PageSize,
-    Paragraph, ParagraphStyle, Run, TableBorderPaintModel, TextStyle,
+    AxisTickMark, Block, BorderLineStyle, BorderSide, CellBorder, Color, HFInline, HeaderFooter,
+    HeaderFooterParagraph, LineJoin, Margins, PageSize, Paragraph, ParagraphStyle, Run,
+    TableBorderPaintModel, TextStyle,
 };
 
 fn cell(text: &str) -> TableCell {
@@ -28,6 +29,7 @@ fn cell(text: &str) -> TableCell {
         icon_shading: None,
         spill_width: None,
         spill_continuation_offset_pt: None,
+        spill_line_width_pt: None,
         vertical_align: None,
         padding: None,
     }
@@ -304,17 +306,26 @@ fn test_spill_crossing_the_group_boundary_continues_on_the_next_page_column() {
 fn test_spill_ending_before_the_group_boundary_leaves_the_next_page_column_blank() {
     // The same grid, but the line stops 50pt short of the boundary: nothing
     // reaches page 2, so its first cell stays empty and carries no offset.
+    // A second row paints in column 3 so the page-column exists at all
+    // (issue #1714 drops one that paints nothing).
     let spilling = TableCell {
         spill_width: Some(100.0),
         ..cell("Short")
     };
     let page = make_page(
         vec![150.0, 150.0, 150.0, 150.0],
-        vec![TableRow {
-            minimum_height: None,
-            cells: vec![cell("A"), spilling, cell(""), cell("")],
-            height: None,
-        }],
+        vec![
+            TableRow {
+                minimum_height: None,
+                cells: vec![cell("A"), spilling, cell(""), cell("")],
+                height: None,
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![cell(""), cell(""), cell(""), cell("D")],
+                height: None,
+            },
+        ],
     );
     let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
@@ -1077,5 +1088,263 @@ fn drawings_inside_the_printable_width_keep_one_page() {
     assert_eq!(
         pages[0].images[0].clip_width_pt, None,
         "an unsplit page draws its images exactly as before"
+    );
+}
+
+/// A row whose only text is in column 0 and whose remaining cells are empty.
+fn row_with_first_cell(text: &str, spill_width: Option<f64>, columns: usize) -> TableRow {
+    let mut cells: Vec<TableCell> = vec![TableCell {
+        spill_width,
+        ..cell(text)
+    }];
+    cells.extend((1..columns).map(|_| cell("")));
+    TableRow {
+        minimum_height: None,
+        cells,
+        height: None,
+    }
+}
+
+/// Excel ends the printed page sequence at its last page carrying ink. A
+/// native Excel-for-Mac export of `100-customers.xlsx` with the last band's
+/// occupation values shortened prints 5 pages, not 6: the down-page run of
+/// three, then only the two strip pages that carry a spilled tail. The strip
+/// page-column therefore stops at its last inked row (issue #1714).
+#[test]
+fn test_last_page_column_drops_its_trailing_rows_with_no_ink() {
+    // Printable width 400pt: columns 0-1 print on page 1, columns 2-3 on the
+    // strip. Rows 0 and 2 spill 400pt past their own column, rows 1, 3 and 4
+    // end inside the first page-column.
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![
+            row_with_first_cell("Corporate Security Supervisor", Some(400.0), 4),
+            row_with_first_cell("Short", None, 4),
+            row_with_first_cell("Principal Configuration Orchestrator", Some(400.0), 4),
+            row_with_first_cell("Short", None, 4),
+            row_with_first_cell("Short", None, 4),
+        ],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        pages[0].table.rows.len(),
+        5,
+        "the first page-column keeps every row of the used range"
+    );
+    assert_eq!(
+        pages[1].table.rows.len(),
+        3,
+        "the strip ends at its last continued line; rows 3 and 4 carry nothing there"
+    );
+    assert_eq!(
+        cell_text(&pages[1].table.rows[1].cells[0]),
+        "",
+        "a blank row between two continued lines is kept, so the bands stay aligned"
+    );
+    assert_eq!(
+        cell_text(&pages[1].table.rows[2].cells[0]),
+        "Principal Configuration Orchestrator"
+    );
+}
+
+/// A trailing strip row whose cell paints a fill or a border is ink, so the
+/// page-column keeps it.
+#[test]
+fn test_trailing_strip_rows_with_a_fill_or_border_are_ink() {
+    for (label, painted) in [
+        (
+            "fill",
+            TableCell {
+                background: Some(Color {
+                    r: 255,
+                    g: 255,
+                    b: 0,
+                }),
+                ..cell("")
+            },
+        ),
+        (
+            "border",
+            TableCell {
+                border: Some(CellBorder {
+                    top: Some(BorderSide {
+                        width: 0.5,
+                        color: Color { r: 0, g: 0, b: 0 },
+                        style: BorderLineStyle::Solid,
+                        join: LineJoin::Round,
+                    }),
+                    ..CellBorder::default()
+                }),
+                ..cell("")
+            },
+        ),
+    ] {
+        let mut last_row = row_with_first_cell("Short", None, 4);
+        last_row.cells[3] = painted;
+        let page = make_page(
+            vec![150.0, 150.0, 150.0, 150.0],
+            vec![
+                row_with_first_cell("Corporate Security Supervisor", Some(400.0), 4),
+                row_with_first_cell("Short", None, 4),
+                last_row,
+            ],
+        );
+        let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+        assert_eq!(pages.len(), 2);
+        assert_eq!(
+            pages[1].table.rows.len(),
+            3,
+            "a {label} on the last row keeps the whole strip"
+        );
+    }
+}
+
+/// Only the last page-column ends early. The same probe series shortened the
+/// middle band's values instead and the native export still printed 6 pages,
+/// the blank strip page for that band included: a blank page inside the
+/// sequence is printed, so a page-column before the last one keeps every
+/// row even when its tail carries nothing.
+#[test]
+fn test_a_page_column_before_the_last_keeps_its_trailing_rows() {
+    // Printable width 400pt over six 150pt columns: three page-columns of
+    // two. Row 0 spills 800pt so it continues on both later page-columns;
+    // row 1 spills 400pt, so it reaches the second page-column only; rows 2
+    // and 3 end on the first.
+    let page = make_page(
+        vec![150.0; 6],
+        vec![
+            row_with_first_cell("Reaches the third page-column", Some(800.0), 6),
+            row_with_first_cell("Reaches the second page-column", Some(400.0), 6),
+            row_with_first_cell("Short", None, 6),
+            row_with_first_cell("Short", None, 6),
+        ],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 3);
+    assert_eq!(pages[0].table.rows.len(), 4);
+    assert_eq!(
+        pages[1].table.rows.len(),
+        4,
+        "the middle page-column keeps rows 2 and 3 although nothing continues there"
+    );
+    assert_eq!(
+        pages[2].table.rows.len(),
+        1,
+        "the last page-column ends at row 0, its only continued line"
+    );
+}
+
+/// Printed gridlines and headings paint every row of the range, and no probe
+/// has measured whether Excel still ends the sequence early then; the
+/// page-column keeps its rows.
+#[test]
+fn test_printed_gridlines_keep_the_trailing_strip_rows() {
+    for (label, gridlines, headings) in [("gridlines", true, false), ("headings", false, true)] {
+        let mut page = make_page(
+            vec![150.0, 150.0, 150.0, 150.0],
+            vec![
+                row_with_first_cell("Corporate Security Supervisor", Some(400.0), 4),
+                row_with_first_cell("Short", None, 4),
+            ],
+        );
+        page.table.prints_gridlines = gridlines;
+        page.table.prints_headings = headings;
+        let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+        assert_eq!(pages.len(), 2);
+        assert_eq!(
+            pages[1].table.rows.len(),
+            2,
+            "printed {label} keep the trailing strip row"
+        );
+    }
+}
+
+/// A last page-column with no ink at all is not emitted.
+#[test]
+fn test_a_last_page_column_without_ink_is_not_emitted() {
+    // Column 3 is empty everywhere and nothing spills past column 1, yet the
+    // four 150pt columns still exceed the 400pt printable width.
+    let page = make_page(
+        vec![150.0, 150.0, 150.0, 150.0],
+        vec![
+            row_with_first_cell("Short", Some(100.0), 4),
+            row_with_first_cell("Short", None, 4),
+        ],
+    );
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 1, "only the inked page-column prints");
+    assert_eq!(pages[0].table.column_widths.len(), 2);
+}
+
+/// A line with the reach to cross the boundary but whose own width ends
+/// before it paints nothing on the next page-column. On `1000-customers.xlsx`
+/// every occupation cell has a three-column reach (E:G), yet row 1001's
+/// `Direct Creative Liaison` is 122pt long and ends inside column F, so the
+/// native export prints no strip page for its band while the longer lines of
+/// the rows above continue (issue #1714). The continuation cell is still
+/// placed — the renderer clips the real glyphs — but it is not ink.
+#[test]
+fn test_a_line_ending_before_the_boundary_is_not_ink_despite_its_reach() {
+    let short_line = TableCell {
+        spill_width: Some(225.0),
+        spill_line_width_pt: Some(124.6),
+        ..cell("Direct Creative Liaison")
+    };
+    let long_line = TableCell {
+        spill_width: Some(225.0),
+        spill_line_width_pt: Some(159.1),
+        ..cell("Corporate Data Orchestrator")
+    };
+    let page = make_page(
+        vec![75.0, 75.0, 75.0],
+        vec![
+            TableRow {
+                minimum_height: None,
+                cells: vec![long_line, cell(""), cell("")],
+                height: None,
+            },
+            TableRow {
+                minimum_height: None,
+                cells: vec![short_line, cell(""), cell("")],
+                height: None,
+            },
+        ],
+    );
+    let mut page = page;
+    // Printable width 150pt: columns 0-1 print first, column 2 on the strip.
+    page.size.width = 250.0;
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+    let continued = &pages[1].table.rows[0].cells[0];
+    assert_eq!(cell_text(continued), "Corporate Data Orchestrator");
+    assert_eq!(continued.spill_continuation_offset_pt, Some(150.0));
+    assert_eq!(
+        pages[1].table.rows.len(),
+        1,
+        "the short line's row paints nothing on the strip, so the strip ends above it"
+    );
+
+    // A line ending within the estimate's slack of the boundary still counts
+    // as painting: the estimate runs under the face's advances.
+    let near_line = TableCell {
+        spill_width: Some(225.0),
+        spill_line_width_pt: Some(146.0),
+        ..cell("Customer Group Developer")
+    };
+    let mut page = make_page(
+        vec![75.0, 75.0, 75.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![near_line, cell(""), cell("")],
+            height: None,
+        }],
+    );
+    page.size.width = 250.0;
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(
+        pages.len(),
+        2,
+        "a line 4pt short of the boundary keeps its strip"
     );
 }

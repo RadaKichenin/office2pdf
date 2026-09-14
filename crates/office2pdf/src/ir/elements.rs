@@ -1460,6 +1460,15 @@ pub struct TableCell {
     /// printed, and clips it at the page-column's edge (issue #1381). `None`
     /// on every cell that paints its own line.
     pub spill_continuation_offset_pt: Option<f64>,
+    /// Estimated width in points of the unwrapped line itself, from the
+    /// cell's own left gridline to the end of its text, inset included. Set
+    /// together with `spill_width`, which is the *reach* the line may paint
+    /// across — whole columns, so a short line in a wide reach ends well
+    /// before the reach does. Column pagination reads this to decide whether
+    /// the line actually crosses a page-column boundary and continues there;
+    /// `None` on a cell that paints no unwrapped line, and on table formats
+    /// that never spill.
+    pub spill_line_width_pt: Option<f64>,
     /// Vertical alignment of cell content.
     pub vertical_align: Option<CellVerticalAlign>,
     /// Optional cell padding override in points.
@@ -1482,6 +1491,7 @@ impl Default for TableCell {
             icon_shading: None,
             spill_width: None,
             spill_continuation_offset_pt: None,
+            spill_line_width_pt: None,
             vertical_align: None,
             padding: None,
         }
