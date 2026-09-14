@@ -1,5 +1,5 @@
 use crate::parser::xml_util::OOXML_XML_VERSION;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 use quick_xml::Reader;
@@ -82,6 +82,71 @@ pub(super) fn worksheet_path(target: &str) -> String {
     } else {
         format!("xl/{target}")
     }
+}
+
+/// Whether `<worksheet>` has a direct child named one of `names`.
+///
+/// Only direct children count: saved custom views nest their own page setup,
+/// and that view-local state must not read as the sheet's. `None` when the
+/// part is malformed or has no `<worksheet>` root, so each caller can fail
+/// closed to its established default instead of silently changing layout.
+pub(super) fn worksheet_has_direct_child(worksheet_xml: &str, names: &[&[u8]]) -> Option<bool> {
+    let mut reader = Reader::from_str(worksheet_xml);
+    let mut depth: usize = 0;
+    let mut saw_worksheet: bool = false;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref element)) => {
+                if depth == 0 && element.local_name().as_ref() == b"worksheet" {
+                    saw_worksheet = true;
+                } else if depth == 1 && names.contains(&element.local_name().as_ref()) {
+                    return Some(true);
+                }
+                depth += 1;
+            }
+            Ok(Event::Empty(ref element)) => {
+                if depth == 1 && names.contains(&element.local_name().as_ref()) {
+                    return Some(true);
+                }
+            }
+            Ok(Event::End(_)) => depth = depth.saturating_sub(1),
+            Ok(Event::Eof) => return saw_worksheet.then_some(false),
+            Err(_) => return None,
+            _ => {}
+        }
+    }
+}
+
+/// Names of the worksheets whose package part satisfies `predicate`.
+///
+/// Walks `xl/workbook.xml` and its relationships so each sheet is matched to
+/// the part umya later collapses; an unreadable package yields no names.
+pub(super) fn worksheets_where(data: &[u8], predicate: impl Fn(&str) -> bool) -> HashSet<String> {
+    let mut matching: HashSet<String> = HashSet::new();
+    let Ok(mut archive) = crate::parser::open_zip(data) else {
+        return matching;
+    };
+    let Some(workbook_xml) = read_zip_text(&mut archive, "xl/workbook.xml") else {
+        return matching;
+    };
+    let Some(relationships_xml) = read_zip_text(&mut archive, "xl/_rels/workbook.xml.rels") else {
+        return matching;
+    };
+
+    let relationships = parse_relationships(&relationships_xml);
+    for (sheet_name, relationship_id) in parse_sheet_relationships(&workbook_xml) {
+        let Some(target) = relationships.get(&relationship_id) else {
+            continue;
+        };
+        let Some(worksheet_xml) = read_zip_text(&mut archive, &worksheet_path(target)) else {
+            continue;
+        };
+        if predicate(&worksheet_xml) {
+            matching.insert(sheet_name);
+        }
+    }
+    matching
 }
 
 pub(crate) fn parse_worksheet_hints(xml: &str) -> RawCondFmtHints {

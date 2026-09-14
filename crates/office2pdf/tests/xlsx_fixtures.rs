@@ -1765,6 +1765,60 @@ fn cell_text(cell: &TableCell) -> String {
         .collect()
 }
 
+/// `100-customers.xlsx` writes no `<sheetFormatPr>` element and no `<cols>`,
+/// so every column is a default column. Excel for Mac prints those at its
+/// own 10-character base — `10 × 7 + 5 = 75pt` on the 7pt Malgun Gothic 12
+/// unit the theme resolves to — not the ECMA 8-character base that a
+/// declared element without `baseColWidth` keeps (issue #1656). Seven 75pt
+/// columns (A:E plus the two the occupation values spill into) are 525pt and
+/// no longer fit the 487pt A4 printable width, so the tails print on a second
+/// page-column after the down-page run, and the rendered PDF carries the
+/// native export's six pages: three of A:F, then three strip pages (issue
+/// #1381).
+#[test]
+fn structure_hundred_customers_prints_mac_default_columns_and_an_overflow_strip() {
+    let pages = sheet_pages("100-customers.xlsx");
+    assert_eq!(
+        pages.len(),
+        2,
+        "A:F fill the first page-column and the overflow reach forms a strip"
+    );
+    let column_widths: Vec<f64> = pages
+        .iter()
+        .flat_map(|page| page.table.column_widths.iter().copied())
+        .collect();
+    assert_eq!(column_widths.len(), 7, "A:G print; got {column_widths:?}");
+    assert!(
+        column_widths
+            .iter()
+            .all(|width| (width - 75.0).abs() < 0.01),
+        "every default column prints at Excel for Mac's 75pt; got {column_widths:?}"
+    );
+
+    let result = office2pdf::convert(fixture_path("100-customers.xlsx")).expect("converts");
+    assert_eq!(
+        rendered_page_count(&result.pdf),
+        6,
+        "native Excel for Mac prints six pages: three of A:F, then three strip pages"
+    );
+}
+
+/// Number of page objects in a PDF. Typst writes every object dictionary in
+/// plain text without separating whitespace, so the `/Type/Page` entries are
+/// countable without a PDF reader on every CI runner; the `/Pages` tree node
+/// is excluded by the boundary.
+fn rendered_page_count(pdf: &[u8]) -> usize {
+    let text: String = String::from_utf8_lossy(pdf).into_owned();
+    text.match_indices("/Type/Page")
+        .filter(|(index, needle)| {
+            !text[index + needle.len()..]
+                .chars()
+                .next()
+                .is_some_and(|next| next.is_ascii_alphabetic())
+        })
+        .count()
+}
+
 #[test]
 fn smoke_customers_overflow_strip() {
     assert_produces_valid_pdf("customers_overflow_strip.xlsx");
