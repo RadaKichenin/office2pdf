@@ -149,7 +149,6 @@ impl FontSearchContext {
         self
     }
 
-    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     pub(crate) fn in_memory_font(
         &self,
         family: &str,
