@@ -2936,6 +2936,14 @@ pub(super) fn build_rows_for_range(
                 umya_cell,
                 cell_padding,
             );
+            // The line's own extent from the cell's left gridline, so
+            // pagination can tell a line that crosses a page-column boundary
+            // from one that merely has the reach to (issue #1714).
+            let spill_line_width_pt: Option<f64> = spill_width.map(|_| {
+                cell_padding.left
+                    + ctx.cell_indent_pt(col_idx, row_idx)
+                    + estimate_text_width_pt(&runs)
+            });
 
             row_wraps_past_one_line |= cell_wraps_past_one_line(
                 ctx,
@@ -3001,6 +3009,7 @@ pub(super) fn build_rows_for_range(
                 icon_shading,
                 spill_width,
                 spill_continuation_offset_pt: None,
+                spill_line_width_pt,
                 vertical_align: cell_vertical_align,
             });
         }

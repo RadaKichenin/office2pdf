@@ -86,11 +86,16 @@ pub(super) fn split_sheet_page_by_width(
     }
 
     let title_table: Option<Table> =
-        title_columns.map(|(start, end)| slice_table_columns(&page.table, start, end));
+        title_columns.map(|(start, end)| slice_table_columns(&page.table, start, end).table);
 
     let mut result: Vec<SheetPage> = Vec::with_capacity(groups.len());
+    let mut last_group_inked_row_count: usize = 0;
     for (index, &(start, end)) in groups.iter().enumerate() {
-        let mut table: Table = slice_table_columns(&page.table, start, end);
+        let ColumnGroupSlice {
+            mut table,
+            inked_row_count,
+        } = slice_table_columns(&page.table, start, end);
+        last_group_inked_row_count = inked_row_count;
         // Excel repeats title columns on pages that no longer show them.
         if let (Some(title_table), Some((title_start, _))) = (title_table.as_ref(), title_columns)
             && start > title_start
@@ -122,10 +127,62 @@ pub(super) fn split_sheet_page_by_width(
             },
         });
     }
+    end_sequence_at_last_inked_row(&mut result, last_group_inked_row_count);
     result
 }
 
-/// Concatenate the repeated title columns before a column group's table.
+/// Whether a cell paints anything of its own: text, a fill, a border, or a
+/// conditional-format decoration. A continued line is judged by
+/// [`SpillContinuation::paints`] where it is placed.
+fn cell_carries_ink(cell: &TableCell) -> bool {
+    cell_carries_text(cell)
+        || cell.background.is_some()
+        || cell.border.as_ref().is_some_and(|border| {
+            border.top.is_some()
+                || border.bottom.is_some()
+                || border.left.is_some()
+                || border.right.is_some()
+        })
+        || cell.data_bar.is_some()
+        || cell.sparkline.is_some()
+        || cell.icon_text.is_some()
+}
+
+/// End the printed page sequence at its last row carrying ink.
+///
+/// Excel prints the page-columns down, then over, and stops after the last
+/// page that paints anything. One-factor native Excel-for-Mac exports of
+/// `100-customers.xlsx` (issue #1714): shortening the occupation values of
+/// the last vertical band so nothing spills there prints 5 pages instead of
+/// 6, the down-page run followed by only the two strip pages that carry a
+/// tail; shortening the middle band's values instead still prints 6, the
+/// blank strip page for that band included. So only the last page-column
+/// ends early, at its last inked row, and a page-column before it keeps
+/// every row so a blank band inside the sequence still prints. The rows
+/// removed are trailing ones, which leaves every earlier band boundary where
+/// the renderer would have placed it.
+///
+/// Printed gridlines and headings paint every row of the range and no probe
+/// has measured whether Excel still ends the sequence early then, so such a
+/// sheet keeps all of its rows.
+fn end_sequence_at_last_inked_row(pages: &mut Vec<SheetPage>, last_inked_row_count: usize) {
+    if pages.len() <= 1 {
+        return;
+    }
+    let Some(last) = pages.last_mut() else {
+        return;
+    };
+    if last.table.prints_gridlines || last.table.prints_headings {
+        return;
+    }
+    if last_inked_row_count == 0 {
+        pages.pop();
+        return;
+    }
+    let kept: usize = last_inked_row_count.max(last.table.header_row_count);
+    last.table.rows.truncate(kept);
+}
+
 /// Shrink a sheet until it fits the pages `fitToWidth` and `fitToHeight`
 /// allow.
 ///
@@ -325,6 +382,7 @@ fn scale_block_font_sizes(block: &mut Block, scale: f64) {
     }
 }
 
+/// Concatenate the repeated title columns before a column group's table.
 fn prepend_title_columns(title_table: &Table, group_table: Table) -> Table {
     let mut column_widths: Vec<f64> = title_table.column_widths.clone();
     column_widths.extend(group_table.column_widths.iter().copied());
@@ -391,10 +449,31 @@ struct SpillContinuation<'a> {
     offset_pt: f64,
     /// Width the line still reaches past the boundary.
     remaining_pt: f64,
+    /// Whether the line's own text crosses the boundary, so the continuation
+    /// paints something rather than an empty clip box.
+    paints: bool,
 }
 
+/// Slack, in points, granted to the estimated line width when deciding
+/// whether a continuation paints. The ASCII-ratio estimate runs 0.6–9.1pt
+/// under the face's own advances on the 1,000 occupation strings of
+/// `1000-customers.xlsx` (mean 4.7pt at Malgun Gothic 12); with 6pt of slack
+/// no line the native export continues is taken for one that ends before
+/// the boundary on that corpus, while a line ending well inside its reach —
+/// row 1001's `Direct Creative Liaison`, 26pt short of it — still counts as
+/// painting nothing (issue #1714).
+const LINE_REACH_TOLERANCE_PT: f64 = 6.0;
+
 /// The continuation `cell`, starting at column `cell_start` before
-/// `boundary`, sends past that boundary — `None` when its line ends first.
+/// `boundary`, sends past that boundary — `None` when its reach ends first.
+///
+/// `spill_width` is the reach the line may paint across, in whole columns,
+/// and the continuation is redrawn whenever that reach crosses the boundary
+/// so the renderer clips the real glyphs rather than an estimate. The line
+/// itself is `spill_line_width_pt` and usually ends inside the reach;
+/// whether it crosses decides only `paints`, which the page-sequence rule
+/// reads (issue #1714). A cell carrying no line width — a synthetic table —
+/// is taken to fill its reach.
 ///
 /// A merged cell's spill is the merge's own width, so it never reaches past
 /// the merge and never continues this way; the straddling merge is handled
@@ -408,10 +487,14 @@ fn spill_continuation_past<'a>(
     let spill_width: f64 = cell.spill_width?;
     let offset_pt: f64 = column_widths[cell_start..boundary].iter().sum();
     let remaining_pt: f64 = spill_width - offset_pt;
+    let line_reach_pt: f64 = cell
+        .spill_line_width_pt
+        .map_or(spill_width, |line_width| line_width.min(spill_width));
     (remaining_pt > 0.0).then_some(SpillContinuation {
         source: cell,
         offset_pt,
         remaining_pt,
+        paints: line_reach_pt + LINE_REACH_TOLERANCE_PT > offset_pt,
     })
 }
 
@@ -444,16 +527,18 @@ fn cell_carries_text(cell: &TableCell) -> bool {
 /// merge's line on the following page-column at a negative x so its tail lands
 /// there, rather than leaving the cell empty (#631); no native Excel export
 /// of a straddling merge has been measured yet.
-fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
+fn slice_table_columns(table: &Table, start: usize, end: usize) -> ColumnGroupSlice {
     let column_count: usize = table.column_widths.len();
     // Tracks rows still covered by a row-spanning cell, per column.
     let mut rowspan_remaining: Vec<usize> = vec![0; column_count];
     let group_width: f64 = table.column_widths[start..end].iter().sum();
 
     let mut rows: Vec<TableRow> = Vec::with_capacity(table.rows.len());
+    let mut inked_row_count: usize = 0;
     for row in &table.rows {
         let mut column_cursor: usize = 0;
         let mut cells: Vec<TableCell> = Vec::new();
+        let mut row_paints: bool = false;
         // The line, if any, still reaching into this group from a cell on an
         // earlier page-column. Only a row's last text before the boundary can
         // reach it: any later text or merge blocks the spill first.
@@ -505,7 +590,12 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
                     // remains of the group from this cell's left edge.
                     let available: f64 = table.column_widths[overlap_start..end].iter().sum();
                     sliced.spill_width = Some(spill.min(available));
-                } else if cell_start == start
+                }
+                // A straddling merge paints on here even with its content
+                // blanked: the merge's line continues on this page-column in
+                // a spreadsheet application (#631).
+                let mut cell_paints: bool = cell_start < start || cell_carries_ink(&sliced);
+                if cell_start == start
                     && span == 1
                     && cell.row_span <= 1
                     && !cell_carries_text(cell)
@@ -516,7 +606,9 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
                     sliced.spill_continuation_offset_pt = Some(continuation.offset_pt);
                     sliced.padding = continuation.source.padding;
                     sliced.vertical_align = continuation.source.vertical_align;
+                    cell_paints |= continuation.paints;
                 }
+                row_paints |= cell_paints;
                 cells.push(sliced);
             }
 
@@ -536,9 +628,12 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
             cells,
             height: row.height,
         });
+        if row_paints {
+            inked_row_count = rows.len();
+        }
     }
 
-    Table {
+    let table = Table {
         rows,
         column_widths: table.column_widths[start..end].to_vec(),
         header_row_count: table.header_row_count,
@@ -554,7 +649,20 @@ fn slice_table_columns(table: &Table, start: usize, end: usize) -> Table {
         prints_headings: table.prints_headings,
         centers_between_print_margins: table.centers_between_print_margins,
         print_scale: table.print_scale,
+    };
+    ColumnGroupSlice {
+        table,
+        inked_row_count,
     }
+}
+
+/// One page-column's table and how far down it paints anything.
+struct ColumnGroupSlice {
+    table: Table,
+    /// One past the last row with a cell that paints text, a continued
+    /// line, a fill, a border, a decoration, or a straddling merge; zero
+    /// when nothing in the group paints.
+    inked_row_count: usize,
 }
 
 /// Split a drawing-only sheet into page-columns at printable-width

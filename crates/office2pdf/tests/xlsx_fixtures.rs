@@ -1819,6 +1819,85 @@ fn rendered_page_count(pdf: &[u8]) -> usize {
         .count()
 }
 
+/// Excel ends the printed sequence at its last page carrying ink. The native
+/// Excel-for-Mac export of `1000-customers.xlsx` prints 51 pages: 26 of A:F,
+/// then 25 strip pages, none for the 26th band whose only row does not spill
+/// (issue #1714). The strip page-column therefore ends at its last continued
+/// line, which leaves the 26th band with nothing to print.
+#[test]
+fn structure_thousand_customers_prints_no_strip_page_for_the_tail_less_last_band() {
+    let pages = sheet_pages("1000-customers.xlsx");
+    assert_eq!(pages.len(), 2, "A:F, then the overflow strip");
+    let strip_rows: usize = pages[1].table.rows.len();
+    assert!(
+        strip_rows < pages[0].table.rows.len(),
+        "the strip ends before the last row; it still carries {strip_rows} rows"
+    );
+    assert!(
+        pages[1].table.rows[strip_rows - 1]
+            .cells
+            .iter()
+            .any(|cell| cell.spill_continuation_offset_pt.is_some()),
+        "the strip's last row carries a continued line"
+    );
+
+    let result = office2pdf::convert(fixture_path("1000-customers.xlsx")).expect("converts");
+    assert_eq!(
+        rendered_page_count(&result.pdf),
+        51,
+        "native Excel for Mac prints 26 down-page pages and 25 strip pages"
+    );
+}
+
+/// `customers_trailing_band_no_spill.xlsx` is `100-customers.xlsx` with the
+/// occupation values of rows 81-101, the third vertical band, shortened to
+/// `x`. The native Excel-for-Mac export prints 5 pages: the down-page run of
+/// three, then only the two strip pages whose bands carry a spilled tail
+/// (issue #1714 probe).
+#[test]
+fn structure_trailing_band_without_a_spill_prints_no_strip_page() {
+    let pages = sheet_pages("customers_trailing_band_no_spill.xlsx");
+    assert_eq!(pages.len(), 2);
+    let strip_rows: usize = pages[1].table.rows.len();
+    assert!(
+        (41..=80).contains(&strip_rows),
+        "the strip ends inside the second band; got {strip_rows} rows"
+    );
+
+    let result = office2pdf::convert(fixture_path("customers_trailing_band_no_spill.xlsx"))
+        .expect("converts");
+    assert_eq!(rendered_page_count(&result.pdf), 5);
+}
+
+/// `customers_middle_band_no_spill.xlsx` shortens rows 41-80 instead, the
+/// second band. The native export still prints 6 pages, the blank strip page
+/// for that band included: a blank page inside the sequence is printed, so
+/// the strip keeps every row up to its last continued line in the third band
+/// (issue #1714 probe).
+#[test]
+fn structure_middle_band_without_a_spill_keeps_its_blank_strip_page() {
+    let pages = sheet_pages("customers_middle_band_no_spill.xlsx");
+    assert_eq!(pages.len(), 2);
+    let strip_rows: usize = pages[1].table.rows.len();
+    assert!(
+        strip_rows > 80,
+        "the strip reaches the third band's continued lines; got {strip_rows} rows"
+    );
+    let second_band_has_continuation: bool = pages[1].table.rows[40..80].iter().any(|row| {
+        row.cells
+            .iter()
+            .any(|cell| cell.spill_continuation_offset_pt.is_some())
+    });
+    assert!(
+        !second_band_has_continuation,
+        "rows 41-80 carry nothing on the strip"
+    );
+
+    let result =
+        office2pdf::convert(fixture_path("customers_middle_band_no_spill.xlsx")).expect("converts");
+    assert_eq!(rendered_page_count(&result.pdf), 6);
+}
+
 #[test]
 fn smoke_customers_overflow_strip() {
     assert_produces_valid_pdf("customers_overflow_strip.xlsx");
