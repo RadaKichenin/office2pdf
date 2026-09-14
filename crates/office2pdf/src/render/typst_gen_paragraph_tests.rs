@@ -2037,6 +2037,7 @@ fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterP
         elements,
         border: None,
         border_space: None,
+        sheet_section_is_rich: false,
         frame: None,
     }
 }

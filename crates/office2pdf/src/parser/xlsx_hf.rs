@@ -345,9 +345,12 @@ pub(super) fn parse_hf_format_string(
         // One paragraph per line of the section. A line that carries no ink is
         // skipped, exactly as an empty section is: Excel seats a footer's text
         // against the band, so materialising a blank leading line would move
-        // the visible label without any measurement asking for it.
-        for line in split_section_lines(text) {
-            let elements = build_hf_elements(&line);
+        // the visible label without any measurement asking for it. The break
+        // still counts: it is what put the section on the rich-text path.
+        let lines: Vec<Vec<HfSegment>> = split_section_lines(text);
+        let sheet_section_is_rich: bool = section_is_rich(&lines);
+        for line in &lines {
+            let elements = build_hf_elements(line);
             if !elements.is_empty() {
                 paragraphs.push(HeaderFooterParagraph {
                     style: ParagraphStyle {
@@ -358,6 +361,7 @@ pub(super) fn parse_hf_format_string(
                     border: None,
                     border_space: None,
                     frame: None,
+                    sheet_section_is_rich,
                 });
             }
         }
@@ -373,6 +377,29 @@ pub(super) fn parse_hf_format_string(
             shapes: Vec::new(),
         })
     }
+}
+
+/// Whether Excel draws a section through its rich-text path, which seats the
+/// text one point lower and one point further left than a section drawn as
+/// one uniform run (issue #1552).
+///
+/// Native Excel-for-Mac exports of one-factor variants of
+/// `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx` put every form that
+/// splits the section's text on the lower seat — the 1pt `#` marker run a
+/// Sensitivity label opens with, a face switch in the middle of the words,
+/// and a bare `_x000D_` ahead of otherwise uniform text — while a colour,
+/// face or size code ahead of *all* the text leaves the section on the plain
+/// seat: the text is still one run. So the test is whether more than one
+/// segment carries text on any line, or the section breaks a line at all,
+/// blank lines included.
+fn section_is_rich(lines: &[Vec<HfSegment>]) -> bool {
+    lines.len() > 1
+        || lines.iter().any(|line| {
+            line.iter()
+                .filter(|segment| !segment.text.is_empty())
+                .count()
+                > 1
+        })
 }
 
 /// Split a section's segments at every [`LINE_BREAK_SENTINEL`], keeping each

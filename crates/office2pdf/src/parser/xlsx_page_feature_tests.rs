@@ -730,15 +730,12 @@ fn build_xlsx_with_footer_margins(footer_str: &str, footer_in: f64, bottom_in: f
 }
 
 /// Excel measures a printed footer up from the page's bottom edge, through
-/// `<pageMargins>/@footer`, and leaves a further 2pt below the text's line box
-/// (issue #1142).
+/// `<pageMargins>/@footer` (issue #1142).
 ///
-/// The 2pt is measured: on Excel-for-Mac exports of one-factor variants of
-/// `tests/fixtures/xlsx/headerFooterTest.xlsx`, a 12pt Calibri footer over a
-/// 0.5in footer margin puts its baseline 41pt above the page's bottom edge —
-/// 36pt of margin, Calibri's 3.22pt `hhea` descent, and 2pt between them. The
-/// same series holds at 6, 8, 14, 20, 40 and 80pt, and across Arial, Verdana,
-/// Times New Roman and Aptos.
+/// The story carries the margin as the source states it, in paper points. The
+/// whole-point floor, the 2pt band inset and the seat itself are the
+/// renderer's: a fitted sheet floors the margin in sheet points, which cannot
+/// be recovered from a value floored on paper (issue #1552).
 #[test]
 fn a_sheet_footer_is_seated_from_the_page_bottom_edge() {
     let data = build_xlsx_with_footer_margins("&LSensitivity: Internal", 0.3, 0.75);
@@ -749,10 +746,15 @@ fn a_sheet_footer_is_seated_from_the_page_bottom_edge() {
         .footer
         .as_ref()
         .expect("the sheet states a footer");
-    assert_eq!(
-        footer.distance_from_edge,
-        Some(23.0),
-        "0.3in floors to 21pt of footer margin, plus Excel's 2pt band inset"
+    assert!(
+        (footer
+            .distance_from_edge
+            .expect("the footer margin is stated")
+            - 21.6)
+            .abs()
+            < 1e-9,
+        "0.3in is 21.6pt of footer margin, carried unrounded: {:?}",
+        footer.distance_from_edge
     );
 }
 
@@ -771,21 +773,13 @@ fn a_sheet_footer_seat_follows_its_own_margin_not_the_bottom_one() {
             .distance_from_edge
     };
 
-    assert_eq!(
-        seat_of(0.5, 0.75),
-        Some(38.0),
-        "0.5in is 36pt plus the inset"
-    );
+    assert_eq!(seat_of(0.5, 0.75), Some(36.0), "0.5in is 36pt");
     assert_eq!(
         seat_of(0.5, 1.5),
-        Some(38.0),
+        Some(36.0),
         "doubling the bottom margin must not move the footer"
     );
-    assert_eq!(
-        seat_of(1.0, 1.5),
-        Some(74.0),
-        "1.0in is 72pt plus the inset"
-    );
+    assert_eq!(seat_of(1.0, 1.5), Some(72.0), "1.0in is 72pt");
 }
 
 /// A sheet that states no `<pageMargins>` takes Excel's own 0.3in default.
@@ -799,7 +793,116 @@ fn a_sheet_footer_without_page_margins_takes_excels_default() {
         .footer
         .as_ref()
         .expect("the sheet states a footer");
-    assert_eq!(footer.distance_from_edge, Some(23.0));
+    assert!(
+        (footer
+            .distance_from_edge
+            .expect("the default margin is stated")
+            - 21.6)
+            .abs()
+            < 1e-9,
+        "Excel's default footer margin is 0.3in = 21.6pt: {:?}",
+        footer.distance_from_edge
+    );
+}
+
+/// Whether each section of a parsed footer takes Excel's rich-text drop, in
+/// paragraph order.
+fn hf_section_richness(hf: &HeaderFooter) -> Vec<bool> {
+    hf.paragraphs
+        .iter()
+        .map(|paragraph| paragraph.sheet_section_is_rich)
+        .collect()
+}
+
+/// A section whose text is one uniform run is drawn through Excel's plain
+/// path, and a face, size or colour code ahead of all of its text does not
+/// change that (issue #1552).
+///
+/// Native Excel-for-Mac exports of one-factor variants of
+/// `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx` seat
+/// `&L&"Aptos"&8&K000000 Sensitivity: Internal`, its `&KFF0000` twin and the
+/// codeless `&L&8 Sensitivity: Internal` all on the same whole point, one
+/// point above every form that splits the text.
+#[test]
+fn a_sheet_footer_section_of_one_uniform_run_is_plain() {
+    for format_str in [
+        r#"&L&"Aptos"&8&K000000 Sensitivity: Internal"#,
+        r#"&L&"Aptos"&8&KFF0000 Sensitivity: Internal"#,
+        "&L&8 Sensitivity: Internal",
+        "&CPage &P of &N",
+    ] {
+        let hf = parse_hf(format_str).expect("the section has text");
+        assert_eq!(
+            hf_section_richness(&hf),
+            vec![false],
+            "{format_str:?} is one uniform run and must stay plain"
+        );
+    }
+}
+
+/// A section that changes face or size partway through its text is drawn
+/// through Excel's rich-text path, which seats it one point lower and one
+/// point further left (issue #1552).
+///
+/// The Sensitivity label Excel writes — a 1pt `#` marker run in the Normal
+/// font ahead of the 8pt Aptos text — is the reported case; a switch in the
+/// middle of the words is the same path.
+#[test]
+fn a_second_run_marks_a_sheet_footer_section_rich() {
+    for format_str in [
+        r#"&L_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal"#,
+        r#"&L&1#&"Aptos"&8 Sensitivity: Internal"#,
+        r#"&L&"Aptos"&8 Sensitivity: &"Arial"&8Internal"#,
+    ] {
+        let hf = parse_hf(format_str).expect("the section has text");
+        assert_eq!(
+            hf_section_richness(&hf),
+            vec![true],
+            "{format_str:?} changes formatting inside its text and must be rich"
+        );
+    }
+}
+
+/// A line break alone puts a section on the rich-text path, even when the
+/// broken-off line carries no ink and is not materialised (issue #1552).
+///
+/// `&L_x000D_&"Aptos"&8 Sensitivity: Internal` is one uniform run after a
+/// carriage return; native Excel seats it with the two-run forms, a point
+/// below the same string without the return.
+#[test]
+fn a_line_break_marks_a_sheet_footer_section_rich() {
+    let hf =
+        parse_hf(r#"&L_x000D_&"Aptos"&8 Sensitivity: Internal"#).expect("the section has text");
+    assert_eq!(
+        hf_section_texts(&hf),
+        vec![" Sensitivity: Internal"],
+        "the blank leading line is still not materialised"
+    );
+    assert_eq!(hf_section_richness(&hf), vec![true]);
+
+    let two_lines = parse_hf(
+        r#"&L&"Aptos"&8Line one
+Sensitivity: Internal"#,
+    )
+    .expect("the section has text");
+    assert_eq!(
+        hf_section_richness(&two_lines),
+        vec![true, true],
+        "every line of a broken section shares the section's path"
+    );
+}
+
+/// The path is decided per section: Excel seats a rich left section and a
+/// plain right section of the same footer one point apart (issue #1552).
+#[test]
+fn sheet_footer_sections_take_their_own_richness() {
+    let hf = parse_hf(r#"&L_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal&R&"Aptos"&8Page"#)
+        .expect("both sections have text");
+    assert_eq!(
+        hf_section_texts(&hf),
+        vec!["# Sensitivity: Internal", "Page"]
+    );
+    assert_eq!(hf_section_richness(&hf), vec![true, false]);
 }
 
 #[test]

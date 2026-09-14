@@ -871,6 +871,7 @@ fn convert_hf_paragraph(
         elements,
         border: extract_hf_paragraph_border(&paragraph.property),
         border_space: extract_hf_paragraph_border_space(&paragraph.property),
+        sheet_section_is_rich: false,
         frame: extract_hf_frame(&paragraph.property),
     }
 }

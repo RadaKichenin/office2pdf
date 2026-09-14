@@ -25,6 +25,7 @@ fn test_generate_flow_page_with_text_header() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -67,6 +68,7 @@ fn test_generate_flow_page_with_page_number_footer() {
                 ],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -137,6 +139,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                     right: None,
                 }),
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -179,6 +182,7 @@ fn a_page_anchored_footer_frame_paints_below_body_content() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: Some(HeaderFooterFrame {
                     wraps_text: true,
                     x: Some(71.8),
@@ -238,6 +242,7 @@ fn test_page_anchored_frame_page_number_compiles() {
                 elements: vec![HFInline::PageNumber(TextStyle::default())],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: Some(HeaderFooterFrame {
                     wraps_text: true,
                     x: Some(50.0),
@@ -302,6 +307,7 @@ fn test_generate_flow_page_with_header_and_footer() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -314,6 +320,7 @@ fn test_generate_flow_page_with_header_and_footer() {
                 elements: vec![HFInline::PageNumber(TextStyle::default())],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -646,6 +653,7 @@ fn test_table_page_with_header() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -695,6 +703,7 @@ fn test_table_page_with_page_number_footer() {
                 ],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -718,14 +727,55 @@ fn test_table_page_with_page_number_footer() {
 }
 
 /// A sheet page carrying a footer seat, for the seating tests below.
+///
+/// `footer_margin_pt` is `<pageMargins>/@footer` in paper points, as the
+/// parser carries it; the footer is one plain 8pt run.
 #[cfg(not(target_arch = "wasm32"))]
-fn sheet_page_with_seated_footer(distance_from_edge: Option<f64>, family: Option<&str>) -> Page {
+fn sheet_page_with_seated_footer(footer_margin_pt: Option<f64>, family: Option<&str>) -> Page {
+    sheet_page_with_footer_sections(
+        PageSize::default(),
+        54.0,
+        footer_margin_pt,
+        None,
+        vec![(
+            Alignment::Left,
+            false,
+            vec![hf_run("Sensitivity: Internal", family, 8.0)],
+        )],
+    )
+}
+
+/// One footer run of `family` at `size_pt`.
+#[cfg(not(target_arch = "wasm32"))]
+fn hf_run(text: &str, family: Option<&str>, size_pt: f64) -> Run {
+    Run {
+        text: text.to_string(),
+        style: TextStyle {
+            font_family: family.map(str::to_string),
+            font_size: Some(size_pt),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+    }
+}
+
+/// A sheet page whose footer has one paragraph per `(alignment, is_rich,
+/// runs)` section, seated on `footer_margin_pt` with the given fit scale.
+#[cfg(not(target_arch = "wasm32"))]
+fn sheet_page_with_footer_sections(
+    size: PageSize,
+    bottom_margin_pt: f64,
+    footer_margin_pt: Option<f64>,
+    sheet_print_scale: Option<f64>,
+    sections: Vec<(Alignment, bool, Vec<Run>)>,
+) -> Page {
     Page::Sheet(SheetPage {
         name: "Sheet1".to_string(),
-        size: PageSize::default(),
+        size,
         margins: Margins {
             top: 54.0,
-            bottom: 54.0,
+            bottom: bottom_margin_pt,
             left: 50.0,
             right: 50.0,
         },
@@ -733,32 +783,49 @@ fn sheet_page_with_seated_footer(distance_from_edge: Option<f64>, family: Option
         header: None,
         footer: Some(HeaderFooter {
             shapes: Vec::new(),
-            distance_from_edge,
-            sheet_print_scale: None,
-            paragraphs: vec![HeaderFooterParagraph {
-                style: ParagraphStyle {
-                    alignment: Some(Alignment::Left),
-                    ..ParagraphStyle::default()
-                },
-                elements: vec![HFInline::Run(Run {
-                    text: "Sensitivity: Internal".to_string(),
-                    style: TextStyle {
-                        font_family: family.map(str::to_string),
-                        font_size: Some(8.0),
-                        ..TextStyle::default()
+            distance_from_edge: footer_margin_pt,
+            sheet_print_scale,
+            paragraphs: sections
+                .into_iter()
+                .map(
+                    |(alignment, sheet_section_is_rich, runs)| HeaderFooterParagraph {
+                        style: ParagraphStyle {
+                            alignment: Some(alignment),
+                            ..ParagraphStyle::default()
+                        },
+                        elements: runs.into_iter().map(HFInline::Run).collect(),
+                        border: None,
+                        border_space: None,
+                        frame: None,
+                        sheet_section_is_rich,
                     },
-                    href: None,
-                    footnote: None,
-                })],
-                border: None,
-                border_space: None,
-                frame: None,
-            }],
+                )
+                .collect(),
         }),
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
     })
+}
+
+/// The bare `hhea` descent of `family` at `size_pt`, in points.
+#[cfg(not(target_arch = "wasm32"))]
+fn hhea_descent_pt(family: &str, size_pt: f64) -> f64 {
+    let (_, descent_em, _) = crate::render::pdf::font_line_metrics_em(family)
+        .unwrap_or_else(|| panic!("{family} metrics should resolve on every runner"));
+    descent_em * size_pt
+}
+
+/// Baseline of the compiled page's run whose text contains `needle`, in
+/// points down from the page top.
+#[cfg(not(target_arch = "wasm32"))]
+fn compiled_baseline_of(source: &str, needle: &str) -> f64 {
+    let runs = crate::render::pdf::compiled_text_runs(source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{source}"));
+    runs.iter()
+        .find(|run| run.text.contains(needle))
+        .unwrap_or_else(|| panic!("no run containing {needle:?}: {runs:?}\n{source}"))
+        .baseline_pt
 }
 
 /// Excel lays a fitted sheet's header/footer out in sheet coordinates and
@@ -767,7 +834,7 @@ fn sheet_page_with_seated_footer(distance_from_edge: Option<f64>, family: Option
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_fitted_sheet_footer_uses_its_scaled_horizontal_coordinate_box() {
-    let mut page = sheet_page_with_seated_footer(Some(23.0), Some("Arial"));
+    let mut page = sheet_page_with_seated_footer(Some(21.6), Some("Arial"));
     let Page::Sheet(sheet) = &mut page else {
         panic!("the fixture is a sheet page");
     };
@@ -804,7 +871,7 @@ fn a_fitted_sheet_footer_uses_its_scaled_horizontal_coordinate_box() {
 #[test]
 fn a_seated_sheet_footer_spans_the_gap_to_its_own_margin() {
     let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(
-        Some(23.0),
+        Some(21.6),
         Some("Arial"),
     )]))
     .expect("document should generate")
@@ -816,7 +883,8 @@ fn a_seated_sheet_footer_spans_the_gap_to_its_own_margin() {
     );
     assert!(
         source.contains("block(width: 100%, height: 31pt)"),
-        "the band must span the 54pt bottom margin down to the 23pt seat: {source}"
+        "the band must span the 54pt bottom margin down to the 23pt band Excel \
+         leaves above a 0.3in (21.6pt, floored to 21pt) footer margin: {source}"
     );
     assert!(
         source.contains("#place(bottom"),
@@ -825,11 +893,18 @@ fn a_seated_sheet_footer_spans_the_gap_to_its_own_margin() {
 }
 
 /// Triangulation: the band is measured, not a constant (issue #1142).
+///
+/// The 2pt is measured: on Excel-for-Mac exports of one-factor variants of
+/// `tests/fixtures/xlsx/headerFooterTest.xlsx`, a 12pt Calibri footer over a
+/// 0.5in footer margin puts its baseline 41pt above the page's bottom edge —
+/// 36pt of margin, Calibri's 3.22pt `hhea` descent, and 2pt between them. The
+/// same series holds at 6, 8, 14, 20, 40 and 80pt, and across Arial, Verdana,
+/// Times New Roman and Aptos.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_seated_sheet_footer_band_tracks_the_stated_seat() {
     let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(
-        Some(38.0),
+        Some(36.0),
         Some("Arial"),
     )]))
     .expect("document should generate")
@@ -837,32 +912,42 @@ fn a_seated_sheet_footer_band_tracks_the_stated_seat() {
 
     assert!(
         source.contains("block(width: 100%, height: 16pt)"),
-        "a 38pt seat under a 54pt bottom margin leaves a 16pt band: {source}"
+        "a 0.5in footer margin (36pt) plus the 2pt inset under a 54pt bottom \
+         margin leaves a 16pt band: {source}"
     );
 }
 
-/// The band states the footer face's own `hhea` descent, so the last baseline
-/// lands the descent above the seat (issue #1142).
+/// The band states where the footer's baseline lands, in points above the
+/// band's bottom: the face's own `hhea` descent, rounded with the band to the
+/// whole point Excel prints (issues #1142, #1552).
 ///
 /// Arial, because every runner resolves it — through Liberation Sans where the
 /// face itself is absent.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_seated_sheet_footer_states_its_own_bottom_edge() {
-    let (ascender_em, _, pitch_em) =
-        crate::render::pdf::font_line_metrics_em("Arial").expect("Arial metrics should resolve");
-    let expected_em: f64 = pitch_em - ascender_em;
+    let descent_pt: f64 = hhea_descent_pt("Arial", 8.0);
+    let expected_lift_pt: f64 = (23.0 + descent_pt).round() - 23.0;
+    assert!(
+        (1.0..2.5).contains(&descent_pt),
+        "the test needs a descent that rounds visibly: Arial 8pt gives {descent_pt}pt"
+    );
 
     let source = generate_typst(&make_doc(vec![sheet_page_with_seated_footer(
-        Some(23.0),
+        Some(21.6),
         Some("Arial"),
     )]))
     .expect("document should generate")
     .source;
 
     assert!(
-        source.contains(&format!("bottom-edge: -{}em", format_f64(expected_em))),
-        "the band must state Arial's own {expected_em}em descent: {source}"
+        !source.contains("bottom-edge: \"descender\"") && !source.contains("em)"),
+        "the band must state the seat in points, not a normalised or em descent: {source}"
+    );
+    assert!(
+        source.contains(&format!("bottom-edge: -{}pt", format_f64(expected_lift_pt))),
+        "the baseline must sit round(23 + {descent_pt}) - 23 = {expected_lift_pt}pt above \
+         the band: {source}"
     );
 }
 
@@ -879,6 +964,186 @@ fn an_unseated_sheet_footer_keeps_the_default_descent() {
         !source.contains("footer-descent"),
         "an unseated footer must not pin the origin: {source}"
     );
+}
+
+/// Excel seats a printed footer line on a whole point: the band, plus the
+/// deepest run's `hhea` descent, rounded (issue #1552).
+///
+/// Native Excel-for-Mac exports of `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`
+/// with its 8pt Aptos label reset to 10, 16, 20, 24 and 40pt seat the baseline
+/// 25, 27, 28, 29 and 33pt above the paper, each `round(23 + descent) - 1`;
+/// the one-point drop is the rich-text path below. The reported label — a
+/// 1pt `#` in the Normal font ahead of the 8pt run — had taken the 1pt run's
+/// face for the 8pt run's descent and landed at 24.78pt against Excel's 24.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_mixed_size_sheet_footer_seats_its_deepest_run_on_a_whole_point() {
+    const PAGE_HEIGHT_PT: f64 = 792.0;
+    let page = sheet_page_with_footer_sections(
+        PageSize {
+            width: 612.0,
+            height: PAGE_HEIGHT_PT,
+        },
+        54.0,
+        Some(21.6),
+        None,
+        vec![(
+            Alignment::Left,
+            true,
+            vec![
+                hf_run("#", Some("Libertinus Serif"), 1.0),
+                hf_run(" Sensitivity: Internal", Some("Arial"), 8.0),
+            ],
+        )],
+    );
+    let deepest_pt: f64 =
+        hhea_descent_pt("Libertinus Serif", 1.0).max(hhea_descent_pt("Arial", 8.0));
+    let expected_seat_pt: f64 = (23.0 + deepest_pt).round() - 1.0;
+
+    let source = generate_typst(&make_doc(vec![page]))
+        .expect("document should generate")
+        .source;
+    let baseline_pt: f64 = compiled_baseline_of(&source, "Sensitivity");
+
+    assert!(
+        (PAGE_HEIGHT_PT - baseline_pt - expected_seat_pt).abs() < 0.05,
+        "the 8pt run must sit {expected_seat_pt}pt above the paper, got {:.3}pt\n{source}",
+        PAGE_HEIGHT_PT - baseline_pt
+    );
+    assert!(
+        (compiled_baseline_of(&source, "#") - baseline_pt).abs() < 0.01,
+        "both runs share the line's baseline\n{source}"
+    );
+}
+
+/// The deepest run decides the line, not the first one and not the largest
+/// one: in native exports a 20pt `#` ahead of 8pt text seats on the 20pt
+/// run's descent, and 13pt Aptos beside 15pt Arial on the 13pt Aptos's 3.66pt
+/// rather than the larger run's 3.18pt, in either order (issue #1552).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_deepest_sheet_footer_run_wins_in_either_order() {
+    const PAGE_HEIGHT_PT: f64 = 792.0;
+    let big = || hf_run("#", Some("Arial"), 20.0);
+    let small = || hf_run(" Sensitivity: Internal", Some("Arial"), 8.0);
+    let expected_seat_pt: f64 = (23.0 + hhea_descent_pt("Arial", 20.0)).round() - 1.0;
+
+    for runs in [vec![big(), small()], vec![small(), big()]] {
+        let page = sheet_page_with_footer_sections(
+            PageSize {
+                width: 612.0,
+                height: PAGE_HEIGHT_PT,
+            },
+            54.0,
+            Some(21.6),
+            None,
+            vec![(Alignment::Left, true, runs)],
+        );
+        let source = generate_typst(&make_doc(vec![page]))
+            .expect("document should generate")
+            .source;
+        let seat_pt: f64 = PAGE_HEIGHT_PT - compiled_baseline_of(&source, "Sensitivity");
+        assert!(
+            (seat_pt - expected_seat_pt).abs() < 0.05,
+            "the 20pt run's descent seats the line at {expected_seat_pt}pt whichever \
+             side it is on, got {seat_pt:.3}pt\n{source}"
+        );
+    }
+}
+
+/// A section drawn as one uniform run sits one point higher than the same
+/// text on the rich-text path, and the two paths are decided per section:
+/// native Excel seats `&L_x000D_&1#&"Aptos"&8&K000000 Sensitivity: Internal&R&"Aptos"&8Page`
+/// with the left label 24pt and the right one 25pt above the paper
+/// (issue #1552).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_plain_sheet_footer_section_sits_one_point_above_a_rich_one() {
+    const PAGE_HEIGHT_PT: f64 = 792.0;
+    let page = sheet_page_with_footer_sections(
+        PageSize {
+            width: 612.0,
+            height: PAGE_HEIGHT_PT,
+        },
+        54.0,
+        Some(21.6),
+        None,
+        vec![
+            (
+                Alignment::Left,
+                true,
+                vec![
+                    hf_run("#", Some("Arial"), 1.0),
+                    hf_run(" Sensitivity: Internal", Some("Arial"), 8.0),
+                ],
+            ),
+            (
+                Alignment::Right,
+                false,
+                vec![hf_run("Page", Some("Arial"), 8.0)],
+            ),
+        ],
+    );
+    let plain_seat_pt: f64 = (23.0 + hhea_descent_pt("Arial", 8.0)).round();
+
+    let source = generate_typst(&make_doc(vec![page]))
+        .expect("document should generate")
+        .source;
+    let rich_baseline_pt: f64 = compiled_baseline_of(&source, "Sensitivity");
+    let plain_baseline_pt: f64 = compiled_baseline_of(&source, "Page");
+
+    assert!(
+        (PAGE_HEIGHT_PT - plain_baseline_pt - plain_seat_pt).abs() < 0.05,
+        "the plain section sits on round(23 + descent) = {plain_seat_pt}pt, got {:.3}pt\n{source}",
+        PAGE_HEIGHT_PT - plain_baseline_pt
+    );
+    assert!(
+        (rich_baseline_pt - plain_baseline_pt - 1.0).abs() < 0.05,
+        "the rich section sits exactly one point lower than the plain one, got {:.3}pt\n{source}",
+        rich_baseline_pt - plain_baseline_pt
+    );
+}
+
+/// A fitted sheet seats its footer in whole *sheet* points and scales the
+/// result onto the paper: at 0.78 the A3 budget sheet's 0.3in margin floors
+/// to 27 sheet points, and native exports of its 8, 16, 24 and 40pt labels
+/// land at (30, 33, 35, 39) x 0.78pt above the paper — `round(29 + descent) - 1`
+/// each, with a plain 8pt run at 31 x 0.78 (issue #1552).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_fitted_sheet_footer_seat_is_a_whole_sheet_point_scaled_to_paper() {
+    const PAGE_HEIGHT_PT: f64 = 1191.0;
+    const SCALE: f64 = 0.78;
+    for (is_rich, drop_pt) in [(true, 1.0), (false, 0.0)] {
+        let page = sheet_page_with_footer_sections(
+            PageSize {
+                width: 842.0,
+                height: PAGE_HEIGHT_PT,
+            },
+            54.0,
+            Some(21.6),
+            Some(SCALE),
+            vec![(
+                Alignment::Left,
+                is_rich,
+                // The parser has already multiplied the run's size by the scale.
+                vec![hf_run(" Sensitivity: Internal", Some("Arial"), 8.0 * SCALE)],
+            )],
+        );
+        let band_sheet_pt: f64 = (21.6 / SCALE).floor() + 2.0;
+        let seat_sheet_pt: f64 = (band_sheet_pt + hhea_descent_pt("Arial", 8.0)).round() - drop_pt;
+        let expected_seat_pt: f64 = seat_sheet_pt * SCALE;
+
+        let source = generate_typst(&make_doc(vec![page]))
+            .expect("document should generate")
+            .source;
+        let seat_pt: f64 = PAGE_HEIGHT_PT - compiled_baseline_of(&source, "Sensitivity");
+        assert!(
+            (seat_pt - expected_seat_pt).abs() < 0.05,
+            "rich={is_rich}: the seat is {seat_sheet_pt} sheet points x {SCALE} = \
+             {expected_seat_pt:.2}pt, got {seat_pt:.3}pt\n{source}"
+        );
+    }
 }
 
 #[test]
@@ -1352,6 +1617,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
                     right: None,
                 }),
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1440,6 +1706,7 @@ fn a_right_aligned_header_does_not_drag_its_rule_left() {
                     right: None,
                 }),
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1496,6 +1763,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
                     right: None,
                 }),
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1547,6 +1815,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1609,6 +1878,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1655,6 +1925,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1790,6 +2061,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
                     bottom: 4.0,
                     left: 0.0,
                 }),
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1847,6 +2119,7 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
                     right: None,
                 }),
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1893,6 +2166,7 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -1946,6 +2220,7 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -2023,6 +2298,7 @@ fn header_text_paragraph(text: &str, style: TextStyle) -> crate::ir::HeaderFoote
         })],
         border: None,
         border_space: None,
+        sheet_section_is_rich: false,
         frame: None,
     }
 }
@@ -2324,6 +2600,7 @@ fn test_header_whose_first_paragraph_is_a_page_field_seats_that_line() {
         elements: vec![HFInline::PageNumber(arial(8.0))],
         border: None,
         border_space: None,
+        sheet_section_is_rich: false,
         frame: None,
     };
     let second = header_text_paragraph("office2pdf CLI Manual v0.6", arial(8.0));
@@ -2523,6 +2800,7 @@ fn test_page_number_field_uses_its_run_style() {
                 ],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -2574,6 +2852,7 @@ fn test_unstyled_page_number_field_stays_bare() {
                 elements: vec![HFInline::PageNumber(TextStyle::default())],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: None,
             }],
         }),
@@ -2610,6 +2889,7 @@ fn test_section_page_numbering_updates_the_counter_and_its_numerals() {
             elements: vec![HFInline::PageNumber(TextStyle::default())],
             border: None,
             border_space: None,
+            sheet_section_is_rich: false,
             frame: None,
         }],
         distance_from_edge: None,
@@ -3101,6 +3381,7 @@ fn a_header_rule_is_spaced_from_the_line_box_bottom() {
             right: None,
         }),
         border_space: None,
+        sheet_section_is_rich: false,
         frame: None,
     };
     let doc = make_doc(vec![Page::Flow(FlowPage {
@@ -3445,6 +3726,7 @@ fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
                     })],
                     border: None,
                     border_space: None,
+                    sheet_section_is_rich: false,
                     frame: Some(frame(wraps_text)),
                 }],
             }),
@@ -3502,6 +3784,7 @@ fn a_bottom_seated_anchored_frame_keeps_one_em_above_its_bottom_inset() {
                     })],
                     border: None,
                     border_space: None,
+                    sheet_section_is_rich: false,
                     frame: Some(HeaderFooterFrame {
                         x: None,
                         y: None,
@@ -3567,6 +3850,7 @@ fn a_page_left_aligned_wps_footer_uses_the_writer_text_origin_seat() {
                 })],
                 border: None,
                 border_space: None,
+                sheet_section_is_rich: false,
                 frame: Some(HeaderFooterFrame {
                     x: None,
                     y: None,
