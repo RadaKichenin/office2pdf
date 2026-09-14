@@ -1235,6 +1235,27 @@ pub(crate) fn active_in_memory_font(
     })
 }
 
+/// The document- or caller-provided face registered under exactly
+/// `font_family`, without walking its alias and substitute chain.
+///
+/// The native metric lookups walk that chain themselves and interleave each
+/// candidate's in-memory face with its on-disk resolution, which is the
+/// compiler's own order: a family held in memory outranks its copy on disk,
+/// but a chain tail held in memory never outranks a candidate that resolves
+/// earlier on a search path (issue #1629). [`active_in_memory_font`] answers
+/// for the whole chain at once where no on-disk book exists.
+pub(crate) fn active_in_memory_font_named(
+    font_family: &str,
+    variant: typst::text::FontVariant,
+) -> Option<typst::text::Font> {
+    ACTIVE_FONT_CONTEXT.with(|active_context| {
+        active_context
+            .borrow()
+            .as_ref()?
+            .in_memory_font(font_family, variant)
+    })
+}
+
 /// Every document- or caller-provided face in the same priority order the
 /// compiler prepends to its fallback font book.
 pub(crate) fn active_in_memory_fonts() -> Vec<typst::text::Font> {

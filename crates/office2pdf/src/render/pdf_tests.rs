@@ -33,6 +33,28 @@ fn typst_cache_state_defers_eviction_while_compilations_overlap() {
 }
 use crate::test_support::make_test_svg;
 
+/// Index into `data` of the face the compiler would shape `family` with over
+/// an explicit font set, walking the same alias and substitute chain as
+/// `best_face` but without a conversion context's in-memory faces.
+fn best_face_index(data: &CachedFontData, family: &str) -> Option<usize> {
+    crate::render::font_subst::family_candidates(family)
+        .iter()
+        .find_map(|candidate| select_face_index(data, candidate))
+}
+
+/// `line_metric_face` over an explicit font set: `office_font_dirs` hold the
+/// application-bundled faces and `system_font_dirs` the faces that may shadow
+/// them.
+fn line_metric_face_in(
+    data: &CachedFontData,
+    office_font_dirs: &[PathBuf],
+    system_font_dirs: &[PathBuf],
+    family: &str,
+) -> Option<typst::text::Font> {
+    let shaped_index: usize = best_face_index(data, family)?;
+    line_metric_face_at(data, office_font_dirs, system_font_dirs, shaped_index)
+}
+
 #[test]
 fn test_default_font_search_paths_match_the_resolved_context() {
     // Every measurement site substitutes the memoized paths for a resolved
@@ -350,19 +372,25 @@ fn test_in_memory_last_resort_bypasses_process_metric_cache() {
     let expected_pitch =
         (f64::from(ttf.ascender()) - f64::from(ttf.descender()) + f64::from(ttf.line_gap())) / upem;
 
+    // A family no host ships and no substitute table names: its chain is the
+    // family itself and the conversion's last resort. (`SimSun` would not do:
+    // its substitutes precede the last resort, and a host shipping one of
+    // them — macOS ships Songti SC — paints and measures that face, which is
+    // the compiler's order, not a cache defect; issue #1629.)
+    let missing_family = "office2pdf issue 943 embedded last resort";
     // Populate the process cache from the machine's ordinary font set first.
-    let _ = font_line_metrics_em("SimSun");
+    assert!(font_line_metrics_em(missing_family).is_none());
 
     let context = crate::render::font_context::resolve_font_search_context_from_fonts(&fonts)
         .with_last_resort_family(Some("Noto Sans SC"));
     let actual = crate::render::font_subst::with_font_search_context(Some(&context), || {
-        font_line_metrics_em("SimSun")
+        font_line_metrics_em(missing_family)
     })
     .expect("the active in-memory last resort should provide metrics");
 
     assert!(
         (actual.2 - expected_pitch).abs() < 1e-12,
-        "active metrics must come from Noto Sans SC even after SimSun was cached: {actual:?}"
+        "active metrics must come from Noto Sans SC even after the family was cached as missing: {actual:?}"
     );
 }
 
@@ -452,6 +480,108 @@ fn test_path_font_last_resort_bypasses_process_metric_caches() {
     assert_ne!(
         powerpoint, cached_powerpoint,
         "the materialized face should replace the cached default-font split"
+    );
+}
+
+#[test]
+fn an_exact_face_on_a_search_path_outranks_an_in_memory_chain_tail_for_metrics() {
+    // Naming a face whose reproducible fallback is bundled loads that fallback
+    // into the conversion's in-memory fonts, and the metric chain ends on it.
+    // The paint chain still resolves the exact face first when a search path
+    // holds it, so every metric must read that face too (issue #1629).
+    let exact_face_bytes: &[u8] = include_bytes!("../../fonts/Selawik-Regular.ttf");
+    let exact_face = typst::text::Font::new(typst::foundations::Bytes::new(exact_face_bytes), 0)
+        .expect("the bundled Selawik face parses");
+    let exact_family: &str = "Selawik";
+    assert_eq!(exact_face.info().family, exact_family);
+
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system time should be valid")
+        .as_nanos();
+    let font_dir = std::env::temp_dir().join(format!("office2pdf-issue-1629-{unique}"));
+    std::fs::create_dir_all(&font_dir).expect("the search path directory is created");
+    std::fs::write(font_dir.join("Selawik-Regular.ttf"), exact_face_bytes)
+        .expect("the face is written to the search path");
+
+    let in_memory: &[typst::text::Font] = crate::bundled_fonts::noto_serif_fonts();
+    let chain_tail = in_memory
+        .iter()
+        .find(|font| font.info().variant == typst::text::FontVariant::default())
+        .expect("the bundled Noto Serif ships a regular face");
+    let chain_tail_family: &str = crate::bundled_fonts::NOTO_SERIF_FAMILY;
+
+    let context =
+        crate::render::font_context::resolve_font_search_context(std::slice::from_ref(&font_dir))
+            .with_in_memory_fonts(in_memory)
+            .with_last_resort_family(Some(chain_tail_family));
+    let (line, hhea_ascender, cap_height, powerpoint, tail_line) =
+        crate::render::font_subst::with_font_search_context(Some(&context), || {
+            (
+                font_line_metrics_em(exact_family),
+                font_hhea_ascender_em(exact_family),
+                font_cap_height_em(exact_family),
+                powerpoint_line_box_em(exact_family),
+                font_line_metrics_em(chain_tail_family),
+            )
+        });
+    let _ = std::fs::remove_dir_all(&font_dir);
+
+    let hhea_line = |font: &typst::text::Font| {
+        let instance = measured_instance(font);
+        let ttf = instance.ttf();
+        let upem = f64::from(ttf.units_per_em()).max(1.0);
+        let pitch = (f64::from(ttf.ascender()) - f64::from(ttf.descender())
+            + f64::from(ttf.line_gap()))
+            / upem;
+        let top = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
+        (top, pitch - top, pitch)
+    };
+    let expected_line = hhea_line(&exact_face);
+    let tail_expected_line = hhea_line(chain_tail);
+    assert_ne!(
+        expected_line, tail_expected_line,
+        "the two faces must disagree for the test to discriminate"
+    );
+    let expected_hhea_ascender = {
+        let instance = measured_instance(&exact_face);
+        let ttf = instance.ttf();
+        f64::from(ttf.tables().hhea.ascender) / f64::from(ttf.units_per_em()).max(1.0)
+    };
+    let expected_cap_height = measured_instance(&exact_face).metrics().cap_height.get();
+    let expected_powerpoint =
+        powerpoint_line_box_split_em([powerpoint_face_metrics_em(&exact_face)])
+            .expect("the exact face declares an ascent");
+
+    let line = line.expect("the exact face on the search path provides line metrics");
+    assert!(
+        (line.0 - expected_line.0).abs() < 1e-12
+            && (line.1 - expected_line.1).abs() < 1e-12
+            && (line.2 - expected_line.2).abs() < 1e-12,
+        "line metrics must come from the exact face on the search path, not the in-memory chain tail: {line:?} vs {expected_line:?}"
+    );
+    let hhea_ascender = hhea_ascender.expect("the exact face provides an ascender");
+    assert!(
+        (hhea_ascender - expected_hhea_ascender).abs() < 1e-12,
+        "hhea ascender must come from the exact face: {hhea_ascender} vs {expected_hhea_ascender}"
+    );
+    let cap_height = cap_height.expect("the exact face provides a cap height");
+    assert!(
+        (cap_height - expected_cap_height).abs() < 1e-12,
+        "cap height must come from the exact face: {cap_height} vs {expected_cap_height}"
+    );
+    let powerpoint = powerpoint.expect("the exact face provides a PowerPoint split");
+    assert!(
+        (powerpoint.0 - expected_powerpoint.0).abs() < 1e-12
+            && (powerpoint.1 - expected_powerpoint.1).abs() < 1e-12,
+        "the PowerPoint line box must come from the exact face: {powerpoint:?} vs {expected_powerpoint:?}"
+    );
+
+    // The in-memory face still answers for the family it actually is.
+    let tail_line = tail_line.expect("the in-memory chain tail provides its own metrics");
+    assert!(
+        (tail_line.2 - tail_expected_line.2).abs() < 1e-12,
+        "a family held in memory keeps resolving to that face: {tail_line:?} vs {tail_expected_line:?}"
     );
 }
 

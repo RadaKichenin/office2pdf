@@ -33,7 +33,7 @@ struct CachedFontData {
 
 /// A discovered face, read from disk on first use.
 ///
-/// typst-kit 0.15 keeps its own slots private, and [`line_metric_face_in`]
+/// typst-kit 0.15 keeps its own slots private, and [`line_metric_face_at`]
 /// needs a face's file to tell an Office bundle's copy from the system's.
 struct FontSlot {
     path: Option<std::path::PathBuf>,
@@ -1313,16 +1313,49 @@ mod tests;
 /// compile-time cache.
 #[cfg(not(target_arch = "wasm32"))]
 fn best_face(family: &str) -> Option<typst::text::Font> {
-    if let Some(font) =
-        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
-    {
-        return Some(font);
-    }
-
     let data = active_font_data();
-    best_face_index(&data, family)
-        .and_then(|index| data.fonts.get(index))
-        .and_then(|slot| slot.get())
+    first_face_in_chain(family, |candidate| {
+        select_face_index(&data, candidate)
+            .and_then(|index| data.fonts.get(index))
+            .and_then(|slot| slot.get())
+    })
+}
+
+/// The first face the alias and substitute chain of `family` resolves to,
+/// taking each candidate's conversion-local in-memory face before `on_disk`.
+///
+/// This is the order the compiler selects in: `MinimalWorld` prepends the
+/// conversion's in-memory faces to the same fallback book, so a family held in
+/// memory outranks a copy on disk, but a candidate later in the chain never
+/// outranks one that resolves earlier. Walking the whole chain against the
+/// in-memory faces first broke that: a deck naming Avenir Next LT Pro loads
+/// the bundled Noto Serif into memory as that family's reproducible fallback,
+/// and every metric lookup answered with Noto Serif's line box even when the
+/// exact face was supplied on `--font-path` and painted the run, seating the
+/// block two points high (issue #1629).
+#[cfg(not(target_arch = "wasm32"))]
+fn first_face_in_chain(
+    family: &str,
+    on_disk: impl Fn(&str) -> Option<typst::text::Font>,
+) -> Option<typst::text::Font> {
+    super::font_subst::family_candidates(family)
+        .iter()
+        .find_map(|candidate| {
+            super::font_subst::active_in_memory_font_named(
+                candidate,
+                typst::text::FontVariant::default(),
+            )
+            .or_else(|| on_disk(candidate))
+        })
+}
+
+/// Index into `data` of the regular face registered under exactly `candidate`.
+#[cfg(not(target_arch = "wasm32"))]
+fn select_face_index(data: &CachedFontData, candidate: &str) -> Option<usize> {
+    data.book.select(
+        &candidate.to_lowercase(),
+        typst::text::FontVariant::default(),
+    )
 }
 
 /// The font set the compiler shapes with: the caller's search paths when a
@@ -1332,20 +1365,6 @@ fn active_font_data() -> Arc<CachedFontData> {
     let search_paths = super::font_subst::active_font_search_paths()
         .unwrap_or_else(|| super::font_context::default_font_search_paths().to_vec());
     get_fonts_for_extra_paths(&search_paths)
-}
-
-/// Index into `data` of the face the compiler will shape `family` with; see
-/// [`best_face`] for the alias and substitute chain walked.
-#[cfg(not(target_arch = "wasm32"))]
-fn best_face_index(data: &CachedFontData, family: &str) -> Option<usize> {
-    super::font_subst::family_candidates(family)
-        .iter()
-        .find_map(|candidate| {
-            data.book.select(
-                &candidate.to_lowercase(),
-                typst::text::FontVariant::default(),
-            )
-        })
 }
 
 /// The face Word measures a line box by, which is not always the face it
@@ -1374,31 +1393,29 @@ fn best_face_index(data: &CachedFontData, family: &str) -> Option<usize> {
 /// every host without an Office bundle is unaffected.
 #[cfg(not(target_arch = "wasm32"))]
 fn line_metric_face(family: &str) -> Option<typst::text::Font> {
-    if let Some(font) =
-        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
-    {
-        return Some(font);
-    }
     let data = active_font_data();
-    line_metric_face_in(
-        &data,
-        super::font_context::default_font_search_paths(),
-        macos_system_font_dirs(),
-        family,
-    )
+    first_face_in_chain(family, |candidate| {
+        let shaped_index: usize = select_face_index(&data, candidate)?;
+        line_metric_face_at(
+            &data,
+            super::font_context::default_font_search_paths(),
+            macos_system_font_dirs(),
+            shaped_index,
+        )
+    })
 }
 
-/// [`line_metric_face`] over an explicit font set: `office_font_dirs` hold the
-/// application-bundled faces and `system_font_dirs` the faces that may shadow
-/// them.
+/// The face Word measures the line box of the face at `shaped_index` by: the
+/// system copy that shadows it, if one does, else the face itself.
+/// `office_font_dirs` hold the application-bundled faces and
+/// `system_font_dirs` the faces that may shadow them.
 #[cfg(not(target_arch = "wasm32"))]
-fn line_metric_face_in(
+fn line_metric_face_at(
     data: &CachedFontData,
     office_font_dirs: &[PathBuf],
     system_font_dirs: &[PathBuf],
-    family: &str,
+    shaped_index: usize,
 ) -> Option<typst::text::Font> {
-    let shaped_index: usize = best_face_index(data, family)?;
     let shaped_slot = data.fonts.get(shaped_index)?;
     let shaped: typst::text::Font = shaped_slot.get()?;
     let is_under =
@@ -1427,7 +1444,7 @@ fn line_metric_face_in(
         .find(|candidate| postscript_name(candidate).as_deref() == Some(shaped_name.as_str()));
     if shadowing.is_some() {
         tracing::debug!(
-            family,
+            family = %family_key,
             postscript_name = %shaped_name,
             bundled = %shaped_path.display(),
             "line metrics follow the system face that shadows the Office-bundled copy"
@@ -1480,11 +1497,6 @@ fn cached_family_metric(
     resolve: fn(&str) -> Option<typst::text::Font>,
     compute: impl FnOnce(&typst::text::Font) -> Option<f64>,
 ) -> Option<f64> {
-    if let Some(font) =
-        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
-    {
-        return compute(&font);
-    }
     if super::font_subst::active_font_search_paths().is_some() {
         return resolve(family).and_then(|font| compute(&font));
     }
@@ -1648,11 +1660,6 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
         let top_em: f64 = (f64::from(ttf.ascender()) + f64::from(ttf.line_gap())) / upem;
         (top_em, hhea_pitch_em - top_em, hhea_pitch_em)
     };
-    if let Some(font) =
-        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
-    {
-        return Some(metrics_for(&font));
-    }
     if super::font_subst::active_font_search_paths().is_some() {
         return line_metric_face(family).map(|font| metrics_for(&font));
     }
@@ -1770,8 +1777,8 @@ pub(crate) fn space_advance_em(_family: &str) -> Option<f64> {
 /// family in `cache`.
 ///
 /// Shared by the digit and space metrics so both walk the same resolution
-/// order: an in-memory font handed to the converter, then an explicit search
-/// path, then the font set the compiler itself will use.
+/// order as [`best_face`]: the conversion's in-memory fonts and search paths
+/// when one is active, else the font set the compiler itself will use.
 #[cfg(not(target_arch = "wasm32"))]
 fn face_advance_em(
     family: &str,
@@ -1781,11 +1788,6 @@ fn face_advance_em(
     use std::collections::HashMap;
     use std::sync::Mutex;
 
-    if let Some(font) =
-        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
-    {
-        return advance_for(&font);
-    }
     if super::font_subst::active_font_search_paths().is_some() {
         return best_face(family).and_then(|font| advance_for(&font));
     }
@@ -2191,11 +2193,6 @@ fn powerpoint_family_metrics_em(family: &str) -> Option<(f64, f64)> {
     type FaceMetricsEm = Option<(f64, f64)>;
     static CACHE: OnceLock<Mutex<HashMap<String, FaceMetricsEm>>> = OnceLock::new();
 
-    if let Some(font) =
-        super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
-    {
-        return Some(powerpoint_face_metrics_em(&font));
-    }
     if super::font_subst::active_font_search_paths().is_some() {
         return best_face(family)
             .or_else(|| best_face(crate::defaults::TYPST_DEFAULT_FONT_FAMILY))
