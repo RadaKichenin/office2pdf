@@ -2570,7 +2570,10 @@ fn an_auto_row_is_sized_by_the_series_of_the_face_its_cell_names() {
     ] {
         let book = sheet_with_one_named_cell_font(1, family, size_pt, is_bold);
         let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
-        for normal_font in [theme_scheme_normal_font(11.0), bare_theme_trebuchet_normal_font()] {
+        for normal_font in [
+            theme_scheme_normal_font(11.0),
+            bare_theme_trebuchet_normal_font(),
+        ] {
             assert_eq!(
                 xlsx_cells::printed_grid_row_height_pt(sheet, 1, Some(&normal_font), None),
                 expected,
