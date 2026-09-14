@@ -893,6 +893,7 @@ fn footer_with_runs(runs: Vec<Run>) -> HeaderFooter {
             elements: runs.into_iter().map(HFInline::Run).collect(),
             border: None,
             border_space: None,
+            sheet_section_is_rich: false,
             frame: None,
         }],
         distance_from_edge: None,

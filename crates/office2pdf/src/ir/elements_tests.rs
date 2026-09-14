@@ -200,6 +200,7 @@ fn test_header_footer_with_text() {
             })],
             border: None,
             border_space: None,
+            sheet_section_is_rich: false,
             frame: None,
         }],
     };
@@ -230,6 +231,7 @@ fn test_header_footer_with_page_number() {
             ],
             border: None,
             border_space: None,
+            sheet_section_is_rich: false,
             frame: None,
         }],
     };

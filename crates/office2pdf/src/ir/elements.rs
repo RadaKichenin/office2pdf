@@ -40,6 +40,14 @@ pub struct HeaderFooterParagraph {
     /// leaves between the paragraph text and each rule.
     pub border_space: Option<Insets>,
     pub frame: Option<HeaderFooterFrame>,
+    /// Whether Excel draws this worksheet header/footer section through its
+    /// rich-text path, which seats the text one point lower and one point
+    /// further left than a section drawn as one uniform run (issue #1552).
+    ///
+    /// Set for a section that changes face, size or colour partway through
+    /// its text, or that breaks a line; shared by every paragraph (line) of
+    /// that section. Always `false` for a flow-page story.
+    pub sheet_section_is_rich: bool,
 }
 
 /// Page- or margin-relative positioning for a header/footer paragraph frame.

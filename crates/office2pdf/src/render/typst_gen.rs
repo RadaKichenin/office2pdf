@@ -2810,12 +2810,12 @@ fn write_table_page_setup(
         } else {
             out.push_str(", header: [");
         }
-        generate_sheet_hf_content(out, header, size, &page.margins, ctx);
+        generate_sheet_hf_content(out, header, size, &page.margins, ctx, None);
         out.push(']');
     }
 
     if let Some(footer) = &page.footer {
-        if let Some(band) = sheet_footer_band_pt(footer, page.margins.bottom) {
+        if let Some(seat) = sheet_footer_seat(footer, page.margins.bottom) {
             out.push_str(", footer-descent: 0pt, footer: ");
             if hf_needs_context(footer) {
                 out.push_str("context ");
@@ -2823,22 +2823,22 @@ fn write_table_page_setup(
             let _ = write!(
                 out,
                 "block(width: 100%, height: {}pt)[#set text(bottom-edge: {}); #place(bottom, block(width: 100%)[",
-                format_f64(band),
-                sheet_footer_bottom_edge(footer),
+                format_f64(seat.band_pt),
+                seat.story_bottom_edge(),
             );
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, Some(&seat));
             out.push_str("])]");
         } else if hf_needs_stack_offset(footer) {
             out.push_str(", footer: context { let footer_content = block(width: 100%)[");
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, None);
             out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
         } else if hf_needs_context(footer) {
             out.push_str(", footer: context [");
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, None);
             out.push(']');
         } else {
             out.push_str(", footer: [");
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, None);
             out.push(']');
         }
     }
@@ -2869,6 +2869,7 @@ fn generate_sheet_hf_content(
     size: &PageSize,
     margins: &Margins,
     ctx: &mut GenCtx,
+    seat: Option<&SheetFooterSeat>,
 ) {
     let scaled_box: Option<(f64, f64)> = hf
         .sheet_print_scale
@@ -2891,54 +2892,137 @@ fn generate_sheet_hf_content(
             format_f64(width_pt),
         );
     }
-    generate_hf_content(out, hf, ctx);
+    generate_hf_content(out, hf, ctx, seat);
     if scaled_box.is_some() {
         out.push_str("]]");
     }
 }
 
-/// The band a seated sheet footer spans, from the bottom margin line down to
-/// the bottom of its text's line box (issue #1142).
+/// What Excel leaves between `<pageMargins>/@footer` and the bottom of the
+/// footer text's line box, in sheet points.
 ///
-/// Excel measures a printed footer up from the paper through
-/// `<pageMargins>/@footer`, so `footer-descent: 0pt` pins Typst's footer origin
-/// on the bottom margin line and a block spanning the remainder ends where
-/// Excel's footer text ends. `None` leaves the story on Typst's own descent:
-/// either the seat is unknown, or the footer margin reaches past the bottom
-/// margin and there is no band to span.
-fn sheet_footer_band_pt(footer: &HeaderFooter, bottom_margin_pt: f64) -> Option<f64> {
-    footer
-        .distance_from_edge
-        // Keep float noise (54 - 23.000000000000004) out of the emitted source.
-        .map(|distance| ((bottom_margin_pt - distance) * 100.0).round() / 100.0)
-        .filter(|band| *band > 0.0)
+/// Measured on Excel-for-Mac exports of one-factor variants of
+/// `tests/fixtures/xlsx/headerFooterTest.xlsx`. A 12pt Calibri footer over a
+/// 0.5in (36pt) footer margin puts its baseline 41pt above the page's bottom
+/// edge; Calibri's `hhea` descender is 0.26855em, so 36 + 2 + 3.22 = 41.22
+/// lands on the whole point Excel prints it at. The same 2pt holds across the
+/// series 6, 8, 12, 14, 20, 40 and 80pt, across Arial, Verdana, Times New
+/// Roman, Aptos and Segoe UI, and at footer margins of 0.3, 0.5, 0.75 and
+/// 1.0in (issue #1142).
+const SHEET_FOOTER_BAND_INSET_PT: f64 = 2.0;
+
+/// How much lower Excel's rich-text path seats a footer section than its
+/// plain path, in sheet points (issue #1552).
+///
+/// On native exports of `tests/fixtures/xlsx/issue_1181_fit_to_height.xlsx`
+/// every section that splits its text — the 1pt `#` marker run ahead of the
+/// Sensitivity label, a face switch mid-sentence, or a `_x000D_` ahead of
+/// otherwise uniform text — prints one whole point below, and one point
+/// further left than, the same text as one uniform run: Aptos 8pt at 24pt
+/// against 25pt, across 10, 16, 20, 24 and 40pt and Arial and Calibri alike,
+/// and per section, a rich left label beside a plain right one landing one
+/// point apart on the same page. The horizontal point is not modelled here.
+const SHEET_RICH_SECTION_DROP_PT: f64 = 1.0;
+
+/// Where a seated sheet footer's block sits and where each of its sections'
+/// baselines land (issues #1142, #1552).
+struct SheetFooterSeat {
+    /// Height of the band block, from the bottom margin line down to the
+    /// band Excel seats the footer on, in paper points.
+    band_pt: f64,
+    /// Per paragraph, how far above the band's bottom its baseline sits, in
+    /// paper points; `None` where no run's face has metrics.
+    section_lift_pt: Vec<Option<f64>>,
 }
 
-/// The `bottom-edge` a seated sheet footer's text takes, as a Typst value.
+impl SheetFooterSeat {
+    /// The `bottom-edge` Typst value that puts a section's baseline `lift`
+    /// points above the band: a negative edge reaches that far below the
+    /// baseline, and `#place(bottom)` rests it on the band.
+    fn bottom_edge_value(lift_pt: f64) -> String {
+        format!("-{}pt", format_f64(lift_pt))
+    }
+
+    /// The story-wide `bottom-edge`: the first section that resolved, so a
+    /// section whose face has no metrics still sits near its neighbours, and
+    /// Typst's normalised descender only when none did.
+    fn story_bottom_edge(&self) -> String {
+        self.section_lift_pt
+            .iter()
+            .flatten()
+            .next()
+            .map(|lift_pt| Self::bottom_edge_value(*lift_pt))
+            .unwrap_or_else(|| "\"descender\"".to_string())
+    }
+
+    /// The `bottom-edge` the paragraph at `index` states for itself.
+    fn section_bottom_edge(&self, index: usize) -> Option<String> {
+        self.section_lift_pt
+            .get(index)
+            .copied()
+            .flatten()
+            .map(Self::bottom_edge_value)
+    }
+}
+
+/// Seat a sheet footer where Excel prints it (issues #1142, #1552).
 ///
-/// The band's bottom is where Excel's footer text bottoms out, so what sits
-/// between it and the last baseline is that line's own sub-baseline share —
-/// the face's bare `hhea` descent, which is what the native exports measure
-/// (issue #1142). Typst's `"descender"` is its *normalised* one, a different
-/// quantity, and is only the fallback for a line whose face cannot be read.
+/// Excel lays the footer out in the sheet's own coordinate space — the fit
+/// scale multiplies every position afterwards, as it does the horizontal box
+/// of issue #1510 — and works in whole points there:
 ///
-/// The deepest of the footer's paragraphs wins because Excel's left, centre
-/// and right sections share one line — [`generate_hf_content`] lays them out
-/// as one grid row — and a line bottoms out on whichever of its runs reaches
-/// furthest below the baseline. `bottom-edge` is one `set text` value for the
-/// whole story, so a footer that really does stack lines takes the deepest
-/// face's ratio rather than its last line's; the two differ by well under a
-/// point on any face pair measured here.
-fn sheet_footer_bottom_edge(footer: &HeaderFooter) -> String {
-    footer
+/// 1. the footer margin floors to a whole sheet point, plus the 2pt band;
+/// 2. the section's deepest run adds its `hhea` descent at the sheet size;
+/// 3. the sum rounds to a whole point;
+/// 4. a section on the rich-text path drops one more point.
+///
+/// Native exports of the reported workbook's 8pt label: 23 + 2.25 = 25.25
+/// rounds to 25, and the rich label prints at 24pt above the Letter page's
+/// bottom edge; the same sheet fitted at 0.78 floors 21.6 / 0.78 = 27.69 to
+/// 27, seats 29 + 2.25 on 31, drops to 30 sheet points and prints at
+/// 30 x 0.78 = 23.40pt above the A3 paper. Both pages had been drawn from a
+/// paper-floored 23pt band with the *first* run's face — the 1pt `#`
+/// marker's Trebuchet MS — scaled to the 8pt Aptos run, 0.78pt and 1.50pt
+/// above where Excel prints them.
+///
+/// `footer-descent: 0pt` pins Typst's footer origin on the bottom margin line
+/// and a block spanning the band's remainder ends where Excel's band does;
+/// each section then states its own `bottom-edge`. `None` leaves the story on
+/// Typst's own descent: either the margin is unknown, or it reaches past the
+/// bottom margin and there is no band to span.
+fn sheet_footer_seat(footer: &HeaderFooter, bottom_margin_pt: f64) -> Option<SheetFooterSeat> {
+    let footer_margin_pt: f64 = footer.distance_from_edge?;
+    let scale: f64 = footer
+        .sheet_print_scale
+        .filter(|scale| *scale > 0.0)
+        .unwrap_or(1.0);
+    // The quotient of two decimals is not exact in binary; a margin that is
+    // a whole number of sheet points must not floor to the one below it.
+    let band_sheet_pt: f64 = (footer_margin_pt / scale + 1e-9).floor() + SHEET_FOOTER_BAND_INSET_PT;
+    // Keep float noise (54 - 23.000000000000004) out of the emitted source.
+    let band_pt: f64 = round_to_hundredths(bottom_margin_pt - band_sheet_pt * scale);
+    if band_pt <= 0.0 {
+        return None;
+    }
+    let section_lift_pt: Vec<Option<f64>> = footer
         .paragraphs
         .iter()
-        .filter_map(|paragraph| {
-            text::sheet_line_box_descent_em(&hf_paragraph_metric_runs(paragraph))
+        .map(|paragraph| {
+            let deepest_descent_pt: f64 =
+                text::sheet_line_deepest_descent_pt(&hf_paragraph_metric_runs(paragraph), scale)?;
+            let drop_pt: f64 = if paragraph.sheet_section_is_rich {
+                SHEET_RICH_SECTION_DROP_PT
+            } else {
+                0.0
+            };
+            let seat_sheet_pt: f64 = (band_sheet_pt + deepest_descent_pt).round() - drop_pt;
+            Some(round_to_hundredths((seat_sheet_pt - band_sheet_pt) * scale))
         })
-        .max_by(|a, b| a.total_cmp(b))
-        .map(|descent_em| format!("-{}em", format_f64(descent_em)))
-        .unwrap_or_else(|| "\"descender\"".to_string())
+        .collect();
+    Some(SheetFooterSeat {
+        band_pt,
+        section_lift_pt,
+    })
 }
 
 /// Check if a header/footer contains any context-dependent fields (page number or total pages).
@@ -2965,7 +3049,18 @@ fn hf_needs_stack_offset(hf: &HeaderFooter) -> bool {
 }
 
 /// Generate inline content for a header or footer.
-fn generate_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
+///
+/// `seat` is a seated sheet footer's per-section `bottom-edge`: Excel decides
+/// the plain or rich-text seat per section, so each grid cell states its own
+/// edge and the row aligns its cells' bottoms on the band (issue #1552).
+fn generate_hf_content(
+    out: &mut String,
+    hf: &HeaderFooter,
+    ctx: &mut GenCtx,
+    seat: Option<&SheetFooterSeat>,
+) {
+    let section_bottom_edge =
+        |index: usize| -> Option<String> { seat.and_then(|seat| seat.section_bottom_edge(index)) };
     // Excel's left/center/right header sections share one line; stacking
     // them as separate lines pushed sections onto extra rows.
     let alignments: Vec<Option<Alignment>> =
@@ -2985,13 +3080,20 @@ fn generate_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
         };
     if is_single_line_sections {
         out.push_str("#grid(columns: (1fr, 1fr, 1fr), ");
+        if seat.is_some() {
+            out.push_str("align: bottom, ");
+        }
         for slot in [Alignment::Left, Alignment::Center, Alignment::Right] {
             let _ = write!(out, "[");
-            if let Some(para) = hf
+            if let Some((index, para)) = hf
                 .paragraphs
                 .iter()
-                .find(|p| p.style.alignment == Some(slot))
+                .enumerate()
+                .find(|(_, p)| p.style.alignment == Some(slot))
             {
+                if let Some(bottom_edge) = section_bottom_edge(index) {
+                    let _ = write!(out, "#set text(bottom-edge: {bottom_edge}); ");
+                }
                 generate_hf_styled_paragraph(out, para, ctx);
             }
             out.push_str("], ");
@@ -3002,6 +3104,9 @@ fn generate_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
     for (i, para) in hf.paragraphs.iter().enumerate() {
         if i > 0 {
             out.push_str("\\\n");
+        }
+        if let Some(bottom_edge) = section_bottom_edge(i) {
+            let _ = write!(out, "#set text(bottom-edge: {bottom_edge}); ");
         }
         generate_hf_styled_paragraph(out, para, ctx);
     }

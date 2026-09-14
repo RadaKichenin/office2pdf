@@ -1371,24 +1371,43 @@ pub(super) fn word_line_box_descent_em(runs: &[Run]) -> Option<f64> {
     Some(advance_em - top_em)
 }
 
-/// What sits below the baseline of an Excel sheet header or footer line, in em
-/// of the line's face.
+/// How far an Excel sheet header or footer line reaches below its baseline,
+/// in points of the sheet's own coordinate space.
 ///
-/// The face's bare `hhea` descender, deliberately *not*
-/// [`word_line_box_descent_em`]: that one carries Word's 1.3x East Asian line
-/// box and the line gap Word keeps above the baseline, neither of which any
-/// Excel export measured here shows. Native Excel-for-Mac exports put a footer
-/// baseline exactly its `hhea` descent above the band Excel seats the text on —
-/// Calibri 0.26855em, Arial 0.21191em, Verdana 0.20996em, Times New Roman
-/// 0.21631em and Aptos 0.28174em all land on the whole point Excel prints
-/// (issue #1142).
+/// Each run reaches its face's bare `hhea` descender at its own size —
+/// deliberately *not* [`word_line_box_descent_em`], which carries Word's 1.3x
+/// East Asian line box and the line gap Word keeps above the baseline,
+/// neither of which any Excel export measured here shows. Native
+/// Excel-for-Mac exports seat a footer baseline its `hhea` descent above the
+/// band Excel leaves for it — Calibri 0.26855em, Arial 0.21191em, Verdana
+/// 0.20996em, Times New Roman 0.21631em and Aptos 0.28174em all land on the
+/// whole point Excel prints (issue #1142).
 ///
-/// `None` when the face's metrics are unknown, which leaves the story on the
-/// renderer's own seat.
-pub(super) fn sheet_line_box_descent_em(runs: &[Run]) -> Option<f64> {
-    let family: &str = east_asian_aware_metric_family(runs)?;
-    let (_, descent_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
-    (descent_em > 0.0).then_some(descent_em)
+/// The line bottoms out on whichever run reaches furthest: not the first
+/// run's face, and not the largest run. A 20pt Trebuchet MS `#` ahead of 8pt
+/// Aptos text seats the line on the 20pt run's 4.44pt, and 13pt Aptos beside
+/// 15pt Arial on the Aptos run's 3.66pt rather than the larger run's 3.18pt,
+/// in either order. The reported Sensitivity label — a 1pt marker run in the
+/// Normal font ahead of the 8pt Aptos text — had taken the marker's face for
+/// the label's descent (issue #1552).
+///
+/// `scale` is the fit-to-page factor already multiplied into the runs' sizes
+/// (issue #940), divided back out so the result is in the sheet points the
+/// seat is rounded in. `None` when no run's face has metrics, which leaves the
+/// story on the renderer's own seat.
+pub(super) fn sheet_line_deepest_descent_pt(runs: &[Run], scale: f64) -> Option<f64> {
+    runs.iter()
+        .filter_map(|run| {
+            let family: &str = east_asian_aware_metric_family(std::slice::from_ref(run))?;
+            let (_, descent_em, _) = crate::render::pdf::font_line_metrics_em(family)?;
+            let size_pt: f64 = run
+                .style
+                .font_size
+                .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_SIZE_PT)
+                / scale;
+            (descent_em > 0.0).then_some(descent_em * size_pt)
+        })
+        .reduce(f64::max)
 }
 
 /// Where Word seats a header story's first baseline, in em below the
