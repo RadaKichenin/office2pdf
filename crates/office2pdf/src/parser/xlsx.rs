@@ -25,6 +25,8 @@ mod print_headings;
 mod print_options;
 #[path = "xlsx_row_boundaries.rs"]
 mod row_boundaries;
+#[path = "xlsx_sheet_format.rs"]
+mod sheet_format;
 #[path = "xlsx_sparklines.rs"]
 mod sparklines;
 #[path = "xlsx_tables.rs"]
@@ -490,11 +492,15 @@ fn empty_sheet_context(
     normal_font: Option<&NormalFont>,
     theme: Option<&umya_spreadsheet::structs::drawing::Theme>,
     row_boundary_points: Option<&row_boundaries::RowBoundaryPoints>,
+    has_sheet_format_properties: bool,
 ) -> SheetContext {
     let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
     let default_width_pt: f64 = default_column_width_pt(
         declared_default_column_width(sheet),
-        declared_base_column_width(sheet),
+        base_column_width_chars(
+            declared_base_column_width(sheet),
+            has_sheet_format_properties,
+        ),
         unit_pt,
     );
 
@@ -709,6 +715,9 @@ impl XlsxParser {
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
         let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
+        // umya cannot tell an absent `<sheetFormatPr>` from a present one,
+        // and Excel for Mac prices default columns differently (issue #1656).
+        let format_properties_less_sheets = sheet_format::sheets_without_format_properties(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data, Some(book.get_theme()));
@@ -756,6 +765,7 @@ impl XlsxParser {
                 cell_indents.get(sheet.get_name()),
                 row_boundary_points.get(sheet.get_name()),
                 sparklines_by_sheet.get(sheet.get_name()),
+                !format_properties_less_sheets.contains(sheet.get_name()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -769,6 +779,7 @@ impl XlsxParser {
                         normal_font.as_ref(),
                         Some(book.get_theme()),
                         row_boundary_points.get(sheet.get_name()),
+                        !format_properties_less_sheets.contains(sheet.get_name()),
                     );
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()
@@ -1032,6 +1043,9 @@ impl Parser for XlsxParser {
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
         let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
+        // umya cannot tell an absent `<sheetFormatPr>` from a present one,
+        // and Excel for Mac prices default columns differently (issue #1656).
+        let format_properties_less_sheets = sheet_format::sheets_without_format_properties(data);
         let print_options_by_sheet = print_options::sheets_print_options(data);
         let mut table_styles = tables::extract_table_styles(data);
         let normal_font = extract_normal_font(data, Some(book.get_theme()));
@@ -1077,6 +1091,7 @@ impl Parser for XlsxParser {
                 cell_indents.get(sheet.get_name()),
                 row_boundary_points.get(sheet.get_name()),
                 sparklines_by_sheet.get(sheet.get_name()),
+                !format_properties_less_sheets.contains(sheet.get_name()),
             ) else {
                 // A sheet without used cells can still carry drawings; give
                 // its images a page instead of dropping them.
@@ -1090,6 +1105,7 @@ impl Parser for XlsxParser {
                         normal_font.as_ref(),
                         Some(book.get_theme()),
                         row_boundary_points.get(sheet.get_name()),
+                        !format_properties_less_sheets.contains(sheet.get_name()),
                     );
                     let images: Vec<crate::ir::SheetImage> = raw_images
                         .unwrap_or_default()

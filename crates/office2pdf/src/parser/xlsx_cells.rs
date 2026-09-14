@@ -844,28 +844,59 @@ pub(super) fn resolve_indent_unit_pt(normal_font: Option<&NormalFont>) -> f64 {
     }
 }
 
+/// ECMA-376 §18.3.1.81's default for `sheetFormatPr@baseColWidth`, which
+/// Excel for Mac applies when the sheet writes the element without the
+/// attribute (the issue #621 probes, all of which declared the element).
+const ECMA_BASE_COLUMN_WIDTH_CHARS: u32 = 8;
+
+/// Excel for Mac's own default column ("10.83" in its UI), applied when the
+/// sheet writes no `<sheetFormatPr>` element at all (issue #1656).
+const EXCEL_MAC_BASE_COLUMN_WIDTH_CHARS: u32 = 10;
+
+/// The character base a sheet's default columns are priced on.
+///
+/// A declared `baseColWidth` wins. Otherwise the base depends on whether the
+/// worksheet wrote `<sheetFormatPr>` at all, which umya's model cannot tell
+/// apart. Measured one factor per native Excel-for-Mac export of
+/// `100-customers.xlsx` (issue #1656): with no element the default column
+/// prints 75pt on a 7pt unit (`10 × 7 + 5`), adding
+/// `<sheetFormatPr defaultRowHeight="15"/>` alone drops it to 61pt
+/// (`8 × 7 + 5`), and `baseColWidth="10"` restores 75pt; the same
+/// `base × unit + 5` held at the 6pt and 8pt units (65/85pt).
+pub(super) fn base_column_width_chars(
+    declared_base_col_width_chars: Option<u32>,
+    has_sheet_format_properties: bool,
+) -> u32 {
+    declared_base_col_width_chars.unwrap_or(if has_sheet_format_properties {
+        ECMA_BASE_COLUMN_WIDTH_CHARS
+    } else {
+        EXCEL_MAC_BASE_COLUMN_WIDTH_CHARS
+    })
+}
+
 /// Width in points of a column with no `<col>` entry.
 ///
 /// With no declared `defaultColWidth` either, Excel prints
-/// `baseColWidth × unit + 5` points — not 8.43 character units — where
-/// `baseColWidth` defaults to 8 when `sheetFormatPr` omits it too. Measured
-/// by the issue #621 probes: no-baseColWidth workbooks print 45/53/61pt at
-/// unit 5/6/7, and the round-3 probes calibri11base10/calibri11base12
-/// (`<sheetFormatPr baseColWidth="10|12"/>`, no defaultColWidth, 6pt
-/// Calibri-11 unit) print 65pt and 77pt default columns — killing the
-/// ignore-baseColWidth model (53pt). When the sheet does declare
-/// `defaultColWidth`, it outranks `baseColWidth` (ECMA-376 §18.3.1.81) and
-/// is assumed to quantize like any declared width (the probes only covered
-/// the absent case; declared widths quantize this way, so the declared
-/// default is routed through the same rule).
+/// `baseColWidth × unit + 5` points — not 8.43 character units — with the
+/// base from `base_column_width_chars`. Measured by the issue #621 probes:
+/// base-8 workbooks print 45/53/61pt at unit 5/6/7, and the round-3 probes
+/// calibri11base10/calibri11base12 (`<sheetFormatPr baseColWidth="10|12"/>`,
+/// no defaultColWidth, 6pt Calibri-11 unit) print 65pt and 77pt default
+/// columns — killing the ignore-baseColWidth model (53pt). When the sheet
+/// does declare `defaultColWidth`, it outranks `baseColWidth` (ECMA-376
+/// §18.3.1.81) and quantizes like any declared width: the issue #1656 probe
+/// declaring `defaultColWidth="8.43"` printed `round_half_up(8.43 × 7) = 59pt`.
+///
+/// TODO(#1657): the flat 5pt padding is the Normal font's inset pair, which
+/// steps to 7pt at a 9pt unit; a units 9–12 sweep is needed before it moves.
 pub(super) fn default_column_width_pt(
     declared_width_chars: Option<f64>,
-    base_col_width_chars: Option<u32>,
+    base_col_width_chars: u32,
     column_unit_pt: f64,
 ) -> f64 {
     match declared_width_chars {
         Some(width_chars) => round_half_up_pt(width_chars * column_unit_pt),
-        None => f64::from(base_col_width_chars.unwrap_or(8)) * column_unit_pt + 5.0,
+        None => f64::from(base_col_width_chars) * column_unit_pt + 5.0,
     }
 }
 
@@ -3177,6 +3208,7 @@ pub(super) fn prepare_sheet_context(
     cell_indents: Option<&super::indent::CellIndentLevels>,
     row_boundary_points: Option<&super::row_boundaries::RowBoundaryPoints>,
     sparklines: Option<&HashMap<(u32, u32), crate::ir::SparklineInfo>>,
+    has_sheet_format_properties: bool,
 ) -> Option<(SheetContext, u32, u32)> {
     let (worksheet_max_col, mut max_row) = sheet.get_highest_column_and_row();
     let sparklines = sparklines.cloned().unwrap_or_default();
@@ -3213,7 +3245,10 @@ pub(super) fn prepare_sheet_context(
     let unit_pt: f64 = resolve_column_unit_pt(sheet, normal_font);
     let default_width_pt: f64 = default_column_width_pt(
         declared_default_column_width(sheet),
-        declared_base_column_width(sheet),
+        base_column_width_chars(
+            declared_base_column_width(sheet),
+            has_sheet_format_properties,
+        ),
         unit_pt,
     );
     let cell_indents: super::indent::CellIndentLevels = cell_indents.cloned().unwrap_or_default();

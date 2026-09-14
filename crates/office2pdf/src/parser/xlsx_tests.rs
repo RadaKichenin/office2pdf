@@ -425,25 +425,136 @@ fn test_declared_column_width_quantizes_to_integer_points() {
 }
 
 /// A column with no `<col>` entry and no declared `defaultColWidth` prints at
-/// `baseColWidth × unit + 5` points — NOT 8.43 character units — where
-/// `baseColWidth` defaults to 8 when `sheetFormatPr` does not declare it.
-/// Verified by the issue #621 probes: at the 6pt Calibri-11 unit,
-/// baseColWidth 10 → 65pt and 12 → 77pt (round-3 probes calibri11base10/12),
-/// absent → 53pt; units 5/7 with no baseColWidth → 45/61pt. A declared
-/// `defaultColWidth` outranks `baseColWidth` and goes through the
-/// declared-units quantization instead.
+/// `baseColWidth × unit + 5` points — NOT 8.43 character units. Verified by
+/// the issue #621 probes: at the 6pt Calibri-11 unit, baseColWidth 10 → 65pt
+/// and 12 → 77pt (round-3 probes calibri11base10/12), the ECMA base 8 → 53pt;
+/// units 5/7 at base 8 → 45/61pt. A declared `defaultColWidth` outranks
+/// `baseColWidth` and goes through the declared-units quantization instead.
 #[test]
 fn test_default_column_width_is_base_col_width_units_plus_five_points() {
-    assert_eq!(default_column_width_pt(None, None, 5.0), 45.0);
-    assert_eq!(default_column_width_pt(None, None, 6.0), 53.0);
-    assert_eq!(default_column_width_pt(None, None, 7.0), 61.0);
+    assert_eq!(default_column_width_pt(None, 8, 5.0), 45.0);
+    assert_eq!(default_column_width_pt(None, 8, 6.0), 53.0);
+    assert_eq!(default_column_width_pt(None, 8, 7.0), 61.0);
     // Measured baseColWidth probes (no defaultColWidth): 10 → 65, 12 → 77.
-    assert_eq!(default_column_width_pt(None, Some(10), 6.0), 65.0);
-    assert_eq!(default_column_width_pt(None, Some(12), 6.0), 77.0);
+    assert_eq!(default_column_width_pt(None, 10, 6.0), 65.0);
+    assert_eq!(default_column_width_pt(None, 12, 6.0), 77.0);
     // Declared defaultColWidth quantizes like any declared width and
     // outranks baseColWidth.
-    assert_eq!(default_column_width_pt(Some(10.6), None, 6.0), 64.0);
-    assert_eq!(default_column_width_pt(Some(10.6), Some(12), 6.0), 64.0);
+    assert_eq!(default_column_width_pt(Some(10.6), 8, 6.0), 64.0);
+    assert_eq!(default_column_width_pt(Some(10.6), 12, 6.0), 64.0);
+}
+
+/// The base column width depends on whether the worksheet writes a
+/// `<sheetFormatPr>` element at all, not only on its `baseColWidth`
+/// attribute. Measured one factor at a time on native Excel-for-Mac exports
+/// of `100-customers.xlsx` (issue #1656): with no element the default column
+/// prints `10 × unit + 5` (75pt at the 7pt Malgun Gothic 12 unit, 65pt at
+/// 6pt, 85pt at 8pt); adding `<sheetFormatPr defaultRowHeight="15"/>` alone
+/// drops it to `8 × unit + 5` (61pt), `baseColWidth="10"` restores 75pt, and
+/// `defaultColWidth="8.43"` quantizes like a declared width (59pt).
+#[test]
+fn test_absent_sheet_format_pr_prices_default_columns_at_excel_mac_base_ten() {
+    assert_eq!(base_column_width_chars(None, false), 10);
+    assert_eq!(base_column_width_chars(None, true), 8);
+    assert_eq!(base_column_width_chars(Some(12), true), 12);
+
+    let absent: u32 = base_column_width_chars(None, false);
+    let present: u32 = base_column_width_chars(None, true);
+    for (unit_pt, expected_pt) in [(6.0, 65.0), (7.0, 75.0), (8.0, 85.0)] {
+        assert_eq!(
+            default_column_width_pt(None, absent, unit_pt),
+            expected_pt,
+            "no sheetFormatPr at a {unit_pt}pt unit"
+        );
+    }
+    assert_eq!(default_column_width_pt(None, present, 7.0), 61.0);
+    assert_eq!(
+        default_column_width_pt(None, base_column_width_chars(Some(10), true), 7.0),
+        75.0
+    );
+    assert_eq!(default_column_width_pt(Some(8.43), absent, 7.0), 59.0);
+}
+
+/// Remove every `<name .../>` or `<name ...>...</name>` element from the
+/// workbook's worksheet parts. umya's writer always emits `<sheetFormatPr>`,
+/// so the element-less shape Excel itself writes for `100-customers.xlsx`
+/// has to be produced by editing the archive.
+fn strip_worksheet_element(xlsx: &[u8], element_name: &str) -> Vec<u8> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(xlsx.to_vec())).unwrap();
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let open_tag: String = format!("<{element_name}");
+    let close_tag: String = format!("</{element_name}>");
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).unwrap();
+        let name: String = file.name().to_string();
+        let mut contents: Vec<u8> = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut contents).unwrap();
+        if name.starts_with("xl/worksheets/") && name.ends_with(".xml") {
+            let mut text: String = String::from_utf8(contents).unwrap();
+            while let Some(start) = text.find(&open_tag) {
+                let tag_end: usize = start + text[start..].find('>').unwrap();
+                let end: usize = if text[..=tag_end].ends_with("/>") {
+                    tag_end + 1
+                } else {
+                    let close: usize = text[tag_end..].find(&close_tag).unwrap();
+                    tag_end + close + close_tag.len()
+                };
+                text.replace_range(start..end, "");
+            }
+            contents = text.into_bytes();
+        }
+        writer
+            .start_file(name, zip::write::FileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut writer, &contents).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+/// End to end on a package: the same Calibri-11 workbook prints 53pt default
+/// columns while its worksheet declares `<sheetFormatPr>` and 65pt once the
+/// element is removed, the way Excel for Mac prints a sheet it never wrote
+/// the element for (issue #1656).
+#[test]
+fn test_workbook_without_sheet_format_pr_prints_ten_unit_default_columns() {
+    // umya also writes an auto-width `<col>` for every used column; drop
+    // them so all three printed columns are default columns.
+    let declared = strip_worksheet_element(
+        &build_xlsx_bytes("Sheet1", &[("A1", "x"), ("C3", "y")]),
+        "cols",
+    );
+    let undeclared = strip_worksheet_element(&declared, "sheetFormatPr");
+    let worksheet_part = |xlsx: &[u8]| -> String {
+        let mut archive = zip::ZipArchive::new(Cursor::new(xlsx.to_vec())).unwrap();
+        let mut text = String::new();
+        std::io::Read::read_to_string(
+            &mut archive.by_name("xl/worksheets/sheet1.xml").unwrap(),
+            &mut text,
+        )
+        .unwrap();
+        text
+    };
+    assert!(worksheet_part(&declared).contains("<sheetFormatPr"));
+    assert!(!worksheet_part(&undeclared).contains("sheetFormatPr"));
+
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&declared, &ConvertOptions::default()).unwrap();
+    let declared_widths: Vec<f64> = get_sheet_page(&doc, 0).table.column_widths.clone();
+    assert_eq!(
+        declared_widths,
+        vec![53.0; 3],
+        "ECMA base 8 while the element is present"
+    );
+
+    let (doc, _warnings) = parser
+        .parse(&undeclared, &ConvertOptions::default())
+        .unwrap();
+    let undeclared_widths: Vec<f64> = get_sheet_page(&doc, 0).table.column_widths.clone();
+    assert_eq!(
+        undeclared_widths,
+        vec![65.0; 3],
+        "Excel for Mac's base 10 once the element is absent"
+    );
 }
 
 /// `declared_base_column_width` surfaces `sheetFormatPr@baseColWidth` only
@@ -1444,7 +1555,7 @@ fn test_drawing_only_sheet_resolves_anchors_with_normal_font_metric() {
     );
     let image: &crate::ir::SheetImage = &page.images[0];
 
-    let column_pt: f64 = default_column_width_pt(None, None, 6.0);
+    let column_pt: f64 = default_column_width_pt(None, 8, 6.0);
     assert_eq!(
         column_pt, 53.0,
         "Calibri-11 default column must be 53pt, got {column_pt}"
@@ -1509,7 +1620,7 @@ fn overrun_sweep_picture_width_pt(
         theme_scheme: None,
         theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
-    let ctx: SheetContext = empty_sheet_context(sheet, Some(&normal_font), None, None);
+    let ctx: SheetContext = empty_sheet_context(sheet, Some(&normal_font), None, None, true);
     let placed: crate::ir::SheetImage = anchored_image(
         xlsx_drawing::RawImageAnchor {
             from_row: 6,
@@ -1610,7 +1721,7 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
         theme_scheme: None,
         theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
-    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None);
+    let calibri_ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None, true);
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_11)), 6.0);
     assert_eq!(calibri_ctx.default_column_width_pt, 53.0);
     assert_eq!(calibri_ctx.normal_font, Some(calibri_11));
@@ -1627,14 +1738,14 @@ fn test_empty_sheet_context_derives_metric_from_normal_font() {
     };
     assert_eq!(resolve_column_unit_pt(sheet, Some(&calibri_8)), 4.0);
     assert_eq!(
-        empty_sheet_context(sheet, Some(&calibri_8), None, None).default_column_width_pt,
+        empty_sheet_context(sheet, Some(&calibri_8), None, None, true).default_column_width_pt,
         37.0
     );
 
     // No readable Normal font: the shared cell-font fallback finds no cells
     // on an empty sheet and keeps the legacy 5.25pt unit (7px × 0.75); the
     // #621 probes never covered a stylesheet-less workbook.
-    let fallback_ctx = empty_sheet_context(sheet, None, None, None);
+    let fallback_ctx = empty_sheet_context(sheet, None, None, None, true);
     assert_eq!(resolve_column_unit_pt(sheet, None), 5.25);
     assert_eq!(fallback_ctx.default_column_width_pt, 8.0 * 5.25 + 5.0);
     assert_eq!(fallback_ctx.normal_font, None);
@@ -1821,7 +1932,7 @@ fn test_empty_sheet_context_reads_declared_column_widths() {
         theme_ui_script_faces: ThemeUiScriptFaces::default(),
     };
 
-    let ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None);
+    let ctx = empty_sheet_context(sheet, Some(&calibri_11), None, None, true);
 
     assert_eq!((ctx.col_start, ctx.col_end), (1, 3));
     assert_eq!(ctx.column_widths.len(), 3);
@@ -1842,7 +1953,7 @@ fn test_empty_sheet_context_without_cols_keeps_the_default_window() {
     let book = umya_spreadsheet::new_file();
     let sheet: &umya_spreadsheet::Worksheet = book.get_sheet(&0).unwrap();
 
-    let ctx = empty_sheet_context(sheet, None, None, None);
+    let ctx = empty_sheet_context(sheet, None, None, None, true);
 
     assert!(ctx.column_widths.is_empty());
     assert_eq!(ctx.num_cols, 0);
