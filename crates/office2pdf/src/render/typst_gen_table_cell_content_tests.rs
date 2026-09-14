@@ -4045,6 +4045,43 @@ fn sheet_wrapped_line_advance_reproduces_the_native_excel_export() {
     }
 }
 
+/// Trebuchet MS advances its wrapped lines on its own series, checked against
+/// the native Excel-for-Mac export of the issue's fixture and of a probe
+/// workbook that swept the face over every size the table states (issue
+/// #1551; `/Volumes/T7/scratch/issue-1551`).
+///
+/// The fixture's three-line B7 note at Trebuchet MS 10 advances 13.00pt
+/// natively where the face's bare `hhea` line gives 11.89pt. The probe pairs
+/// the face with an Arial control that reproduced its stored series on all
+/// twenty-one sizes; Trebuchet MS diverges from Arial at 16, 26, 30, 40 and
+/// 48pt, so it cannot be lent Arial's column.
+#[test]
+fn sheet_wrapped_line_advance_reproduces_the_trebuchet_ms_probe() {
+    // (font size pt, advance measured on the native export pt)
+    let measured: [(f64, f64); 8] = [
+        (10.0, 13.0),
+        (16.0, 20.0),
+        (24.0, 29.0),
+        (26.0, 31.0),
+        (30.0, 36.0),
+        (40.0, 48.0),
+        (48.0, 57.0),
+        (8.0, 11.0),
+    ];
+
+    for (font_size_pt, native_advance_pt) in measured {
+        let advance_pt: f64 = sheet_wrapped_line_advance_pt("Trebuchet MS", font_size_pt)
+            .unwrap_or_else(|| {
+                panic!("Trebuchet MS {font_size_pt}pt must carry a measured advance")
+            });
+        assert!(
+            (advance_pt - native_advance_pt).abs() < 0.005,
+            "Trebuchet MS {font_size_pt}pt advances {native_advance_pt}pt on the native \
+             export; the table gives {advance_pt}"
+        );
+    }
+}
+
 /// A family or a size the sweep never reached states nothing, and the caller
 /// keeps the face's `hhea` line rather than an interpolated guess.
 #[test]
