@@ -1314,17 +1314,16 @@ fn test_recorded_ht_with_custom_height_stays_the_declared_track() {
 fn test_a_row_auto_grown_by_an_unmeasured_font_size_keeps_its_cached_ht() {
     // A row Excel auto-grew around a large font is written as an `ht` with no
     // `customHeight`, and Excel recomputes very nearly the same height on
-    // load. The face series stop well short of every size a title uses —
-    // Calibri's ends at 18 — so a 24pt row has no modelled track of its own,
-    // and falling back to the Normal font's 15pt one would print it at half
-    // the height its own text needs. The row's cached `ht` is what Excel last
-    // measured for that text, so it stands in.
+    // load. Every face series stops at 24pt, so a 26pt row has no modelled
+    // track of its own, and falling back to the Normal font's 15pt one would
+    // print it at half the height its own text needs. The row's cached `ht`
+    // is what Excel last measured for that text, so it stands in.
     let data = build_xlsx_formatted_over_a_compacting_grid(|sheet| {
         let cell = sheet.get_cell_mut("A1");
         cell.set_value("분기 실적 요약");
-        cell.get_style_mut().get_font_mut().set_size(24.0);
+        cell.get_style_mut().get_font_mut().set_size(26.0);
         let row = sheet.get_row_dimension_mut(&1);
-        row.set_height(32.0);
+        row.set_height(34.0);
         row.set_custom_height(false);
     });
     let parser = XlsxParser;
@@ -1332,9 +1331,9 @@ fn test_a_row_auto_grown_by_an_unmeasured_font_size_keeps_its_cached_ht() {
     let tp = get_sheet_page(&doc, 0);
     assert_eq!(
         tp.table.rows[0].height,
-        Some(29.0),
-        "no series covers Calibri 24, so the cached 32pt stands and this \
-         compacting grid prints it as a 29pt track"
+        Some(31.0),
+        "no series covers a 26pt cell, so the cached 34pt stands and this \
+         compacting grid prints it as a 31pt track"
     );
 }
 

@@ -1630,11 +1630,11 @@ pub(super) fn recomputed_default_row_height_pt(
 /// its Normal font's face has no measured series or the size sits between
 /// the measured points.
 ///
-/// The series belongs to the face, so a row sized by a font of its own is
-/// looked up in the workbook's table at that font's size. On the workbook
-/// this was measured against that is exactly right, because its cells name
-/// the very face its theme scheme resolves to (issue #1140). A row whose
-/// cells name some *other* face has no series of its own here.
+/// The series belongs to the face, so this answers only for the face the
+/// Normal font resolves to. A row sized by a cell font of its own goes
+/// through [`cell_font_row_height_pt`], which looks up the face that cell
+/// *names* (issue #1550); only a cell font naming no family inherits the
+/// Normal font's series here.
 fn measured_row_height_pt(font: &NormalFont, size_pt: f64) -> Option<f64> {
     if font.uses_theme_scheme() {
         return measured_series_row_height_pt(&UI_SCRIPT_FACE_ROW_HEIGHTS, size_pt);
@@ -1667,8 +1667,9 @@ fn measured_series_row_height_pt(measured: &[(f64, f64)], size_pt: f64) -> Optio
         .map(|(_, height_pt)| *height_pt)
 }
 
-/// The series measured for a Normal font that names `family` outright, or
-/// `None` where no sweep has covered it.
+/// The series measured for a Normal font that names `family` outright — and
+/// that a cell font naming the same face takes (issue #1550) — or `None`
+/// where no sweep has covered it.
 ///
 /// Matched on the whole name, case-insensitively — never as a prefix. The
 /// Calibri and Aptos recompute tables above follow the same rule; prefix
@@ -2426,14 +2427,21 @@ pub(super) fn worksheet_default_row_height_pt(
 /// Sizing all fifteen from the Normal font's own 17pt track instead left the
 /// last of them 88.00pt up the page.
 ///
+/// Each cell taller than the Normal font is measured against the series of
+/// the face it names, through [`cell_font_row_height_pt`], and the tallest
+/// of those rows wins (issue #1550): the probe workbook's cells name the very
+/// face its scheme resolves to, which is why the Normal font's series once
+/// answered for them, but an Arial Bold 18 title under a Trebuchet MS Normal
+/// prints Arial's 23pt, not the UI face's 27pt.
+///
 /// The term only ever raises the track. What Excel gives a row whose cells
 /// are *smaller* than the Normal font is not measured here, and neither is a
 /// size the face's series skips, so neither is interpolated between measured
 /// points that step irregularly (15pt at 10, 17pt at 11, 20pt at 14). A row
-/// holding something taller than the Normal font at a size no series covers
-/// falls back to its own cached `ht` where it has one: that is the height
-/// Excel last measured for this very text, and the sheet default would print
-/// a 24pt title into a 15pt row.
+/// holding something taller than the Normal font at a face or size no series
+/// covers falls back to its own cached `ht` where it has one: that is the
+/// height Excel last measured for this very text, and the sheet default would
+/// print a 24pt title into a 15pt row.
 ///
 /// A sheet marking its default `customHeight` is left alone as well: that
 /// declared default is honoured for `ht`-less rows (issue #1047), and whether
@@ -2462,16 +2470,56 @@ fn auto_row_height_pt(
     };
     let wrapped_height_pt: f64 =
         wrapped_cell_row_height_pt(sheet, row_idx, font, base_height_pt).unwrap_or(base_height_pt);
-    let Some(tallest_cell_size_pt) = tallest_cell_font_size_pt(sheet, row_idx) else {
-        return wrapped_height_pt;
-    };
-    if tallest_cell_size_pt <= font.size_pt {
+    let taller_cell_rows: Vec<Option<f64>> = sheet
+        .get_collection_by_row(&row_idx)
+        .into_iter()
+        .filter_map(|cell| cell.get_style().get_font())
+        .filter(|cell_font| *cell_font.get_size() > font.size_pt)
+        .map(|cell_font| cell_font_row_height_pt(cell_font, font))
+        .collect();
+    if taller_cell_rows.is_empty() {
         return wrapped_height_pt;
     }
     let unmeasured_height_pt: f64 = cached_height_pt.unwrap_or(base_height_pt);
-    measured_row_height_pt(font, tallest_cell_size_pt)
+    taller_cell_rows
+        .into_iter()
+        .collect::<Option<Vec<f64>>>()
+        .and_then(|rows| rows.into_iter().max_by(f64::total_cmp))
         .unwrap_or(unmeasured_height_pt)
         .max(wrapped_height_pt)
+}
+
+/// The row Excel's table measure gives one cell's font: the measured series
+/// of the face that font resolves to, at its size, or `None` where no series
+/// covers that face and size.
+///
+/// The series belongs to the face the cell *names*, not to the Normal font's
+/// face at the cell's size. Native Excel-for-Mac one-factor exports of
+/// `issue_1181_fit_to_height.xlsx` — Trebuchet MS 10 Normal deferring to a
+/// theme that names no script faces, one Arial Bold cell in an auto row —
+/// print that row 13/13/13/14/16/17/18/19/20/22/23/25/28/30pt at 8-24pt: from
+/// 10pt up exactly Arial's series, and the workbook's default row below it.
+/// The same row holding Courier New, Segoe UI, Georgia, Times New Roman,
+/// Verdana or Calibri at 18pt prints 24/26/23/23/23/24, each its own face's
+/// entry, and bold weight moves none of them (issue #1550). Sizing the row
+/// from the Normal font's series printed the UI face's 27pt over Arial's 23.
+///
+/// A cell font deferring to a theme scheme resolves the way the Normal font
+/// does — through the theme's UI-script face where the theme names one, else
+/// on its declared family — and a font naming no family at all inherits the
+/// Normal font's face.
+fn cell_font_row_height_pt(
+    cell_font: &umya_spreadsheet::structs::Font,
+    normal_font: &NormalFont,
+) -> Option<f64> {
+    let size_pt: f64 = *cell_font.get_size();
+    let theme_face: Option<&str> = ThemeFontSlot::parse(cell_font.get_scheme())
+        .and_then(|slot| normal_font.theme_ui_script_faces.face(slot));
+    match theme_face {
+        Some(face) => measured_family_row_height_pt(face, size_pt),
+        None if cell_font.get_name().is_empty() => measured_row_height_pt(normal_font, size_pt),
+        None => measured_family_row_height_pt(cell_font.get_name(), size_pt),
+    }
 }
 
 /// The point a wrapped cell adds to the row its face recomputes, once its
@@ -2571,18 +2619,6 @@ fn cell_sits_in_a_merged_range(sheet: &umya_spreadsheet::Worksheet, col: u32, ro
             .unwrap_or(start_row);
         (start_col..=end_col).contains(&col) && (start_row..=end_row).contains(&row)
     })
-}
-
-/// The largest font size any cell of this row states, ignoring cells that
-/// state none — those inherit the Normal font, which the caller already has.
-fn tallest_cell_font_size_pt(sheet: &umya_spreadsheet::Worksheet, row_idx: u32) -> Option<f64> {
-    sheet
-        .get_collection_by_row(&row_idx)
-        .into_iter()
-        .filter_map(|cell| cell.get_style().get_font())
-        .map(|font| *font.get_size())
-        .filter(|size_pt| *size_pt > 0.0)
-        .max_by(f64::total_cmp)
 }
 
 /// The whole-point track a row occupies in Excel's printed grid, whatever its
