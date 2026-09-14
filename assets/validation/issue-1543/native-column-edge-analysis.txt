@@ -1,0 +1,100 @@
+== control-sheet-0002.pdf gap=150 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 32.3285
+  cat 0 slot0 Birthday native  412.000.. 445.000 w 33.000 | cont  412.355.. 444.684 -> round  412.. 445  OK
+  cat 3 slot0 Other    native  655.000.. 687.000 w 32.000 | cont  654.820.. 687.148 -> round  655.. 687  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  654.820.. 687.148 -> round  655.. 687  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  735.641.. 767.969 -> round  736.. 768  MISMATCH
+  cat 5 slot0 Birthday native  816.000.. 849.000 w 33.000 | cont  816.462.. 848.791 -> round  816.. 849  OK
+  cat 5 slot0 Other    native  816.000.. 849.000 w 33.000 | cont  816.462.. 848.791 -> round  816.. 849  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  897.284.. 929.612 -> round  897.. 930  MISMATCH
+  cat 6 slot0 Holiday  native  897.000.. 930.000 w 33.000 | cont  897.284.. 929.612 -> round  897.. 930  OK
+  ok=5 mismatch=3
+== variant-0-sheet-0002.pdf gap=0 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 80.8214
+  cat 0 slot0 Birthday native  388.109.. 469.000 w 80.891 | cont  388.109.. 468.930 -> round  388.. 469  MISMATCH
+  cat 3 slot0 Other    native  631.000.. 711.000 w 80.000 | cont  630.573.. 711.394 -> round  631.. 711  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  630.573.. 711.394 -> round  631.. 711  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  711.394.. 792.216 -> round  711.. 792  MISMATCH
+  cat 5 slot0 Birthday native  792.000.. 873.000 w 81.000 | cont  792.216.. 873.037 -> round  792.. 873  OK
+  cat 5 slot0 Other    native  792.000.. 873.000 w 81.000 | cont  792.216.. 873.037 -> round  792.. 873  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  873.037.. 953.859 -> round  873.. 954  MISMATCH
+  cat 6 slot0 Holiday  native  873.000.. 954.000 w 81.000 | cont  873.037.. 953.859 -> round  873.. 954  OK
+  ok=4 mismatch=4
+== variant-50-sheet-0002.pdf gap=50 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 53.8809
+  cat 0 slot0 Birthday native  402.000.. 455.000 w 53.000 | cont  401.579.. 455.460 -> round  402.. 455  OK
+  cat 3 slot0 Other    native  644.000.. 698.000 w 54.000 | cont  644.043.. 697.924 -> round  644.. 698  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  644.043.. 697.924 -> round  644.. 698  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  724.865.. 778.746 -> round  725.. 779  MISMATCH
+  cat 5 slot0 Birthday native  806.000.. 860.000 w 54.000 | cont  805.686.. 859.567 -> round  806.. 860  OK
+  cat 5 slot0 Other    native  806.000.. 860.000 w 54.000 | cont  805.686.. 859.567 -> round  806.. 860  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  886.507.. 940.388 -> round  887.. 940  MISMATCH
+  cat 6 slot0 Holiday  native  887.000.. 940.000 w 53.000 | cont  886.507.. 940.388 -> round  887.. 940  OK
+  ok=5 mismatch=3
+== variant-100-sheet-0002.pdf gap=100 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 40.4107
+  cat 0 slot0 Birthday native  408.000.. 449.000 w 41.000 | cont  408.314.. 448.725 -> round  408.. 449  OK
+  cat 3 slot0 Other    native  651.000.. 691.000 w 40.000 | cont  650.778.. 691.189 -> round  651.. 691  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  650.778.. 691.189 -> round  651.. 691  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  731.600.. 772.011 -> round  732.. 772  MISMATCH
+  cat 5 slot0 Birthday native  812.000.. 853.000 w 41.000 | cont  812.421.. 852.832 -> round  812.. 853  OK
+  cat 5 slot0 Other    native  812.000.. 853.000 w 41.000 | cont  812.421.. 852.832 -> round  812.. 853  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  893.243.. 933.653 -> round  893.. 934  MISMATCH
+  cat 6 slot0 Holiday  native  893.000.. 934.000 w 41.000 | cont  893.243.. 933.653 -> round  893.. 934  OK
+  ok=5 mismatch=3
+== variant-219-sheet-0002.pdf gap=219 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 25.3359
+  cat 0 slot0 Birthday native  416.000.. 441.000 w 25.000 | cont  415.852.. 441.188 -> round  416.. 441  OK
+  cat 3 slot0 Other    native  658.000.. 684.000 w 26.000 | cont  658.316.. 683.652 -> round  658.. 684  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  658.316.. 683.652 -> round  658.. 684  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  739.137.. 764.473 -> round  739.. 764  MISMATCH
+  cat 5 slot0 Birthday native  820.000.. 845.000 w 25.000 | cont  819.959.. 845.294 -> round  820.. 845  OK
+  cat 5 slot0 Other    native  820.000.. 845.000 w 25.000 | cont  819.959.. 845.294 -> round  820.. 845  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  900.780.. 926.116 -> round  901.. 926  MISMATCH
+  cat 6 slot0 Holiday  native  901.000.. 926.000 w 25.000 | cont  900.780.. 926.116 -> round  901.. 926  OK
+  ok=5 mismatch=3
+== variant-300-sheet-0002.pdf gap=300 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 20.2053
+  cat 0 slot0 Birthday native  418.000.. 439.000 w 21.000 | cont  418.417.. 438.622 -> round  418.. 439  OK
+  cat 3 slot0 Other    native  661.000.. 681.000 w 20.000 | cont  660.881.. 681.086 -> round  661.. 681  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  660.881.. 681.086 -> round  661.. 681  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  741.703.. 761.908 -> round  742.. 762  MISMATCH
+  cat 5 slot0 Birthday native  823.000.. 843.000 w 20.000 | cont  822.524.. 842.729 -> round  823.. 843  OK
+  cat 5 slot0 Other    native  823.000.. 843.000 w 20.000 | cont  822.524.. 842.729 -> round  823.. 843  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  903.345.. 923.551 -> round  903.. 924  MISMATCH
+  cat 6 slot0 Holiday  native  903.000.. 924.000 w 21.000 | cont  903.345.. 923.551 -> round  903.. 924  OK
+  ok=5 mismatch=3
+== variant-500-sheet-0002.pdf gap=500 overlap=100 bars/band=1 plot sheet 388.1090..1357.9654 thickness 13.4702
+  cat 0 slot0 Birthday native  422.000.. 435.000 w 13.000 | cont  421.785.. 435.255 -> round  422.. 435  OK
+  cat 3 slot0 Other    native  664.000.. 678.000 w 14.000 | cont  664.249.. 677.719 -> round  664.. 678  OK
+  cat 3 slot0 Birthday native  668.551.. 687.751 w 19.200 | cont  664.249.. 677.719 -> round  664.. 678  MISMATCH
+  cat 4 slot0 Holiday  native  770.446.. 789.646 w 19.200 | cont  745.070.. 758.540 -> round  745.. 759  MISMATCH
+  cat 5 slot0 Birthday native  826.000.. 839.000 w 13.000 | cont  825.891.. 839.362 -> round  826.. 839  OK
+  cat 5 slot0 Other    native  826.000.. 839.000 w 13.000 | cont  825.891.. 839.362 -> round  826.. 839  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  906.713.. 920.183 -> round  907.. 920  MISMATCH
+  cat 6 slot0 Holiday  native  907.000.. 920.000 w 13.000 | cont  906.713.. 920.183 -> round  907.. 920  OK
+  ok=5 mismatch=3
+== variant-0-sheet-0002.pdf gap=150 overlap=0 bars/band=3 plot sheet 388.1090..1357.9654 thickness 17.9603
+  cat 0 slot0 Birthday native  402.000.. 420.000 w 18.000 | cont  401.579.. 419.540 -> round  402.. 420  OK
+  cat 3 slot1 Birthday native  668.551.. 687.751 w 19.200 | cont  662.004.. 679.964 -> round  662.. 680  MISMATCH
+  cat 3 slot2 Other    native  680.000.. 698.000 w 18.000 | cont  679.964.. 697.924 -> round  680.. 698  OK
+  cat 4 slot2 Holiday  native  770.446.. 789.646 w 19.200 | cont  760.785.. 778.746 -> round  761.. 779  MISMATCH
+  cat 5 slot0 Birthday native  806.000.. 824.000 w 18.000 | cont  805.686.. 823.646 -> round  806.. 824  OK
+  cat 5 slot2 Other    native  842.000.. 860.000 w 18.000 | cont  841.607.. 859.567 -> round  842.. 860  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  886.507.. 904.468 -> round  887.. 904  MISMATCH
+  cat 6 slot1 Holiday  native  904.000.. 922.000 w 18.000 | cont  904.468.. 922.428 -> round  904.. 922  OK
+  ok=5 mismatch=3
+== variant-50-sheet-0002.pdf gap=150 overlap=50 bars/band=3 plot sheet 388.1090..1357.9654 thickness 23.0918
+  cat 0 slot0 Birthday native  405.000.. 429.000 w 24.000 | cont  405.428.. 428.520 -> round  405.. 429  OK
+  cat 3 slot2 Birthday native  668.551.. 687.751 w 19.200 | cont  670.984.. 694.076 -> round  671.. 694  MISMATCH
+  cat 3 slot2 Other    native  671.000.. 694.000 w 23.000 | cont  670.984.. 694.076 -> round  671.. 694  OK
+  cat 4 slot2 Holiday  native  770.446.. 789.646 w 19.200 | cont  751.805.. 774.897 -> round  752.. 775  MISMATCH
+  cat 5 slot0 Birthday native  810.000.. 833.000 w 23.000 | cont  809.535.. 832.627 -> round  810.. 833  OK
+  cat 5 slot2 Other    native  833.000.. 856.000 w 23.000 | cont  832.627.. 855.718 -> round  833.. 856  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  890.356.. 913.448 -> round  890.. 913  MISMATCH
+  cat 6 slot1 Holiday  native  902.000.. 925.000 w 23.000 | cont  901.902.. 924.994 -> round  902.. 925  OK
+  ok=5 mismatch=3
+== variant--27-sheet-0002.pdf gap=150 overlap=-27 bars/band=3 plot sheet 388.1090..1357.9654 thickness 16.0360
+  cat 0 slot0 Birthday native  400.000.. 416.000 w 16.000 | cont  400.136.. 416.172 -> round  400.. 416  OK
+  cat 3 slot1 Birthday native  668.551.. 687.751 w 19.200 | cont  662.966.. 679.002 -> round  663.. 679  MISMATCH
+  cat 3 slot2 Other    native  683.000.. 699.000 w 16.000 | cont  683.332.. 699.367 -> round  683.. 699  OK
+  cat 4 slot2 Holiday  native  770.446.. 789.646 w 19.200 | cont  764.153.. 780.189 -> round  764.. 780  MISMATCH
+  cat 5 slot0 Birthday native  804.000.. 820.000 w 16.000 | cont  804.243.. 820.279 -> round  804.. 820  OK
+  cat 5 slot2 Other    native  845.000.. 861.000 w 16.000 | cont  844.974.. 861.010 -> round  845.. 861  OK
+  cat 6 slot0 Other    native  869.751.. 888.951 w 19.200 | cont  885.064.. 901.100 -> round  885.. 901  MISMATCH
+  cat 6 slot1 Holiday  native  905.000.. 921.000 w 16.000 | cont  905.430.. 921.466 -> round  905.. 921  OK
+  ok=5 mismatch=3

@@ -4284,6 +4284,38 @@ fn band_bars(band: f64, series_count: usize, layout: BarBandLayout) -> BandBars 
     }
 }
 
+/// Seat one worksheet column on whole sheet points, the way Excel paints it.
+///
+/// An anchored Excel worksheet chart rounds each column edge to a whole
+/// unscaled sheet point and then clips the column to the plot rectangle. Ten
+/// re-zip-controlled native exports of the gift workbook — `<c:gapWidth>` 0,
+/// 50, 100, 150, 219, 300 and 500 at the stacked overlap of 100, and
+/// `<c:overlap>` 0, 50 and -27 at gapWidth 150 — paint 50 columns whose every
+/// edge but one is `round(continuous edge)`; the one remaining edge is the
+/// gapWidth-0 first column's left, which stops at the plot's exact left edge
+/// rather than the rounded point beyond it (#1543). The sheet point is taken on the fitted sheet origin the
+/// markers already snap to, so the column lands where native paints it while
+/// the plot's own chrome keeps its calibration. Column tops stay continuous:
+/// native tops are not whole points. Bar charts are not measured and keep the
+/// continuous band.
+fn worksheet_column_span(
+    start: f64,
+    thickness: f64,
+    plot_x: f64,
+    plot_w: f64,
+    placement: Option<WorksheetMarkerPlacement>,
+) -> (f64, f64) {
+    let Some(placement) = placement else {
+        return (start, thickness);
+    };
+    let origin: f64 = placement.frame_origin.0;
+    let offset: f64 = placement.plot_offset.0;
+    let snap = |chart_local: f64| (origin + chart_local + offset).round() - origin;
+    let left: f64 = snap(start).max(plot_x);
+    let right: f64 = snap(start + thickness).min(plot_x + plot_w);
+    (left, (right - left).max(0.0))
+}
+
 /// Seat one value-axis gridline, label, or tick for a column chart.
 ///
 /// An anchored Excel worksheet chart lays out its plot in unscaled sheet
@@ -4663,12 +4695,19 @@ fn generate_chart_axis(
                 );
             } else {
                 let bar_h: f64 = frac * plot_h;
+                let (column_x, column_w): (f64, f64) = worksheet_column_span(
+                    plot_x + group_start + offset,
+                    bar_thickness,
+                    plot_x,
+                    plot_w,
+                    worksheet_markers,
+                );
                 let _ = writeln!(
                     out,
                     "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
-                    format_f64(plot_x + group_start + offset),
+                    format_f64(column_x),
                     format_f64(plot_y + (1.0 - far_frac) * plot_h),
-                    format_f64(bar_thickness),
+                    format_f64(column_w),
                     format_f64(bar_h.max(0.0)),
                     color
                 );
@@ -4710,7 +4749,16 @@ fn generate_chart_axis(
                         DataLabelPosition::InsideEnd => bar_top,
                         DataLabelPosition::InsideBase => bar_bottom - label_line_h,
                     } - pptx_column_data_label_seat_pt(chart, &s.data_labels);
-                    (plot_x + group_start + offset, y, bar_thickness)
+                    // The label centres on the column as painted, so a
+                    // worksheet column's whole-point edges carry it along.
+                    let (column_x, column_w): (f64, f64) = worksheet_column_span(
+                        plot_x + group_start + offset,
+                        bar_thickness,
+                        plot_x,
+                        plot_w,
+                        worksheet_markers,
+                    );
+                    (column_x, y, column_w)
                 };
                 let _ = writeln!(
                     out,

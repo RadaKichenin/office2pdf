@@ -1,0 +1,16 @@
+{
+  "name": "issue-1543-column-gap-width",
+  "base": "../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+  "part": "xl/charts/chart1.xml",
+  "factor": "c:gapWidth val",
+  "page": 2,
+  "noise_floor": 0.5,
+  "variants": [
+    {"value": "0", "find": "<c:gapWidth val=\"150\"/>", "replace": "<c:gapWidth val=\"0\"/>", "count": 1},
+    {"value": "50", "find": "<c:gapWidth val=\"150\"/>", "replace": "<c:gapWidth val=\"50\"/>", "count": 1},
+    {"value": "100", "find": "<c:gapWidth val=\"150\"/>", "replace": "<c:gapWidth val=\"100\"/>", "count": 1},
+    {"value": "219", "find": "<c:gapWidth val=\"150\"/>", "replace": "<c:gapWidth val=\"219\"/>", "count": 1},
+    {"value": "300", "find": "<c:gapWidth val=\"150\"/>", "replace": "<c:gapWidth val=\"300\"/>", "count": 1},
+    {"value": "500", "find": "<c:gapWidth val=\"150\"/>", "replace": "<c:gapWidth val=\"500\"/>", "count": 1}
+  ]
+}
