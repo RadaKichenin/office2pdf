@@ -1659,7 +1659,9 @@ pub(super) fn sheet_row_line_advance_pt(
 /// fit-to-page scale, and its three wrapped cells measure 17.22, 13.12 and
 /// 31.16pt between baselines — 21.00, 16.00 and 38.00pt unscaled, which is
 /// exactly what this table gives Segoe UI 14, Segoe UI 12 and Century Gothic
-/// 30.
+/// 30. Trebuchet MS was swept later by the same method
+/// (`/Volumes/T7/scratch/issue-1551`) after a 10pt wrapped note advanced
+/// 11.89pt on its `hhea` line against the native 13.00pt (issue #1551).
 ///
 /// `None` for a family or size the sweep did not reach, which leaves the
 /// caller on the face's `hhea` line. **Nothing here interpolates**, and no
@@ -1699,7 +1701,7 @@ struct SheetLineAdvances {
 /// What the sweep described on [`sheet_wrapped_line_advance_pt`] measured, one
 /// series per face.
 #[rustfmt::skip]
-const SHEET_WRAPPED_LINE_ADVANCES: [SheetLineAdvances; 13] = [
+const SHEET_WRAPPED_LINE_ADVANCES: [SheetLineAdvances; 14] = [
     SheetLineAdvances { families: &["Arial"], advances_pt:
         [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 21.0, 22.0, 24.0, 27.0, 29.0, 32.0, 33.0, 35.0, 38.0, 43.0, 46.0, 56.0] },
     SheetLineAdvances { families: &["Times New Roman"], advances_pt:
@@ -1726,6 +1728,10 @@ const SHEET_WRAPPED_LINE_ADVANCES: [SheetLineAdvances; 13] = [
         [13.0, 14.0, 15.0, 17.0, 18.0, 19.0, 20.0, 22.0, 23.0, 26.0, 27.0, 30.0, 32.0, 35.0, 37.0, 40.0, 44.0, 47.0, 52.0, 59.0, 69.0] },
     SheetLineAdvances { families: &["Gulim"], advances_pt:
         [12.0, 13.0, 14.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 22.0, 23.0, 25.0, 27.0, 30.0, 32.0, 34.0, 36.0, 40.0, 44.0, 49.0, 59.0] },
+    // Swept for issue #1551 beside an Arial control that reproduced its series
+    // above on every size; the two diverge at 16, 26, 30, 40 and 48pt.
+    SheetLineAdvances { families: &["Trebuchet MS"], advances_pt:
+        [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 20.0, 21.0, 22.0, 24.0, 27.0, 29.0, 31.0, 33.0, 36.0, 38.0, 43.0, 48.0, 57.0] },
 ];
 
 /// Where a spreadsheet cell's fixed row track sits, so the cell's line can be
