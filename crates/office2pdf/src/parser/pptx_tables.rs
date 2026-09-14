@@ -539,6 +539,7 @@ impl<'a> PptxTableParser<'a> {
             spill_line_width_pt: None,
             vertical_align: self.cell_vertical_align.take(),
             padding: self.cell_padding.take(),
+            row_has_thick_bottom: false,
         });
         self.row_no_fill_cells.push(self.cell_fill_suppressed);
         self.row_suppressed_cell_borders

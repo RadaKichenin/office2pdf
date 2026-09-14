@@ -1755,6 +1755,9 @@ pub(super) struct SheetCellSeat {
     /// Excel resolves that block centre to the lower half of its PDF position
     /// grid (issue #1497).
     pub is_centered_multi_row: bool,
+    /// Whether the worksheet row carries Excel's `thickBot` flag, which lifts
+    /// a bottom-aligned line one sheet point (issue #1545).
+    pub row_has_thick_bottom: bool,
 }
 
 /// The baseline Excel prints for one line of a face whose bare `hhea` numbers
@@ -1894,12 +1897,14 @@ const MERGED_SHEET_CELL_MIN_DESCENT_SEAT_PT: f64 = 5.0;
 /// `descent_floor_pt` is the workbook-wide distance
 /// `xlsx_cells::bottom_aligned_descent_floor_pt` reads, which carries the
 /// measurement behind it: [`COMPACTED_SHEET_CELL_MIN_DESCENT_SEAT_PT`] for the
-/// remapped Calibri/Aptos family in the floor probe matrix, and
-/// [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] for its script-face theme family. Both
-/// families reproduce their native probes at every size swept; later
-/// face-specific printed-grid mappings do not choose this separately measured
-/// floor. The two values differ only under a font small enough to separate
-/// them, which on Arial is 11pt and below.
+/// remapped Calibri/Aptos family in the floor probe matrix,
+/// [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] for its script-face theme family, and
+/// zero for a Normal font Excel neither remaps nor resolves by script, whose
+/// cells rest on the bare rounded descent (issue #1545). Each family
+/// reproduces its native probes at every size swept; later face-specific
+/// printed-grid mappings do not choose this separately measured floor. The
+/// values differ only under a font small enough to separate them, which on
+/// Arial is 11pt and below.
 pub(super) fn sheet_cell_descent_pt(
     family: &str,
     descent_em: f64,
@@ -1917,6 +1922,30 @@ pub(super) fn sheet_cell_descent_pt(
         .unwrap_or_else(|| (descent_em * sheet_font_size_pt).round())
         .max(descent_floor_pt)
         * scale
+}
+
+/// The sheet points Excel lifts a bottom-aligned line by when its worksheet
+/// row carries `thickBot="1"`, printed through the sheet's fit scale
+/// (issue #1545).
+///
+/// Measured on native Excel-for-Mac 16.112 one-factor exports of the budget
+/// workbook of #1545. Removing the flag from the `Cash flow` row (Trebuchet
+/// MS 10 in a 19.5pt custom row) dropped its baseline from 3 to 2 sheet
+/// points above the row boundary; adding it to the unflagged `Cumulative
+/// cash flow` row raised that one from 2 to 3. Adding `thickTop` instead, and
+/// giving the cell itself a thin, thick or double bottom border in place of
+/// its medium top one, each moved nothing: Excel reads the row's flag, not
+/// the border it summarises. The lift is one whole sheet point at every size
+/// of an 8-16pt sweep and at 100%, 85% and 78% print scale.
+pub(super) fn sheet_cell_thick_bottom_lift_pt(
+    row_has_thick_bottom: bool,
+    print_scale: Option<f64>,
+) -> f64 {
+    if !row_has_thick_bottom {
+        return 0.0;
+    }
+    let scale: f64 = print_scale.filter(|scale| *scale > 0.0).unwrap_or(1.0);
+    SHEET_ADVANCE_GRID_PT * scale
 }
 
 /// The seat measured for `family` at `font_size_pt`, or `None` where no sweep
@@ -2015,6 +2044,14 @@ pub(super) struct CellLineBox {
     /// multi-line advance without lengthening the final line's exterior box.
     pub leading_pt: f64,
     pub font_size_pt: f64,
+    /// Points the seated last line still has to drop below the cell's
+    /// content box to reach its measured seat. Typst clamps a positive
+    /// `bottom-edge` at the content box, so a descender seat that falls inside
+    /// the cell's bottom inset — a border-widened inset over a bare rounded
+    /// descent (issues #1277, #1545) — cannot be expressed by the box alone;
+    /// the cell translates its content by this much instead. Zero wherever the
+    /// box reaches the seat on its own.
+    pub seat_shortfall_pt: f64,
 }
 
 /// Line-box settings for a **Word or sheet** table cell: a fixed box spanning
@@ -2093,9 +2130,12 @@ pub(super) fn word_cell_line_box_settings(
     )?;
     Some(format!(
         // The descent is negated here rather than written behind a literal
-        // `-`: a sheet cell's descent can fall *short* of the cell's bottom
-        // inset (issue #1063), and a negative edge behind that sign emitted
-        // `--0.02em`.
+        // `-`: a Word cell's box can carry a negative descent, and a negative
+        // edge behind that sign emitted `--0.02em`. A sheet cell's descender
+        // seat never goes below zero here — Typst clamps a positive
+        // `bottom-edge` at the content box, so a seat inside the cell's
+        // bottom inset rides in `CellLineBox::seat_shortfall_pt` instead
+        // (issue #1545).
         "#set text(top-edge: {}em, bottom-edge: {}em)\n#set par(leading: {}pt)\n",
         format_f64(line_box.top_em),
         format_f64(-line_box.bottom_em),
@@ -2318,6 +2358,7 @@ pub(super) fn word_cell_line_box(
     // places the box inside that inset box, so the seat is expressed by
     // redistributing the box around the baseline — its height, and with it the
     // row's advance, is unchanged.
+    let mut seat_shortfall_pt: f64 = 0.0;
     let (top_em, bottom_em, leading_pt): (f64, f64, f64) = match sheet_seat {
         None => (top_em, bottom_em, leading_pt),
         Some(seat) if seats_text_on_descender => {
@@ -2331,14 +2372,21 @@ pub(super) fn word_cell_line_box(
             } else {
                 seat.descent_floor_pt
             };
-            let bottom_em: f64 = (sheet_cell_descent_pt(
-                family,
-                descender_em,
-                font_size,
-                sheet_print_scale,
-                descent_floor_pt,
-            ) - seat.inset_bottom_pt)
-                / font_size;
+            let descent_pt: f64 =
+                sheet_cell_descent_pt(
+                    family,
+                    descender_em,
+                    font_size,
+                    sheet_print_scale,
+                    descent_floor_pt,
+                ) + sheet_cell_thick_bottom_lift_pt(seat.row_has_thick_bottom, sheet_print_scale)
+                    - seat.inset_bottom_pt;
+            // A seat inside the inset needs the baseline *below* the content
+            // box, which Typst's clamped `bottom-edge` cannot place; keep the
+            // box on the baseline and let the cell translate the content down
+            // by the rest (issues #1277, #1545).
+            seat_shortfall_pt = (-descent_pt).max(0.0);
+            let bottom_em: f64 = descent_pt.max(0.0) / font_size;
             (
                 top_em,
                 bottom_em,
@@ -2400,6 +2448,7 @@ pub(super) fn word_cell_line_box(
         bottom_em,
         leading_pt,
         font_size_pt: font_size,
+        seat_shortfall_pt,
     })
 }
 

@@ -1119,10 +1119,17 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
     let symmetric_bottom_em: f64 = 1.3 * word_pitch_em - east_asian_top_em;
     // Excel rests the descent on the row's own bottom boundary, which is one
     // cell inset below where Typst puts the box's bottom edge (issue #1063);
-    // the descent it rests there is a whole number of points.
+    // the descent it rests there is a whole number of points. Here it falls
+    // inside the 5pt inset, and Typst clamps a box's `bottom-edge` at the
+    // baseline, so the box ends on the baseline and the cell drops its
+    // content by the remainder instead (issue #1545).
     let default_padding_bottom_pt: f64 = 5.0;
-    let seated_bottom_em: f64 =
-        ((descender * font_size).round() - default_padding_bottom_pt) / font_size;
+    let seat_shortfall_pt: f64 = default_padding_bottom_pt - (descender * font_size).round();
+    assert!(
+        seat_shortfall_pt > 0.0,
+        "the control needs a seat inside the inset, descent {descender}"
+    );
+    let seated_bottom_em: f64 = 0.0;
     // The sub-baseline surplus the descender seat removes from the box.
     let leading_pt: f64 = ((word_pitch_em - top_em - seated_bottom_em) * font_size).max(0.0);
     let cell = TableCell {
@@ -1173,6 +1180,13 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
     assert!(
         result.contains(&format!("#set par(leading: {}pt)", format_f64(leading_pt))),
         "the removed sub-baseline surplus must move into leading: {result}"
+    );
+    assert!(
+        result.contains(&format!(
+            "#move(dx: 0pt, dy: {}pt)[",
+            crate::render::typst_gen::tables::format_geometry(seat_shortfall_pt)
+        )),
+        "the seat's remainder inside the inset must drop the cell content: {result}"
     );
     assert!(
         !result.contains(&format!(
@@ -3590,6 +3604,209 @@ fn a_scaled_sheet_scales_the_bottom_seat_floor_after_snapping() {
     assert!(
         (seated_pt - SHEET_CELL_MIN_DESCENT_SEAT_PT * scale).abs() < 1e-9,
         "the 4pt sheet-space floor must print at 2pt, seated {seated_pt}pt"
+    );
+}
+
+/// A workbook whose Normal font Excel neither remaps nor resolves by script
+/// seats a bottom-aligned cell on its bare rounded descent, and a row flagged
+/// `thickBot` lifts that seat by one sheet point (issue #1545).
+///
+/// Native Excel-for-Mac 16.112 one-factor exports of the budget workbook of
+/// #1545 (Trebuchet MS, `hhea` descent 455/2048, 19.5pt custom rows printed
+/// at 19pt, page fitted to 0.78): sweeping the body font size moves the
+/// baseline of the `Cumulative cash flow` row, whose row carries no flag,
+/// and of the `Cash flow` row, whose row carries `thickBot="1"`, to these
+/// distances above the row's bottom boundary, in sheet points:
+///
+/// | size | 8 | 10 | 12 | 14 | 16 |
+/// | ---: | ---: | ---: | ---: | ---: | ---: |
+/// | unflagged | 2 | 2 | 3 | 3 | 4 |
+/// | `thickBot` | 3 | 3 | 4 | 4 | 5 |
+///
+/// Removing the flag from the `Cash flow` row moved it onto the unflagged
+/// series, adding it to the `Cumulative cash flow` row moved that onto the
+/// flagged one, and `thickTop`, the cell's own bottom border weight (none,
+/// thin, thick, double) and `x14ac:dyDescent` each changed nothing. The seat
+/// is unchanged at 100%, 85% and 78% scale, and at 100% is a whole point.
+#[test]
+fn an_unfloored_workbook_seats_the_rounded_descent_and_a_thick_bottom_row_one_point_higher() {
+    const TREBUCHET_DESCENT_EM: f64 = 455.0 / 2048.0;
+    const NO_FLOOR_PT: f64 = 0.0;
+    const SCALE: f64 = 0.78;
+
+    // (font size pt, unflagged seat pt, thickBot seat pt)
+    let measured: [(f64, f64, f64); 5] = [
+        (8.0, 2.0, 3.0),
+        (10.0, 2.0, 3.0),
+        (12.0, 3.0, 4.0),
+        (14.0, 3.0, 4.0),
+        (16.0, 4.0, 5.0),
+    ];
+
+    for (font_size_pt, unflagged_pt, flagged_pt) in measured {
+        for (scale, print_scale) in [(1.0, None), (SCALE, Some(SCALE))] {
+            let seated_pt: f64 = sheet_cell_descent_pt(
+                "Trebuchet MS",
+                TREBUCHET_DESCENT_EM,
+                font_size_pt * scale,
+                print_scale,
+                NO_FLOOR_PT,
+            );
+            assert!(
+                (seated_pt - unflagged_pt * scale).abs() < 1e-9,
+                "Trebuchet MS {font_size_pt}pt at scale {scale}: Excel rests the                  baseline {unflagged_pt} sheet points above the boundary, seated {seated_pt}pt"
+            );
+            let lifted_pt: f64 = seated_pt + sheet_cell_thick_bottom_lift_pt(true, print_scale);
+            assert!(
+                (lifted_pt - flagged_pt * scale).abs() < 1e-9,
+                "Trebuchet MS {font_size_pt}pt at scale {scale} in a thickBot row:                  Excel rests the baseline {flagged_pt} sheet points above the boundary,                  seated {lifted_pt}pt"
+            );
+        }
+    }
+    assert_eq!(
+        sheet_cell_thick_bottom_lift_pt(false, Some(SCALE)),
+        0.0,
+        "an unflagged row keeps its seat"
+    );
+}
+
+/// The lift lands in the compiled page: two identical fixed-track rows whose
+/// only difference is the `thickBot` flag print their baselines exactly one
+/// sheet point apart, on an unscaled sheet and on a fitted one. The control
+/// uses Typst's embedded Libertinus face so it runs on every host.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_thick_bottom_row_prints_its_baseline_one_sheet_point_above_an_unflagged_twin() {
+    const FAMILY: &str = "Libertinus Serif";
+    const DECLARED_ROW_HEIGHT_PT: f64 = 19.0;
+    const DECLARED_FONT_SIZE_PT: f64 = 10.0;
+
+    for scale in [1.0, 0.78] {
+        let row = |row_has_thick_bottom: bool| TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![Run {
+                        text: "Cash flow".to_string(),
+                        style: TextStyle {
+                            font_family: Some(FAMILY.to_string()),
+                            font_size: Some(DECLARED_FONT_SIZE_PT * scale),
+                            ..TextStyle::default()
+                        },
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                row_has_thick_bottom,
+                ..TableCell::default()
+            }],
+            height: Some(DECLARED_ROW_HEIGHT_PT * scale),
+        };
+        let table = Table {
+            rows: vec![row(false), row(true)],
+            column_widths: vec![120.0],
+            default_cell_padding: Some(Insets {
+                top: 1.0 * scale,
+                right: 2.0 * scale,
+                bottom: 1.5 * scale,
+                left: 3.0 * scale,
+            }),
+            default_vertical_align: Some(CellVerticalAlign::Bottom),
+            seats_bottom_aligned_text_on_descender: true,
+            bottom_aligned_descent_floor_pt: 0.0,
+            print_scale: (scale < 1.0).then_some(scale),
+            ..Table::default()
+        };
+        let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+            .expect("the two-row sheet renders");
+        let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+        let mut baselines: Vec<f64> = runs.into_iter().map(|run| run.baseline_pt).collect();
+        baselines.sort_by(f64::total_cmp);
+        assert_eq!(baselines.len(), 2, "two lines expected: {baselines:?}");
+        // Row pitch is one track; the flagged second row sits one sheet point
+        // higher within its track, so the baselines are (track - 1) apart.
+        let expected_gap_pt: f64 = (DECLARED_ROW_HEIGHT_PT - 1.0) * scale;
+        assert!(
+            (baselines[1] - baselines[0] - expected_gap_pt).abs() < 0.05,
+            "at scale {scale} the thickBot row must print {expected_gap_pt}pt below the              unflagged one, got {:.3}pt\n{}",
+            baselines[1] - baselines[0],
+            output.source
+        );
+    }
+}
+
+/// A border on the row boundary never moves Excel's text (issue #1277), so a
+/// descender seat that falls inside the cell's border-widened inset still has
+/// to land on the boundary distance. Typst clamps a positive `bottom-edge` at
+/// the content box, which silently lifted such a line by the shortfall on the
+/// budget workbook of issue #1545 (a thin-ruled 10pt cell printed 0.44pt above
+/// its unruled twin once the floor came off). Two identical bottom-aligned
+/// rows whose only difference is a 2pt bottom rule must print one track apart.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_descender_seat_inside_the_border_inset_still_lands_on_the_row_boundary() {
+    const FAMILY: &str = "Libertinus Serif";
+    const ROW_HEIGHT_PT: f64 = 19.0;
+    const FONT_SIZE_PT: f64 = 10.0;
+
+    let row = |border: Option<CellBorder>| TableRow {
+        minimum_height: None,
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "TOTAL INCOME".to_string(),
+                    style: TextStyle {
+                        font_family: Some(FAMILY.to_string()),
+                        font_size: Some(FONT_SIZE_PT),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            })],
+            border,
+            ..TableCell::default()
+        }],
+        height: Some(ROW_HEIGHT_PT),
+    };
+    let ruled: CellBorder = CellBorder {
+        bottom: Some(BorderSide {
+            width: 2.0,
+            color: Color::black(),
+            style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
+        }),
+        ..CellBorder::default()
+    };
+    let table = Table {
+        rows: vec![row(None), row(Some(ruled))],
+        column_widths: vec![120.0],
+        default_cell_padding: Some(Insets {
+            top: 1.0,
+            right: 2.0,
+            bottom: 1.5,
+            left: 3.0,
+        }),
+        default_vertical_align: Some(CellVerticalAlign::Bottom),
+        seats_bottom_aligned_text_on_descender: true,
+        bottom_aligned_descent_floor_pt: 0.0,
+        ..Table::default()
+    };
+    let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+        .expect("the two-row sheet renders");
+    let runs = crate::render::pdf::compiled_text_runs(&output.source, 0)
+        .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source));
+    let mut baselines: Vec<f64> = runs.into_iter().map(|run| run.baseline_pt).collect();
+    baselines.sort_by(f64::total_cmp);
+    assert_eq!(baselines.len(), 2, "two lines expected: {baselines:?}");
+    assert!(
+        (baselines[1] - baselines[0] - ROW_HEIGHT_PT).abs() < 0.05,
+        "the ruled row must print exactly one {ROW_HEIGHT_PT}pt track below the unruled          one, got {:.3}pt\n{}",
+        baselines[1] - baselines[0],
+        output.source
     );
 }
 

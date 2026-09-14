@@ -1039,6 +1039,7 @@ fn generate_table_cell(
                 is_horizontally_merged: cell.col_span > 1,
                 is_centered_multi_row: cell.row_span > 1
                     && effective_vertical_align == Some(CellVerticalAlign::Center),
+                row_has_thick_bottom: cell.row_has_thick_bottom,
             }
         });
     ctx.cell_sheet_row_line = row_shared_line.filter(|_| seats_on_row_line).cloned();
@@ -1249,6 +1250,10 @@ fn generate_table_cell(
     let content_shift: Option<(f64, f64)> = word_cell_content_shift(&boundary_band)
         .or_else(|| excel_merged_cell_content_shift(&boundary_band, cell));
     let wraps_content_shift: bool = content_shift.is_some() && cell.spill_width.is_none();
+    // A descender seat inside the cell's inset drops the content by the
+    // remainder: inside the cell for an ordinary cell, on the placed clip box
+    // for a spill so the clip moves with its line (issue #1545).
+    let seat_shortfall_pt: f64 = sheet_cell_seat_shortfall_pt(&cell.content, ctx);
     if wraps_content_shift {
         let (dx, dy) = content_shift.expect("the content-shift wrapper requires a seat");
         let _ = write!(
@@ -1362,7 +1367,7 @@ fn generate_table_cell(
         out.push_str("#context {let o2p-spill = [");
         let enclosing_in_spill_cell = ctx.in_spill_cell;
         ctx.in_spill_cell = true;
-        let spill_content = generate_sheet_cell_content(out, &cell.content, ctx);
+        let spill_content = generate_sheet_cell_content(out, &cell.content, ctx, 0.0);
         ctx.in_spill_cell = enclosing_in_spill_cell;
         spill_content?;
         // The single-line box, moved back inside the clip for a continuation:
@@ -1385,6 +1390,11 @@ fn generate_table_cell(
             (Some(shift), None) => Some(shift),
             (None, Some(_)) => Some((-spill_inset.left, 0.0)),
             (None, None) => None,
+        };
+        let placement_shift: Option<(f64, f64)> = match placement_shift {
+            Some((dx, dy)) => Some((dx, dy + seat_shortfall_pt)),
+            None if seat_shortfall_pt > 0.0 => Some((0.0, seat_shortfall_pt)),
+            None => None,
         };
         // The spill width is an estimate, so a continuation is emitted for
         // every line that may cross the boundary. Excel prints nothing on
@@ -1437,7 +1447,7 @@ fn generate_table_cell(
                 format_f64(height)
             );
         }
-        generate_sheet_cell_content(out, &cell.content, ctx)?;
+        generate_sheet_cell_content(out, &cell.content, ctx, seat_shortfall_pt)?;
         if strut_height_pt.is_some() {
             out.push_str("])");
         }
@@ -3047,31 +3057,73 @@ fn format_border_side(side: &BorderSide) -> String {
 }
 
 /// Generate a table cell's content at its established seat when the fitted
-/// worksheet's paint layer has been translated underneath it.
+/// worksheet's paint layer has been translated underneath it, or when its
+/// descender seat falls inside the cell's inset.
 ///
 /// `#move` leaves layout dimensions unchanged, so the inverse translation
-/// cancels only the visual table-paint offset from issue #1538. Off a fitted
-/// sheet the helper is byte-for-byte the old direct generation path.
+/// cancels only the visual table-paint offset from issue #1538, and
+/// `seat_shortfall_pt` drops the line to a boundary distance Typst's clamped
+/// `bottom-edge` cannot reach (issue #1545); a spill passes zero here and
+/// translates its placed clip box instead, so the clip moves with the line.
+/// Off a fitted sheet and with the seat inside the box, the helper is
+/// byte-for-byte the direct generation path.
 fn generate_sheet_cell_content(
     out: &mut String,
     blocks: &[Block],
     ctx: &mut GenCtx,
+    seat_shortfall_pt: f64,
 ) -> Result<(), ConvertError> {
     let paint_offset_pt: Option<(f64, f64)> = ctx.sheet_paint_offset_pt.take();
-    if let Some((paint_dx_pt, paint_dy_pt)) = paint_offset_pt {
+    let content_shift_pt: Option<(f64, f64)> = match paint_offset_pt {
+        Some((paint_dx_pt, paint_dy_pt)) => Some((-paint_dx_pt, seat_shortfall_pt - paint_dy_pt)),
+        None if seat_shortfall_pt > 0.0 => Some((0.0, seat_shortfall_pt)),
+        None => None,
+    };
+    if let Some((dx_pt, dy_pt)) = content_shift_pt {
         let _ = write!(
             out,
             "#move(dx: {}pt, dy: {}pt)[",
-            format_geometry(-paint_dx_pt),
-            format_geometry(-paint_dy_pt),
+            format_geometry(dx_pt),
+            format_geometry(dy_pt),
         );
     }
     let result = generate_cell_content(out, blocks, ctx);
     ctx.sheet_paint_offset_pt = paint_offset_pt;
-    if paint_offset_pt.is_some() {
+    if content_shift_pt.is_some() {
         out.push(']');
     }
     result
+}
+
+/// Points a descender-seated sheet cell's last line must still drop below
+/// the content box to reach its measured seat — the line box's own
+/// `seat_shortfall_pt`, read off the cell's first paragraph with the same
+/// arguments the paragraph codegen resolves it with. Zero for every cell the
+/// box seats on its own.
+fn sheet_cell_seat_shortfall_pt(blocks: &[Block], ctx: &GenCtx) -> f64 {
+    if !ctx.cell_seats_text_on_descender || ctx.cell_sheet_seat.is_none() {
+        return 0.0;
+    }
+    blocks
+        .iter()
+        .find_map(|block| match block {
+            Block::Paragraph(paragraph) if !paragraph.runs.is_empty() => Some(paragraph),
+            _ => None,
+        })
+        .and_then(|paragraph| {
+            word_cell_line_box(
+                &paragraph.runs,
+                &paragraph.style,
+                ctx.line_grid_pitch,
+                ctx.row_east_asian,
+                ctx.cell_vertical_align,
+                ctx.cell_seats_text_on_descender,
+                ctx.cell_sheet_row_line.as_ref(),
+                ctx.cell_sheet_seat,
+                ctx.sheet_print_scale(),
+            )
+        })
+        .map_or(0.0, |line_box| line_box.seat_shortfall_pt)
 }
 
 fn generate_cell_content(
