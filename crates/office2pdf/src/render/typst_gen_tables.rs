@@ -1036,14 +1036,15 @@ fn generate_table_cell(
     // centres the text block against that one declared-space height, whereas
     // Typst otherwise centres from the paragraph's own metric edges (#1497).
     // Bottom-aligned multi-row cells keep the legacy answer because their
-    // measured descender seat belongs to a single row; top alignment is also
-    // outside the measured regime. Auto rows have no fixed grid track at all.
+    // measured descender seat belongs to a single row; a top-aligned single
+    // row seats its first baseline a measured whole point below the track's
+    // top (issue #1606), while a top-aligned multi-row merge is outside the
+    // measured regime. Auto rows have no fixed grid track at all.
     ctx.cell_sheet_seat = cell_track_height
         .filter(|_| ctx.table_seats_bottom_aligned_text_on_descender)
         .filter(|_| {
             cell.row_span <= 1 || effective_vertical_align == Some(CellVerticalAlign::Center)
         })
-        .filter(|_| effective_vertical_align != Some(CellVerticalAlign::Top))
         .map(|track_pt| {
             let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
             SheetCellSeat {

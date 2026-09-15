@@ -1757,9 +1757,9 @@ const SHEET_WRAPPED_LINE_ADVANCES: [SheetLineAdvances; 14] = [
 /// seated on the baseline the native export prints (issue #1063).
 ///
 /// `None` outside that regime: a Word table, an auto-height sheet row (whose
-/// track is the content's own answer, not Excel's), a top-aligned cell (a
-/// seat this issue did not settle), or a bottom-aligned multi-row merge whose
-/// descender seat has only been measured within one row.
+/// track is the content's own answer, not Excel's), or a top- or
+/// bottom-aligned multi-row merge whose seat has only been measured within
+/// one row. A single-row top-aligned cell is inside it since issue #1606.
 #[derive(Clone, Copy)]
 pub(super) struct SheetCellSeat {
     /// The cell's printed fixed-track height, in points. This is one row for
@@ -1850,17 +1850,72 @@ pub(super) fn sheet_cell_baseline_from_track_top_pt(
     } else {
         half_slack_pt.ceil()
     };
-    // A fitted sheet's fixed-row text origin sits one sheet-space point above
-    // the otherwise identical unscaled cadence. The landscape #982 export
-    // exposes the same quantum across merged Century Gothic headings and
-    // ordinary Segoe UI header/body rows; applying it after scaling would turn
-    // one Excel grid point into one device point (issue #1496).
-    let fitted_sheet_lift_pt: f64 = if scale + f64::EPSILON < 1.0 {
+    // A fitted sheet lifts the completed seat by one sheet-space point before
+    // scaling it (issue #1496); see `fitted_sheet_lift_pt`.
+    (slack_above_pt + above_baseline_pt - fitted_sheet_lift_pt(scale)) * scale
+}
+
+/// The sheet-space point a fitted sheet's fixed-row text origin sits above
+/// the otherwise identical unscaled cadence (issue #1496). The landscape #982
+/// export exposes the same quantum across merged Century Gothic headings,
+/// ordinary Segoe UI header/body rows and the top-aligned instruction block;
+/// applying it after scaling would turn one Excel grid point into one device
+/// point. It stands in for the snap remainder between the converter's
+/// physical-margin text origin and Excel's sheet-space one, so a fix for
+/// issue #1719 re-derives it from that origin for every seat at once.
+fn fitted_sheet_lift_pt(scale: f64) -> f64 {
+    if scale + f64::EPSILON < 1.0 {
         SHEET_ADVANCE_GRID_PT
     } else {
         0.0
-    };
-    (slack_above_pt + above_baseline_pt - fitted_sheet_lift_pt) * scale
+    }
+}
+
+/// The constant Excel adds to a top-aligned line's `hhea` ascent plus line
+/// gap before rounding the pair to the whole sheet point its baseline sits
+/// below the track's top boundary (issue #1606).
+///
+/// The #1063 Arial probes admit any value in `[1.12, 1.23)`: 10pt seats 11
+/// (`9.38 + c` must round up) while 12pt, 28pt and 44pt seat 12, 27 and 42
+/// (`11.26 + c`, `26.26 + c` and `41.27 + c` must not). No composition of the
+/// separately rounded ascent and gap the centred seat uses reproduces the
+/// series — `floor(ascent) + ceil(gap) + 1` misses 24pt and
+/// `round(ascent) + ceil(gap) + 1` misses 12pt.
+const SHEET_TOP_ALIGNED_SEAT_OFFSET_PT: f64 = 1.17;
+
+/// The baseline Excel prints for a **top-aligned** line of a face whose
+/// `hhea` ascender and line gap add to `ascent_with_gap_em`, set at
+/// `font_size_pt`, as an offset below its fixed track's **top boundary**
+/// (issue #1606).
+///
+/// Excel adds [`SHEET_TOP_ALIGNED_SEAT_OFFSET_PT`] to the face's ascent plus
+/// line gap at the cell's *declared* size and rounds the sum to a whole sheet
+/// point; nothing else enters. The seat is track-independent (a 12pt Arial
+/// line sits 12pt below the top of 20, 30, 45 and 60pt tracks alike), a cell
+/// border changes nothing, and a horizontal merge keeps the unmerged answer:
+/// the #982 workbook's merged B4:D4 instruction block prints its Segoe UI 14
+/// first baseline 16 sheet points below row 4's top, exactly where the
+/// unmerged Arial series predicts. Like the centred seat, a fitted sheet
+/// evaluates the rule in declared sheet space, lifts it by
+/// [`fitted_sheet_lift_pt`], and scales the completed answer onto the page:
+/// that block sits 16 sheet points down in both the unscaled control and the
+/// 0.82-fitted original.
+///
+/// Measured on the native Excel-for-Mac exports of the #1063 probe workbooks
+/// (`/Volumes/T7/scratch/issue-1063/probe`, the top-aligned rows of probe 1's
+/// size and track sweeps and probe 2's bordered/unbordered pairing) and on the
+/// two native exports of the #982 workbook, reproduced in
+/// `top_aligned_sheet_cell_seat_reproduces_the_native_excel_probe`.
+pub(super) fn sheet_cell_top_baseline_from_track_top_pt(
+    ascent_with_gap_em: f64,
+    font_size_pt: f64,
+    print_scale: Option<f64>,
+) -> f64 {
+    let scale: f64 = print_scale.filter(|scale| *scale > 0.0).unwrap_or(1.0);
+    let sheet_font_size_pt: f64 = font_size_pt / scale;
+    let seat_pt: f64 =
+        (ascent_with_gap_em * sheet_font_size_pt + SHEET_TOP_ALIGNED_SEAT_OFFSET_PT).round();
+    (seat_pt - fitted_sheet_lift_pt(scale)) * scale
 }
 
 /// The gap Excel never closes between a bottom-aligned sheet cell's baseline
@@ -2114,8 +2169,11 @@ pub(super) struct CellLineBox {
 /// baseline so it seats where Excel prints it, overriding both seats above:
 /// the ascent and descent are each rounded to a whole point and the line is
 /// centred in the row's own *track*, or, under bottom alignment, its rounded
-/// descent rests on the track's own bottom boundary. The box's height, and
-/// with it the row's advance, is unchanged (issue #1063).
+/// descent rests on the track's own bottom boundary, or, under top alignment,
+/// its baseline sits the whole sheet point of
+/// [`sheet_cell_top_baseline_from_track_top_pt`] below the track's top
+/// boundary (issue #1606). The box's height, and with it the row's advance,
+/// is unchanged (issue #1063).
 ///
 /// When `sheet_print_scale` is `Some` — any cell of a spreadsheet, carrying
 /// the sheet's `fitToWidth` factor — a face and size
@@ -2417,6 +2475,27 @@ pub(super) fn word_cell_line_box(
                 bottom_em,
                 ((advance_em - top_em - bottom_em) * font_size).max(0.0),
             )
+        }
+        Some(seat) if vertical_align == Some(CellVerticalAlign::Top) => {
+            // Typst rests a top-aligned box on the cell's top inset, so the
+            // seat is the box's ascent above the baseline less that inset.
+            // Excel's whole-point seat is rounded from the face's continuous
+            // ascent, so the two differ by up to half a sheet point either
+            // way; the inset plus the continuous ascent is not it
+            // (issue #1606).
+            let baseline_pt: f64 = sheet_cell_top_baseline_from_track_top_pt(
+                ascender_em,
+                font_size,
+                sheet_print_scale,
+            );
+            let seated_top_em: f64 = (baseline_pt - seat.inset_top_pt) / font_size;
+            if seated_top_em > 0.0 {
+                (seated_top_em, advance_em - seated_top_em, leading_pt)
+            } else {
+                // An inset deeper than the seat cannot be expressed by the
+                // box; keep the unseated top-aligned box.
+                (top_em, bottom_em, leading_pt)
+            }
         }
         Some(seat) => {
             // Typst centres the box in the inset content box, whose centre is

@@ -1,0 +1,567 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 274.9824,
+      "bbox_pt": {
+        "height": 5.04,
+        "width": 270.72,
+        "x": 811.92,
+        "y": 326.4
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Amount Spent zero-value segments Feb-Mar (71.5x2.2pt) and Aug-Dec (270.7x5.0pt), inspected in 3x 300 DPI GT/output/diff crops: after the fix the turquoise stroke is one solid 1.84pt line on both sides where before it showed two teal edges around a grey core (the #1604 defect). The diff that remains is a ring on each zero-value marker and a hairline along one stroke edge: native paints each marker as a 7x7 raster sprite scaled to 5.74pt with a soft halo while the output draws a crisp 5pt vector disc at the same centre (trace y 329.7978 native / 329.7987 output), and the stroke edges differ by their antialiasing only. Colour, width, centre and cap agree."
+      },
+      "id": "p2-d7d399836297",
+      "region": "right"
+    },
+    {
+      "area_pt2": 70.4448,
+      "bbox_pt": {
+        "height": 2.16,
+        "width": 71.52,
+        "x": 414.24,
+        "y": 329.28
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Amount Spent zero-value segments Feb-Mar (71.5x2.2pt) and Aug-Dec (270.7x5.0pt), inspected in 3x 300 DPI GT/output/diff crops: after the fix the turquoise stroke is one solid 1.84pt line on both sides where before it showed two teal edges around a grey core (the #1604 defect). The diff that remains is a ring on each zero-value marker and a hairline along one stroke edge: native paints each marker as a 7x7 raster sprite scaled to 5.74pt with a soft halo while the output draws a crisp 5pt vector disc at the same centre (trace y 329.7978 native / 329.7987 output), and the stroke edges differ by their antialiasing only. Colour, width, centre and cap agree."
+      },
+      "id": "p2-f0ad941bf266",
+      "region": "center"
+    },
+    {
+      "area_pt2": 66.9312,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 12.0,
+        "x": 158.88,
+        "y": 265.92
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-b3e77f1383ba",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 60.4224,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 13.68,
+        "x": 192.0,
+        "y": 249.84
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-350a4f430aab",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 51.0336,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 10.08,
+        "x": 200.4,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-8293aaa2149b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 46.08,
+      "bbox_pt": {
+        "height": 11.52,
+        "width": 8.16,
+        "x": 151.44,
+        "y": 179.76
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-5cf76d3c8843",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 39.9168,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 9.12,
+        "x": 228.72,
+        "y": 216.72
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-815407c08cf6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 35.3088,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 12.72,
+        "x": 212.88,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-8865fb30c67a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 35.136,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.68,
+        "x": 125.52,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-231a406656dc",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 34.6752,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 9.12,
+        "x": 171.6,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-5be3b97138cf",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.7744,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.72,
+        "x": 221.28,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-4363ca22fb1c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.6592,
+      "bbox_pt": {
+        "height": 17.76,
+        "width": 17.52,
+        "x": 169.44,
+        "y": 107.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Two glyph fragments of the 40pt Century Gothic sheet title GIFT BUDGET AND TRACKER (x 169-221pt, y 107.5pt): same glyphs, size, weight and baseline on both sides, edge-only differences at 300 DPI; the title is not among the audit's shifted instances."
+      },
+      "id": "p2-57d2ddf8efee",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 31.104,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 9.36,
+        "x": 196.8,
+        "y": 165.36
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-93045f27e7f7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.6432,
+      "bbox_pt": {
+        "height": 6.0,
+        "width": 8.64,
+        "x": 186.24,
+        "y": 216.96
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-d1393d0f1a0d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.1248,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.16,
+        "x": 183.6,
+        "y": 165.12
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-fb83767342db",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.664,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 7.44,
+        "x": 187.2,
+        "y": 267.12
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-ac91fb59996b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.5904,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.0,
+        "x": 133.92,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-c4c3fe1c72fe",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.9776,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 239.04,
+        "y": 147.84
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-face2a5cb69f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.4592,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.52,
+        "x": 201.6,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-c2850f9e227c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 6.0,
+        "x": 193.92,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-93050d11bfd5",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.9408,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 7.68,
+        "x": 230.88,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-5dac0061cf65",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.9408,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 6.24,
+        "x": 177.12,
+        "y": 165.12
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-8aea49b30ffe",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.8256,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.76,
+        "x": 187.44,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-e8d89ebb9f0d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.5376,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 5.76,
+        "x": 156.24,
+        "y": 165.12
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-abffca59fb6a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.9616,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.56,
+        "x": 234.24,
+        "y": 145.2
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-fef0baf94aed",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.24,
+        "x": 139.2,
+        "y": 216.96
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-50bcef15fd20",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.6736,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.52,
+        "x": 238.08,
+        "y": 216.96
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-dcbbdccf2922",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.2704,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 4.08,
+        "x": 161.04,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-80b4addb7d80",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.0032,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 7.2,
+        "x": 1041.36,
+        "y": 464.16
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "The 'ts' tail of the Notes cell '6/16, Movie tickets' (7.2x4.8pt at x 1041pt): the run origin matches and the glyph bodies drift right along the string as Excel for Mac advances each glyph a whole point, inspected in the 2x crop."
+      },
+      "id": "p2-a9ec5d42ff0d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.2544,
+      "bbox_pt": {
+        "height": 17.76,
+        "width": 9.6,
+        "x": 211.68,
+        "y": 107.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Two glyph fragments of the 40pt Century Gothic sheet title GIFT BUDGET AND TRACKER (x 169-221pt, y 107.5pt): same glyphs, size, weight and baseline on both sides, edge-only differences at 300 DPI; the title is not among the audit's shifted instances."
+      },
+      "id": "p2-0c9e7c228fe3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.0816,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 3.84,
+        "x": 205.92,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-3824122f87d7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.6208,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 3.6,
+        "x": 141.6,
+        "y": 265.92
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-18afa9c941f3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.3904,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.28,
+        "x": 165.84,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-31c439e22df9",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.0448,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 5.52,
+        "x": 181.44,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1719",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row 4) after the #1606 fix: all nine lines now sit on Excel's 16-sheet-point top seat (native first baseline y 154.16, output 154.04 at the 0.82 fit; pitch 17.22pt on both sides; layout audit fine shifts 0). The remaining clusters are glyph-sized and grow toward each line's end in the 300 DPI diff and the four 4x crops (differ / ily a / s with / v yea): the output glyphs sit +0.185pt right of native on the same baseline, the fitted physical-margin text origin of #1719 whose snap remainder also carries the 0.12pt vertical residual, and the intra-string drift of Excel's whole-point advances (#1659) widens it along the line. No line break, weight or colour differs."
+      },
+      "id": "p2-022498758373",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 34,
+    "duplicate": 0,
+    "total": 34,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
