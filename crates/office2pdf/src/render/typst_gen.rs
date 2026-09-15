@@ -254,7 +254,8 @@ impl GenCtx {
     /// The scale a spreadsheet cell's declared-space metrics must be read
     /// through: `Some(1.0)` on an unscaled sheet, `Some(the fit-to-page
     /// factor)` on a fitted one, and `None` off a sheet. This covers the
-    /// measured wrapped-line advance (#1163) and whole-point seats (#1238).
+    /// measured wrapped-line advance (#1163), whole-point seats (#1238), and
+    /// the declared-width border bands Excel scales with the page (#1564).
     fn sheet_print_scale(&self) -> Option<f64> {
         self.table_seats_bottom_aligned_text_on_descender
             .then(|| self.table_print_scale.unwrap_or(1.0))

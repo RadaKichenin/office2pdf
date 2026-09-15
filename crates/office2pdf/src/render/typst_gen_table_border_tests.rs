@@ -565,6 +565,135 @@ fn test_boundary_band_medium_thick_double_weights() {
     );
 }
 
+/// A fitted sheet's boundary-band table: sizes already multiplied by the
+/// print scale, with the scale riding on the table as the parser leaves it.
+fn fitted_boundary_band_table(rows: Vec<TableRow>, scale: f64) -> Table {
+    Table {
+        seats_bottom_aligned_text_on_descender: true,
+        print_scale: Some(scale),
+        ..boundary_band_table(rows, vec![100.0])
+    }
+}
+
+#[test]
+fn test_fitted_sheet_scales_thin_bands_and_run_extension_with_the_print_scale() {
+    // Native Excel 16.112 export of the fit-to-height budget sheet at its
+    // 0.78 auto-fit scale (issue #1564): every thin rule is a 0.78pt filled
+    // band `[B, B + 0.78]` running 0.78pt past its end boundary, i.e. the
+    // declared 1pt band scaled with the rest of the sheet.
+    let border = CellBorder {
+        top: Some(solid_side(1.0)),
+        bottom: Some(solid_side(1.0)),
+        left: Some(solid_side(1.0)),
+        right: Some(solid_side(1.0)),
+    };
+    let table = fitted_boundary_band_table(
+        vec![fixed_row(vec![bordered_text_cell("Thin", border)])],
+        0.78,
+    );
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    // The layout inset keeps the declared half widths: the seat model of
+    // #1545 was calibrated against it, and Excel scales only the paint.
+    assert!(
+        result.contains("inset: (top: 5.5pt, right: 5pt, bottom: 5.5pt, left: 5pt)"),
+        "border layout inset must stay at the declared half widths: {result}"
+    );
+    // Top band [B, B+0.78]: centre at B + 0.39 from the boundary at
+    // inset.top = 5.5pt, so dy = -5.5 + 0.39; the run extension is 0.78.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -5pt, dy: -5.11pt, line(length: 100% + 10.78pt, angle: 0deg, stroke: 0.78pt + rgb(0, 0, 0)))"
+        ),
+        "top thin band must fill [B, B+0.78]: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(bottom + left, dx: -5pt, dy: 5.89pt, line(length: 100% + 10.78pt, angle: 0deg, stroke: 0.78pt + rgb(0, 0, 0)))"
+        ),
+        "bottom thin band must fill [B, B+0.78] below the boundary: {result}"
+    );
+    // Vertical bands: the 20pt fixed row plus the scaled 0.78pt extension.
+    assert!(
+        result.contains(
+            "#place(top + left, dx: -4.61pt, dy: -5.5pt, line(length: 20.78pt, angle: 90deg, stroke: 0.78pt + rgb(0, 0, 0)))"
+        ),
+        "left thin band must fill [B, B+0.78] right of the boundary: {result}"
+    );
+    assert!(
+        result.contains(
+            "#place(top + right, dx: 5.39pt, dy: -5.5pt, line(length: 20.78pt, angle: 90deg, stroke: 0.78pt + rgb(0, 0, 0)))"
+        ),
+        "right thin band must fill [B, B+0.78] past the boundary: {result}"
+    );
+    assert!(
+        !result.contains("stroke: 1pt + rgb(0, 0, 0)"),
+        "no band may keep the unscaled 1pt weight on a fitted sheet: {result}"
+    );
+}
+
+#[test]
+fn test_fitted_sheet_scales_medium_thick_double_bands_with_the_print_scale() {
+    // A different scale than the reported sheet's, so the rule is the
+    // multiplication and not a constant: at 0.5 the medium band [B-1, B+1]
+    // becomes a 1pt rule centred on B, the thick band [B-1, B+2] a 1.5pt rule
+    // centred at B + 0.25, and a double's two 1pt bands become 0.5pt rules
+    // centred at B - 0.25 and B + 0.75.
+    let single_top = |side: BorderSide| CellBorder {
+        top: Some(side),
+        bottom: None,
+        left: None,
+        right: None,
+    };
+    let render = |side: BorderSide| -> String {
+        let table = fitted_boundary_band_table(
+            vec![fixed_row(vec![bordered_text_cell("Fit", single_top(side))])],
+            0.5,
+        );
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        generate_typst(&doc).unwrap().source
+    };
+
+    let medium = render(solid_side(2.0));
+    // Boundary at inset.top = 6pt (declared 1pt half width).
+    assert!(
+        medium.contains(
+            "#place(top + left, dx: -5pt, dy: -6pt, line(length: 100% + 10.5pt, angle: 0deg, stroke: 1pt + rgb(0, 0, 0)))"
+        ),
+        "medium band must fill [B-0.5, B+0.5]: {medium}"
+    );
+
+    let thick = render(solid_side(3.0));
+    // Boundary at inset.top = 6.5pt; centre at B + 0.25.
+    assert!(
+        thick.contains(
+            "#place(top + left, dx: -5pt, dy: -6.25pt, line(length: 100% + 10.5pt, angle: 0deg, stroke: 1.5pt + rgb(0, 0, 0)))"
+        ),
+        "thick band must fill [B-0.5, B+1]: {thick}"
+    );
+
+    let double = render(BorderSide {
+        width: 1.0,
+        color: Color::black(),
+        style: BorderLineStyle::Double,
+        join: LineJoin::Round,
+    });
+    // Boundary at inset.top = 5.5pt; rules at B - 0.25 and B + 0.75.
+    assert!(
+        double.contains(
+            "#place(top + left, dx: -5pt, dy: -5.75pt, line(length: 100% + 10.5pt, angle: 0deg, stroke: 0.5pt + rgb(0, 0, 0)))"
+        ),
+        "outer double band must fill [B-0.5, B]: {double}"
+    );
+    assert!(
+        double.contains(
+            "#place(top + left, dx: -5pt, dy: -4.75pt, line(length: 100% + 10.5pt, angle: 0deg, stroke: 0.5pt + rgb(0, 0, 0)))"
+        ),
+        "inner double band must fill [B+0.5, B+1]: {double}"
+    );
+}
+
 #[test]
 fn test_boundary_band_shared_edge_paints_once() {
     // Both neighbours declare the same internal boundary: it must paint once.

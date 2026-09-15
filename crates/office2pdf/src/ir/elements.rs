@@ -1326,7 +1326,9 @@ pub struct Table {
     /// glyph advances follow the same order (issue #1238). Fitted sheet paint
     /// is another exception: Excel constructs the paper-space origin and its
     /// positive-axis background bleed before applying this scale (issue
-    /// #1538).
+    /// #1538), and paints each declared-width border band — 1pt `thin`, 2pt
+    /// `medium`, 3pt `thick`, the 1pt run-end extension — multiplied by it
+    /// (issue #1564).
     pub print_scale: Option<f64>,
 }
 
