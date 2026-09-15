@@ -1537,10 +1537,19 @@ fn structure_repository_workbook_preserves_print_orientation_per_sheet() {
 fn structure_repository_workbook_extracts_every_dashboard_chart_with_data() {
     let pages = sheet_pages(REPOSITORY_WORKBOOK_FIXTURE);
 
+    // The dashboard is wider than one page-column, and a chart crossing the
+    // boundary is printed on both tiles (issue #1598), so the same anchored
+    // chart can appear on more than one page. Count each anchor once.
+    let mut seen_anchors: std::collections::HashSet<(u32, Option<String>)> =
+        std::collections::HashSet::new();
     let charts: Vec<&office2pdf::ir::Chart> = pages
         .iter()
         .filter(|page| page.name == "01_대시보드")
-        .flat_map(|page| page.charts.iter().map(|sheet_chart| &sheet_chart.chart))
+        .flat_map(|page| page.charts.iter())
+        .filter(|sheet_chart| {
+            seen_anchors.insert((sheet_chart.anchor_row, sheet_chart.chart.title.clone()))
+        })
+        .map(|sheet_chart| &sheet_chart.chart)
         .collect();
 
     assert_eq!(charts.len(), 3, "the dashboard anchors three charts");

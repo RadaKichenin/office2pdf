@@ -5160,6 +5160,7 @@ fn anchored_excel_gift_chart_source(chart: Chart, chart_space_frame_top: f64) ->
                 width: EXCEL_GIFT_CHART_FRAME.0,
                 height: EXCEL_GIFT_CHART_FRAME.1,
                 print_scale: EXCEL_GIFT_PRINT_SCALE,
+                clip_window: None,
             }),
             chart,
         }],

@@ -386,6 +386,7 @@ fn test_drawings_shift_with_the_inset_grid() {
             width: 200.0,
             height: 100.0,
             print_scale: 1.0,
+            clip_window: None,
         }),
         chart: crate::ir::Chart {
             chart_type: crate::ir::ChartType::Bar,

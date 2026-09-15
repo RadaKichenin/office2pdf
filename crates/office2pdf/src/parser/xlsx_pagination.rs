@@ -12,7 +12,10 @@
 //! from the drawings' extents instead ([`split_drawing_only_page`],
 //! issue #713).
 
-use crate::ir::{Block, HFInline, HeaderFooter, SheetPage, Table, TableCell, TableRow};
+use crate::ir::{
+    Block, HFInline, HeaderFooter, SheetChart, SheetClipWindow, SheetPage, Table, TableCell,
+    TableRow,
+};
 
 /// Upper bound on overflow pages per sheet chunk. Pathological sheets (used
 /// ranges thousands of columns wide) would otherwise explode into thousands
@@ -97,11 +100,20 @@ pub(super) fn split_sheet_page_by_width(
         } = slice_table_columns(&page.table, start, end);
         last_group_inked_row_count = inked_row_count;
         // Excel repeats title columns on pages that no longer show them.
+        let mut repeated_title_width_pt: f64 = 0.0;
         if let (Some(title_table), Some((title_start, _))) = (title_table.as_ref(), title_columns)
             && start > title_start
         {
             table = prepend_title_columns(title_table, table);
+            repeated_title_width_pt = title_width;
         }
+        // The window this page-column prints, in sheet points, and where its
+        // own columns begin on the page once the repeated titles are in front.
+        let window_left_pt: f64 = page.table.column_widths[..start].iter().sum();
+        let window = SheetClipWindow {
+            left_pt: repeated_title_width_pt,
+            width_pt: page.table.column_widths[start..end].iter().sum(),
+        };
         result.push(SheetPage {
             name: page.name.clone(),
             size: page.size,
@@ -109,12 +121,9 @@ pub(super) fn split_sheet_page_by_width(
             table,
             header: page.header.clone(),
             footer: page.footer.clone(),
-            // Charts and images anchor to rows of the first column group only.
-            charts: if index == 0 {
-                page.charts.clone()
-            } else {
-                Vec::new()
-            },
+            charts: charts_on_page_column(&page.charts, window_left_pt, window, index == 0),
+            // Images, text boxes and shapes anchor to rows of the first
+            // column group only.
             images: if index == 0 {
                 page.images.clone()
             } else {
@@ -134,6 +143,52 @@ pub(super) fn split_sheet_page_by_width(
     }
     end_sequence_at_last_inked_row(&mut result, last_group_inked_row_count);
     result
+}
+
+/// The charts one page-column prints: every anchored chart that reaches into
+/// its window, translated onto the page and clipped to the window.
+///
+/// Excel prints a chart that crosses a horizontal print boundary on both
+/// tiles: clipped at the printed sheet edge of the first, and continued on the
+/// next shifted left by the width the first tile already printed. On the
+/// native export of the reported budget workbook the month labels resume on
+/// the second tile exactly one first-tile width to the left of where they
+/// would have stood past the edge (issue #1598). Keeping every chart on the
+/// first tile alone painted the crossing chart into that page's right margin
+/// and left the next tile's chart band blank.
+///
+/// `window_left_pt` is where the page-column begins in sheet points; `window`
+/// is where its own columns begin on the page and how wide they print. A chart
+/// whose right edge sits exactly on the boundary paints nothing past it and is
+/// not continued. A chart no drawing anchors flows after the grid and stays on
+/// the first page-column, as before.
+fn charts_on_page_column(
+    charts: &[SheetChart],
+    window_left_pt: f64,
+    window: SheetClipWindow,
+    is_first_page_column: bool,
+) -> Vec<SheetChart> {
+    charts
+        .iter()
+        .filter_map(|chart| {
+            let Some(placement) = chart.placement else {
+                return is_first_page_column.then(|| chart.clone());
+            };
+            let painted_width_pt: f64 = placement.width * placement.print_scale;
+            let reaches_window: bool = placement.x_offset_pt + painted_width_pt > window_left_pt
+                && placement.x_offset_pt < window_left_pt + window.width_pt;
+            if !reaches_window {
+                return None;
+            }
+            let mut paged: SheetChart = chart.clone();
+            paged.placement = Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: window.left_pt + (placement.x_offset_pt - window_left_pt),
+                clip_window: Some(window),
+                ..placement
+            });
+            Some(paged)
+        })
+        .collect()
 }
 
 /// Shrink a worksheet shape whole: its anchor offset and extent, the line
@@ -203,7 +258,9 @@ fn cell_carries_ink(cell: &TableCell) -> bool {
 ///
 /// Printed gridlines and headings paint every row of the range and no probe
 /// has measured whether Excel still ends the sequence early then, so such a
-/// sheet keeps all of its rows.
+/// sheet keeps all of its rows. A last page-column that carries a chart
+/// continuation and no inked cell keeps its rows too: the chart is ink and
+/// the tile prints.
 fn end_sequence_at_last_inked_row(pages: &mut Vec<SheetPage>, last_inked_row_count: usize) {
     if pages.len() <= 1 {
         return;
@@ -215,7 +272,11 @@ fn end_sequence_at_last_inked_row(pages: &mut Vec<SheetPage>, last_inked_row_cou
         return;
     }
     if last_inked_row_count == 0 {
-        pages.pop();
+        // A chart continued onto this page-column paints there even though
+        // no cell does, so the tile still prints (issue #1598).
+        if last.charts.is_empty() {
+            pages.pop();
+        }
         return;
     }
     let kept: usize = last_inked_row_count.max(last.table.header_row_count);
@@ -723,7 +784,8 @@ struct ColumnGroupSlice {
 ///
 /// Every image on a split page carries [`crate::ir::SheetImage::clip_width_pt`]
 /// so the renderer clips it to its page-column window; a continued copy also
-/// carries a negative `x_offset_pt`. Charts and text boxes stay on the first
+/// carries a negative `x_offset_pt`. Charts follow the same windows through
+/// [`charts_on_page_column`]; text boxes and shapes stay on the first
 /// page-column, like the column splitter keeps them on its first group.
 pub(super) fn split_drawing_only_page(page: SheetPage) -> Vec<SheetPage> {
     let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
@@ -760,8 +822,16 @@ pub(super) fn split_drawing_only_page(page: SheetPage) -> Vec<SheetPage> {
                     paged_image
                 })
                 .collect();
+            paged.charts = charts_on_page_column(
+                &page.charts,
+                window_left,
+                SheetClipWindow {
+                    left_pt: 0.0,
+                    width_pt: printable_width,
+                },
+                group == 0,
+            );
             if group > 0 {
-                paged.charts = Vec::new();
                 paged.text_boxes = Vec::new();
                 paged.shapes = Vec::new();
             }

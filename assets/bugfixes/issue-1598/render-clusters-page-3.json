@@ -1,0 +1,487 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 388.9152,
+      "bbox_pt": {
+        "height": 6.0,
+        "width": 221.28,
+        "x": 471.6,
+        "y": 386.88
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-0fdcddecb69a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 317.952,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 221.04,
+        "x": 471.84,
+        "y": 141.84
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-b7e33a511825",
+      "region": "top"
+    },
+    {
+      "area_pt2": 211.968,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 191.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-290da470ceaf",
+      "region": "top"
+    },
+    {
+      "area_pt2": 211.968,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 341.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-76ff6c5a8c15",
+      "region": "center"
+    },
+    {
+      "area_pt2": 211.968,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 167.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-47885312cf2c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 340.56
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-47071168de34",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 192.72
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-25d9b1a8930a",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 240.72
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-75928817cbd0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 166.56
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-4f74b3812ed2",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 241.68
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-eee05c9d8a5d",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 265.68
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-b7580edc5c15",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 266.64
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-09fe8de11ec0",
+      "region": "top"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 290.64
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-115e5f9c0d0c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 291.6
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-ce3f4f0459af",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 471.84,
+        "y": 315.6
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-abfc55f4337f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 158.976,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 220.8,
+        "x": 472.08,
+        "y": 316.56
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full-page, 5% diff and the 1250x1350px chart-band crop of the second tile: every one of the eleven grey rules and the category axis is now painted at the native x extent (-277.11..692.74pt against native -276.89..692.97pt) but 0.85pt higher (axis 390.34pt against native 391.19pt), the unscaled column-chart vertical inset of #1607. The axis-row cluster also carries the grey axis stroke over the coincident turquoise series (#1604) and native's 7x7pt raster marker sprites against the vector circles at the same centres."
+      },
+      "id": "p3-1c16976aadd9",
+      "region": "center"
+    },
+    {
+      "area_pt2": 59.904,
+      "bbox_pt": {
+        "height": 49.92,
+        "width": 1.2,
+        "x": 471.84,
+        "y": 63.12
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Both rose bands keep size and colour; the trace edges differ by 0.225pt at their centered sheet origin, below the 0.5pt gate, and the crops show only the one-pixel boundary rim."
+      },
+      "id": "p3-60be89008733",
+      "region": "top"
+    },
+    {
+      "area_pt2": 59.904,
+      "bbox_pt": {
+        "height": 49.92,
+        "width": 1.2,
+        "x": 471.84,
+        "y": 444.0
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Both rose bands keep size and colour; the trace edges differ by 0.225pt at their centered sheet origin, below the 0.5pt gate, and the crops show only the one-pixel boundary rim."
+      },
+      "id": "p3-0a866784a835",
+      "region": "center"
+    },
+    {
+      "area_pt2": 40.0896,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 7.44,
+        "x": 656.4,
+        "y": 582.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-18f408ad53f7",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 37.2672,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 10.32,
+        "x": 503.76,
+        "y": 515.76
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain their baselines; the trace shifts are Delivered? dx -1.41pt and Yes dx -0.56pt, the centered-cell displacement of #1600, unchanged from the pre-fix audit."
+      },
+      "id": "p3-58ec05841354",
+      "region": "center"
+    },
+    {
+      "area_pt2": 34.1568,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 12.48,
+        "x": 129.6,
+        "y": 811.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-ee7f0b77fd94",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 31.7376,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 6.0,
+        "x": 490.08,
+        "y": 513.6
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain their baselines; the trace shifts are Delivered? dx -1.41pt and Yes dx -0.56pt, the centered-cell displacement of #1600, unchanged from the pre-fix audit."
+      },
+      "id": "p3-40dd1cddaa4f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 27.072,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 9.12,
+        "x": 115.92,
+        "y": 811.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-9114be56a843",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 26.1504,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 678.48,
+        "y": 582.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-53c2b30c9aad",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.4064,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 5.28,
+        "x": 518.88,
+        "y": 515.76
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain their baselines; the trace shifts are Delivered? dx -1.41pt and Yes dx -0.56pt, the centered-cell displacement of #1600, unchanged from the pre-fix audit."
+      },
+      "id": "p3-679a27b8b45f",
+      "region": "center"
+    },
+    {
+      "area_pt2": 22.2336,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.04,
+        "x": 612.0,
+        "y": 585.36
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-593dc0dd2a0d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.0032,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 6.48,
+        "x": 503.52,
+        "y": 642.96
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain their baselines; the trace shifts are Delivered? dx -1.41pt and Yes dx -0.56pt, the centered-cell displacement of #1600, unchanged from the pre-fix audit."
+      },
+      "id": "p3-97c60104e14d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 21.9456,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 3.12,
+        "x": 530.88,
+        "y": 513.12
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Matched header and Yes crops retain their baselines; the trace shifts are Delivered? dx -1.41pt and Yes dx -0.56pt, the centered-cell displacement of #1600, unchanged from the pre-fix audit."
+      },
+      "id": "p3-75fe63c03299",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.16,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.48,
+        "x": 148.56,
+        "y": 811.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-81dc77e0486b",
+      "region": "bottom-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 3,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 29,
+    "duplicate": 0,
+    "total": 29,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
