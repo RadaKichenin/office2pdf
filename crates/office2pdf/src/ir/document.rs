@@ -200,6 +200,29 @@ pub struct SheetPage {
     pub images: Vec<SheetImage>,
     /// Drawing text boxes anchored within this sheet.
     pub text_boxes: Vec<SheetTextBox>,
+    /// Drawing shapes with no text of their own anchored within this sheet.
+    pub shapes: Vec<SheetShape>,
+}
+
+/// A worksheet drawing shape anchored to a sheet row: a DrawingML
+/// `xdr:cxnSp` connector or a text-less `xdr:sp`, such as the line
+/// separators Excel draws between charts (issue #1566).
+#[derive(Debug, Clone)]
+pub struct SheetShape {
+    /// 1-indexed anchor row. Used only to order drawings deterministically;
+    /// placement comes from `x_offset_pt`/`y_offset_pt` (issue #474).
+    pub anchor_row: u32,
+    /// Horizontal offset of the anchor from the sheet's left edge, points.
+    pub x_offset_pt: f64,
+    /// Vertical offset of the anchor from the sheet's content top, points.
+    pub y_offset_pt: f64,
+    /// Anchor width in points; a vertical line's is zero.
+    pub width: f64,
+    /// Anchor height in points; a horizontal line's is zero.
+    pub height: f64,
+    /// The geometry and paint, with line coordinates in points relative to
+    /// the anchor's top-left corner.
+    pub shape: super::elements::Shape,
 }
 
 /// A chart drawn on a worksheet.

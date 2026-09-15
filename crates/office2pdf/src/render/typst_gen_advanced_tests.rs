@@ -47,6 +47,7 @@ fn test_data_bar_codegen() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -144,6 +145,7 @@ fn test_data_bar_fixed_row_height_codegen() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -196,6 +198,7 @@ fn test_icon_text_codegen() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1000,6 +1003,7 @@ fn test_spill_continuation_redraws_the_line_shifted_left_and_clipped_at_the_grid
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1049,6 +1053,7 @@ fn test_spill_width_codegen() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1099,6 +1104,7 @@ fn test_table_default_vertical_align_codegen() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1198,6 +1204,7 @@ fn test_non_repeating_header_rows_emit_a_separate_header_block() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1253,6 +1260,7 @@ fn test_header_without_non_repeating_rows_stays_a_single_block() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1302,6 +1310,7 @@ fn test_data_bar_is_inset_from_the_row_edges() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1352,6 +1361,7 @@ fn test_data_bar_in_a_short_row_keeps_a_visible_height() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1399,6 +1409,7 @@ fn icon_sheet(cell: TableCell) -> Page {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 
@@ -2104,6 +2115,7 @@ fn sheet_page_with_text_boxes(text_boxes: Vec<crate::ir::SheetTextBox>) -> Page 
         charts: vec![],
         images: Vec::new(),
         text_boxes,
+        shapes: Vec::new(),
     })
 }
 

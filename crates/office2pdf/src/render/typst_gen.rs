@@ -1138,6 +1138,7 @@ enum SheetAnchor<'a> {
     },
     Image(&'a crate::ir::SheetImage),
     TextBox(&'a crate::ir::SheetTextBox),
+    Shape(&'a crate::ir::SheetShape),
 }
 
 /// Render a sheet's grid, under the marker its drawing layer is pinned to and
@@ -1221,7 +1222,11 @@ fn sheet_drawing_layer(
         .iter()
         .filter(|chart| chart.placement.is_some())
         .collect();
-    if placed_charts.is_empty() && page.images.is_empty() && page.text_boxes.is_empty() {
+    if placed_charts.is_empty()
+        && page.images.is_empty()
+        && page.text_boxes.is_empty()
+        && page.shapes.is_empty()
+    {
         return None;
     }
 
@@ -1278,6 +1283,15 @@ fn sheet_drawing_layer(
             &SheetAnchor::TextBox(text_box),
             left_pt,
             top_pt + text_box.y_offset_pt,
+            ctx,
+        );
+    }
+    for sheet_shape in &page.shapes {
+        write_placed_sheet_drawing(
+            &mut foreground,
+            &SheetAnchor::Shape(sheet_shape),
+            left_pt,
+            top_pt + sheet_shape.y_offset_pt,
             ctx,
         );
     }
@@ -1391,6 +1405,24 @@ fn write_placed_sheet_anchor(
                 out.push(']');
             }
             out.push_str("]]");
+        }
+        SheetAnchor::Shape(sheet_shape) => {
+            // The shape's own geometry is relative to its anchor corner, so
+            // it is drawn in a `place` at that corner, as a slide shape is
+            // drawn at its fixed element's (issue #1566).
+            let _ = write!(
+                out,
+                "#place(top + left, dx: {}pt)[",
+                format_f64(left_pt + sheet_shape.x_offset_pt),
+            );
+            generate_shape(
+                out,
+                &sheet_shape.shape,
+                sheet_shape.width,
+                sheet_shape.height,
+                ctx,
+            );
+            out.push(']');
         }
         SheetAnchor::Image(sheet_image) => {
             // A page-column window from drawing-width pagination: the image

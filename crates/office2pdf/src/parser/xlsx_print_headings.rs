@@ -274,6 +274,10 @@ pub(super) fn augment_page_with_print_headings(
         text_box.x_offset_pt += PRINT_HEADING_GUTTER_WIDTH_PT;
         text_box.y_offset_pt += PRINT_HEADING_STRIP_HEIGHT_PT;
     }
+    for sheet_shape in &mut page.shapes {
+        sheet_shape.x_offset_pt += PRINT_HEADING_GUTTER_WIDTH_PT;
+        sheet_shape.y_offset_pt += PRINT_HEADING_STRIP_HEIGHT_PT;
+    }
     for placement in page
         .charts
         .iter_mut()

@@ -486,3 +486,131 @@ fn multiple_drawing_elements_resolve_in_body_order() {
         ]
     );
 }
+
+// ── Line shapes (issue #1566) ────────────────────────────────────────────
+
+/// A worksheet drawing holding one line-geometry shape, as Excel writes the
+/// "Chart border" connectors of the budget workbook on issue #1566.
+fn drawing_with_line_shape(element: &str, shape_properties: &str, style: &str) -> String {
+    format!(
+        r#"<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <xdr:twoCellAnchor editAs="oneCell">
+    <xdr:from><xdr:col>3</xdr:col><xdr:colOff>482419</xdr:colOff><xdr:row>3</xdr:row><xdr:rowOff>28322</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>3</xdr:col><xdr:colOff>482419</xdr:colOff><xdr:row>14</xdr:row><xdr:rowOff>47387</xdr:rowOff></xdr:to>
+    <xdr:{element} macro="">
+      <xdr:nvCxnSpPr><xdr:cNvPr id="19" name="Chart border 1" descr="Chart border"/><xdr:cNvCxnSpPr/></xdr:nvCxnSpPr>
+      <xdr:spPr>{shape_properties}</xdr:spPr>
+      {style}
+    </xdr:{element}>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>"#
+    )
+}
+
+const LINE_XFRM: &str = r#"<a:xfrm><a:off x="4778194" y="1780922"/><a:ext cx="0" cy="2524140"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom>"#;
+
+const ACCENT_LINE_REFERENCE: &str = r#"<xdr:style><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef></xdr:style>"#;
+
+#[test]
+fn connector_line_shape_yields_its_anchor_stroke_and_colour() {
+    let xml = drawing_with_line_shape(
+        "cxnSp",
+        &format!(
+            r#"{LINE_XFRM}<a:ln w="12700"><a:solidFill><a:schemeClr val="bg1"><a:lumMod val="85000"/></a:schemeClr></a:solidFill></a:ln>"#
+        ),
+        ACCENT_LINE_REFERENCE,
+    );
+    let lines = parse_drawing_line_shapes(&xml, &accent_theme());
+    assert_eq!(lines.len(), 1, "the anchor holds one line shape");
+    let line = &lines[0];
+    assert_eq!(line.geometry.from_col, 3);
+    assert_eq!(line.geometry.from_col_off_emu, 482_419);
+    assert_eq!(line.geometry.from_row, 3);
+    assert_eq!(line.geometry.from_row_off_emu, 28_322);
+    assert_eq!(line.geometry.to, Some((3, 482_419, 14, 47_387)));
+    // `a:ln w="12700"` is one point; "bg1, darker 15%" is #D9D9D9.
+    assert!(
+        (line.stroke.width - 1.0).abs() < 1e-9,
+        "{}",
+        line.stroke.width
+    );
+    assert_eq!(line.stroke.color, Color::new(217, 217, 217));
+    assert!(!line.flip_h && !line.flip_v);
+}
+
+#[test]
+fn flipped_connector_records_its_mirrored_direction() {
+    let xml = drawing_with_line_shape(
+        "cxnSp",
+        r#"<a:xfrm flipV="1"><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom><a:ln w="19050"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:ln>"#,
+        "",
+    );
+    let lines = parse_drawing_line_shapes(&xml, &accent_theme());
+    assert_eq!(lines.len(), 1, "a straight connector is a line shape too");
+    assert!(
+        lines[0].flip_v,
+        "flipV runs the line bottom-left to top-right"
+    );
+    assert!(!lines[0].flip_h);
+    assert!((lines[0].stroke.width - 1.5).abs() < 1e-9);
+    assert_eq!(lines[0].stroke.color, Color::new(255, 0, 0));
+}
+
+#[test]
+fn connector_without_a_line_fill_takes_the_style_line_reference() {
+    // Excel's default connector: an empty `<a:ln/>` whose colour comes from
+    // `<xdr:style><a:lnRef>`, at DrawingML's 0.75pt default width.
+    let xml = drawing_with_line_shape(
+        "cxnSp",
+        &format!("{LINE_XFRM}<a:ln/>"),
+        ACCENT_LINE_REFERENCE,
+    );
+    let lines = parse_drawing_line_shapes(&xml, &accent_theme());
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].stroke.color, Color::new(68, 114, 196));
+    assert!((lines[0].stroke.width - 0.75).abs() < 1e-9);
+}
+
+#[test]
+fn connector_whose_line_is_no_fill_is_not_drawn() {
+    let xml = drawing_with_line_shape(
+        "cxnSp",
+        &format!("{LINE_XFRM}<a:ln w=\"12700\"><a:noFill/></a:ln>"),
+        ACCENT_LINE_REFERENCE,
+    );
+    assert!(parse_drawing_line_shapes(&xml, &accent_theme()).is_empty());
+}
+
+#[test]
+fn hidden_line_shape_is_not_drawn() {
+    let xml = drawing_with_line_shape(
+        "cxnSp",
+        &format!(
+            r#"{LINE_XFRM}<a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>"#
+        ),
+        "",
+    )
+    .replace(r#"name="Chart border 1""#, r#"name="Chart border 1" hidden="1""#);
+    assert!(parse_drawing_line_shapes(&xml, &accent_theme()).is_empty());
+}
+
+#[test]
+fn a_plain_shape_with_line_geometry_is_a_line_shape() {
+    let xml = drawing_with_line_shape(
+        "sp",
+        &format!(
+            r#"{LINE_XFRM}<a:ln w="9525"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>"#
+        ),
+        "",
+    );
+    let lines = parse_drawing_line_shapes(&xml, &accent_theme());
+    assert_eq!(lines.len(), 1, "`xdr:sp` with `prst=\"line\"` is a line");
+    assert!((lines[0].stroke.width - 0.75).abs() < 1e-9);
+}
+
+#[test]
+fn a_text_box_rectangle_is_not_a_line_shape() {
+    let xml = drawing_with_fill(r#"<a:srgbClr val="FF0000"/>"#);
+    assert!(parse_drawing_line_shapes(&xml, &accent_theme()).is_empty());
+}

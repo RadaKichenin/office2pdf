@@ -97,6 +97,7 @@ fn make_page(column_widths: Vec<f64>, rows: Vec<TableRow>) -> SheetPage {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     }
 }
 
@@ -566,6 +567,72 @@ fn test_fit_to_width_scales_an_anchored_picture_with_the_grid() {
     assert_eq!(picture.y_offset_pt, 20.0);
     assert_eq!(picture.image.width, Some(300.0));
     assert_eq!(picture.image.height, Some(100.0));
+}
+
+/// A worksheet line shape is anchored to the same columns and rows a picture
+/// is, so the fit scale shrinks its offsets, its extent and its stroke alike:
+/// the budget workbook's `a:ln w="12700"` separators trace as 0.78pt lines
+/// on the 0.78-fitted native page (issue #1566).
+#[test]
+fn test_fit_to_width_scales_an_anchored_line_shape_with_the_grid() {
+    use crate::ir::{ArrowHead, Shape, ShapeKind};
+
+    let mut page = make_page(
+        vec![400.0, 400.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("left"), cell("right")],
+            height: Some(20.0),
+        }],
+    );
+    page.shapes = vec![crate::ir::SheetShape {
+        anchor_row: 3,
+        x_offset_pt: 100.0,
+        y_offset_pt: 40.0,
+        width: 0.0,
+        height: 200.0,
+        shape: Shape {
+            kind: ShapeKind::Line {
+                x1: 0.0,
+                y1: 0.0,
+                x2: 0.0,
+                y2: 200.0,
+                head_end: ArrowHead::None,
+                tail_end: ArrowHead::None,
+            },
+            fill: None,
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: Some(BorderSide {
+                width: 1.0,
+                color: Color::new(217, 217, 217),
+                style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
+            }),
+            rotation_deg: None,
+            opacity: None,
+            shadow: None,
+            top_bevel: None,
+        },
+    }];
+
+    let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
+
+    let line = &pages[0].shapes[0];
+    assert_eq!(line.x_offset_pt, 50.0);
+    assert_eq!(line.y_offset_pt, 20.0);
+    assert_eq!(line.height, 100.0);
+    let ShapeKind::Line { y2, .. } = line.shape.kind else {
+        panic!("the line keeps its geometry: {:?}", line.shape.kind);
+    };
+    assert_eq!(y2, 100.0);
+    let stroke = line
+        .shape
+        .stroke
+        .as_ref()
+        .expect("the line keeps its stroke");
+    assert_eq!(stroke.width, 0.5);
+    assert_eq!(stroke.color, Color::new(217, 217, 217));
 }
 
 /// Excel's auto-fit scale is a whole percent, truncated so the content is

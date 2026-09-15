@@ -2045,6 +2045,7 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
                 charts: Vec::new(),
                 images: Vec::new(),
                 text_boxes: Vec::new(),
+                shapes: Vec::new(),
             })]);
             let output = generate_typst(&doc).unwrap();
             let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();

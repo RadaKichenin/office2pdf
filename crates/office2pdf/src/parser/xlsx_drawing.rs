@@ -1359,6 +1359,335 @@ pub(super) fn parse_drawing_text_boxes(
     result
 }
 
+// ── Drawing line shapes ─────────────────────────────────────────────────
+
+/// A line-geometry shape from a worksheet drawing, in raw drawing
+/// coordinates: an `xdr:cxnSp` connector or an `xdr:sp` whose preset is a
+/// line. Its extent comes from the anchor once the sheet's printed grid is
+/// known, so only the direction is recorded here (issue #1566).
+pub(super) struct RawLineAnchor {
+    pub(super) geometry: ImageAnchorGeometry,
+    pub(super) stroke: crate::ir::BorderSide,
+    /// `a:xfrm flipH`: the line runs from the anchor's right edge to its left.
+    pub(super) flip_h: bool,
+    /// `a:xfrm flipV`: the line runs from the anchor's bottom edge to its top.
+    pub(super) flip_v: bool,
+}
+
+/// Extract anchored line shapes per sheet from worksheet drawings.
+pub(super) fn extract_line_shapes_with_anchors(data: &[u8]) -> HashMap<String, Vec<RawLineAnchor>> {
+    let Ok(mut archive) = crate::parser::open_zip(data) else {
+        return HashMap::new();
+    };
+
+    let workbook_xml = read_zip_entry_string(&mut archive, "xl/workbook.xml");
+    let sheet_rids = parse_workbook_sheet_rids(&workbook_xml);
+    let workbook_rels_xml = read_zip_entry_string(&mut archive, "xl/_rels/workbook.xml.rels");
+    let rid_to_target = parse_rels_targets(&workbook_rels_xml);
+    let (theme_colors, _theme_fonts) = workbook_theme(&mut archive, &workbook_rels_xml);
+
+    let mut result: HashMap<String, Vec<RawLineAnchor>> = HashMap::new();
+
+    for (sheet_name, sheet_rid) in &sheet_rids {
+        let Some(sheet_target) = rid_to_target.get(sheet_rid) else {
+            continue;
+        };
+        let sheet_dir: String = sheet_part_dir(sheet_target);
+        let sheet_xml = read_zip_entry_string(&mut archive, &sheet_part_path(sheet_target));
+        let sheet_rels_xml = read_zip_entry_string(&mut archive, &sheet_rels_path(sheet_target));
+        if sheet_rels_xml.is_empty() {
+            continue;
+        }
+
+        for drawing_target in &sheet_drawing_targets(&sheet_xml, &sheet_rels_xml) {
+            let drawing_path = resolve_relative_xl_path(&sheet_dir, drawing_target);
+            let drawing_xml = read_zip_entry_string(&mut archive, &drawing_path);
+            if drawing_xml.is_empty() {
+                continue;
+            }
+            let lines = parse_drawing_line_shapes(&drawing_xml, &theme_colors);
+            if !lines.is_empty() {
+                result.entry(sheet_name.clone()).or_default().extend(lines);
+            }
+        }
+    }
+
+    result
+}
+
+/// Whether a DrawingML preset geometry is a straight line.
+fn is_line_preset(preset: &str) -> bool {
+    matches!(preset, "line" | "straightConnector1")
+}
+
+/// Parse the line shapes of one worksheet drawing: every `xdr:cxnSp` or
+/// `xdr:sp` whose `a:prstGeom` is a straight line and whose outline paints.
+///
+/// The outline is the shape's own `a:ln`; when that names no fill, the
+/// `xdr:style`'s `a:lnRef` colour stands in, as it does for a slide's
+/// connector. `a:noFill` inside `a:ln`, a hidden shape (`cNvPr hidden="1"`),
+/// and a shape with no colour at all draw nothing. Excel prints the budget
+/// workbook's two `a:ln w="12700"` "Chart border" connectors as 0.78pt
+/// #D9D9D9 lines on its fitted page (issue #1566).
+pub(super) fn parse_drawing_line_shapes(
+    xml: &str,
+    theme_colors: &HashMap<String, crate::ir::Color>,
+) -> Vec<RawLineAnchor> {
+    use crate::ir::{BorderLineStyle, BorderSide, LineJoin};
+    use crate::parser::drawingml::{self, SchemeColors};
+
+    let aliases = xlsx_scheme_aliases();
+    let scheme = SchemeColors {
+        colors: theme_colors,
+        aliases: &aliases,
+    };
+
+    #[derive(Default, Clone, Copy)]
+    struct Corner {
+        col: u32,
+        col_off: i64,
+        row: u32,
+        row_off: i64,
+    }
+
+    /// DrawingML's default outline width when `a:ln` names none.
+    const DEFAULT_LINE_WIDTH_PT: f64 = 0.75;
+
+    /// What the current anchor's shape has declared so far.
+    struct PendingLine {
+        is_line_geometry: bool,
+        is_hidden: bool,
+        flip_h: bool,
+        flip_v: bool,
+        width_pt: f64,
+        /// The `a:ln` fill colour.
+        color: Option<crate::ir::Color>,
+        /// The `xdr:style`/`a:lnRef` colour, used when `a:ln` names none.
+        style_color: Option<crate::ir::Color>,
+        has_no_fill: bool,
+    }
+
+    impl Default for PendingLine {
+        fn default() -> Self {
+            Self {
+                is_line_geometry: false,
+                is_hidden: false,
+                flip_h: false,
+                flip_v: false,
+                width_pt: DEFAULT_LINE_WIDTH_PT,
+                color: None,
+                style_color: None,
+                has_no_fill: false,
+            }
+        }
+    }
+
+    fn is_true(value: Option<String>) -> bool {
+        value.is_some_and(|value| value == "1" || value == "true")
+    }
+
+    let mut result: Vec<RawLineAnchor> = Vec::new();
+    let mut reader = quick_xml::Reader::from_str(xml);
+
+    let mut in_anchor = false;
+    let mut in_shape = false;
+    let mut in_shape_properties = false;
+    let mut in_line = false;
+    let mut in_style_line_ref = false;
+    let mut corner_target: Option<bool> = None;
+    let mut current_field: Option<&'static str> = None;
+    let mut from = Corner::default();
+    let mut to: Option<Corner> = None;
+    let mut ext_emu: Option<(i64, i64)> = None;
+    let mut pending = PendingLine::default();
+
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(ref e)) => {
+                let local = e.local_name();
+                match local.as_ref() {
+                    b"twoCellAnchor" | b"oneCellAnchor" | b"absoluteAnchor" => {
+                        in_anchor = true;
+                        in_shape = false;
+                        from = Corner::default();
+                        to = None;
+                        ext_emu = None;
+                        pending = PendingLine::default();
+                    }
+                    b"from" if in_anchor => corner_target = Some(true),
+                    b"to" if in_anchor => {
+                        corner_target = Some(false);
+                        to = Some(Corner::default());
+                    }
+                    b"col" if corner_target.is_some() => current_field = Some("col"),
+                    b"colOff" if corner_target.is_some() => current_field = Some("colOff"),
+                    b"row" if corner_target.is_some() => current_field = Some("row"),
+                    b"rowOff" if corner_target.is_some() => current_field = Some("rowOff"),
+                    b"sp" | b"cxnSp" if in_anchor => in_shape = true,
+                    b"cNvPr" if in_shape => {
+                        pending.is_hidden = is_true(xml_util::get_attr_str(e, b"hidden"));
+                    }
+                    b"spPr" if in_shape => in_shape_properties = true,
+                    b"xfrm" if in_shape_properties => {
+                        pending.flip_h = is_true(xml_util::get_attr_str(e, b"flipH"));
+                        pending.flip_v = is_true(xml_util::get_attr_str(e, b"flipV"));
+                    }
+                    b"prstGeom" if in_shape_properties => {
+                        pending.is_line_geometry = xml_util::get_attr_str(e, b"prst")
+                            .is_some_and(|preset| is_line_preset(&preset));
+                    }
+                    b"ln" if in_shape_properties => {
+                        in_line = true;
+                        if let Some(width) = xml_util::get_attr_str(e, b"w")
+                            && let Ok(emu) = width.parse::<f64>()
+                        {
+                            pending.width_pt = emu / 12_700.0;
+                        }
+                    }
+                    b"lnRef" if in_shape && !in_shape_properties => in_style_line_ref = true,
+                    b"srgbClr" | b"schemeClr" | b"sysClr" if in_line || in_style_line_ref => {
+                        let parsed =
+                            drawingml::parse_color_from_start(&mut reader, e, &scheme).color;
+                        let color = resolved_or_legacy(parsed, local.as_ref(), e);
+                        if in_line {
+                            if pending.color.is_none() {
+                                pending.color = color;
+                            }
+                        } else if pending.style_color.is_none() {
+                            pending.style_color = color;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(quick_xml::events::Event::Empty(ref e)) => {
+                let local = e.local_name();
+                match local.as_ref() {
+                    b"cNvPr" if in_shape => {
+                        pending.is_hidden = is_true(xml_util::get_attr_str(e, b"hidden"));
+                    }
+                    b"xfrm" if in_shape_properties => {
+                        pending.flip_h = is_true(xml_util::get_attr_str(e, b"flipH"));
+                        pending.flip_v = is_true(xml_util::get_attr_str(e, b"flipV"));
+                    }
+                    b"prstGeom" if in_shape_properties => {
+                        pending.is_line_geometry = xml_util::get_attr_str(e, b"prst")
+                            .is_some_and(|preset| is_line_preset(&preset));
+                    }
+                    b"ln" if in_shape_properties => {
+                        // An empty `<a:ln/>` still carries a width; its colour
+                        // falls to the style reference.
+                        if let Some(width) = xml_util::get_attr_str(e, b"w")
+                            && let Ok(emu) = width.parse::<f64>()
+                        {
+                            pending.width_pt = emu / 12_700.0;
+                        }
+                    }
+                    b"noFill" if in_line => pending.has_no_fill = true,
+                    b"srgbClr" | b"schemeClr" | b"sysClr" if in_line || in_style_line_ref => {
+                        let parsed = drawingml::parse_color_from_empty(e, &scheme).color;
+                        let color = resolved_or_legacy(parsed, local.as_ref(), e);
+                        if in_line {
+                            if pending.color.is_none() {
+                                pending.color = color;
+                            }
+                        } else if pending.style_color.is_none() {
+                            pending.style_color = color;
+                        }
+                    }
+                    b"ext" if in_anchor && !in_shape && to.is_none() => {
+                        let mut cx: i64 = 0;
+                        let mut cy: i64 = 0;
+                        for attr in e.attributes().flatten() {
+                            let value: i64 = attr
+                                .normalized_value(OOXML_XML_VERSION)
+                                .ok()
+                                .and_then(|v| v.parse().ok())
+                                .unwrap_or(0);
+                            match attr.key.local_name().as_ref() {
+                                b"cx" => cx = value,
+                                b"cy" => cy = value,
+                                _ => {}
+                            }
+                        }
+                        ext_emu = Some((cx, cy));
+                    }
+                    _ => {}
+                }
+            }
+            Ok(quick_xml::events::Event::Text(ref t)) => {
+                if let (Some(is_from), Some(field)) = (corner_target, current_field)
+                    && let Ok(text) = t.xml_content(OOXML_XML_VERSION)
+                    && let Ok(number) = text.trim().parse::<i64>()
+                {
+                    let corner: &mut Corner = if is_from {
+                        &mut from
+                    } else {
+                        to.as_mut().expect("to corner initialized on <to>")
+                    };
+                    match field {
+                        "col" => corner.col = number as u32,
+                        "colOff" => corner.col_off = number,
+                        "row" => corner.row = number as u32,
+                        "rowOff" => corner.row_off = number,
+                        _ => {}
+                    }
+                }
+            }
+            Ok(quick_xml::events::Event::End(ref e)) => {
+                let local = e.local_name();
+                match local.as_ref() {
+                    b"twoCellAnchor" | b"oneCellAnchor" | b"absoluteAnchor" => {
+                        let color: Option<crate::ir::Color> = if pending.has_no_fill {
+                            None
+                        } else {
+                            pending.color.or(pending.style_color)
+                        };
+                        if in_shape
+                            && pending.is_line_geometry
+                            && !pending.is_hidden
+                            && let Some(color) = color
+                        {
+                            result.push(RawLineAnchor {
+                                geometry: ImageAnchorGeometry {
+                                    from_row: from.row,
+                                    from_col: from.col,
+                                    from_col_off_emu: from.col_off,
+                                    from_row_off_emu: from.row_off,
+                                    to: to.map(|c| (c.col, c.col_off, c.row, c.row_off)),
+                                    ext_emu,
+                                },
+                                stroke: BorderSide {
+                                    width: pending.width_pt,
+                                    color,
+                                    style: BorderLineStyle::Solid,
+                                    join: LineJoin::Round,
+                                },
+                                flip_h: pending.flip_h,
+                                flip_v: pending.flip_v,
+                            });
+                        }
+                        in_anchor = false;
+                        in_shape = false;
+                        corner_target = None;
+                    }
+                    b"from" | b"to" => corner_target = None,
+                    b"col" | b"colOff" | b"row" | b"rowOff" => current_field = None,
+                    b"spPr" => in_shape_properties = false,
+                    b"ln" => in_line = false,
+                    b"lnRef" => in_style_line_ref = false,
+                    _ => {}
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+    }
+
+    result
+}
+
 /// Read the workbook theme's color palette and Latin font scheme
 /// (`xl/theme/theme1.xml`, or the rels-declared target). A missing or
 /// unreadable theme yields an empty palette, which downgrades scheme

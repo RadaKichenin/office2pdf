@@ -2501,6 +2501,67 @@ fn structure_fit_to_page_sheet_without_declared_bounds_fits_its_rows_on_one_page
     );
 }
 
+/// The budget sheet's drawing holds two `xdr:cxnSp` connectors with
+/// `a:prstGeom prst="line"`, the gray separators between its three summary
+/// charts. Native Excel prints them as 0.78pt #D9D9D9 vertical lines at
+/// x = 340.07 and 596.34pt from y = 130.44 to 284.49pt on the 0.78-fitted
+/// page; the output held no line shape at all (issue #1566).
+#[test]
+fn structure_monthly_budget_prints_its_two_chart_separator_lines() {
+    use office2pdf::ir::ShapeKind;
+
+    let pages = sheet_pages("issue_1181_fit_to_height.xlsx");
+    let budget = sheet_page_named(&pages, "Monthly college budget");
+    assert_eq!(
+        budget.shapes.len(),
+        2,
+        "the budget sheet anchors two separator lines"
+    );
+    for (index, line) in budget.shapes.iter().enumerate() {
+        let ShapeKind::Line { x1, y1, x2, y2, .. } = line.shape.kind else {
+            panic!("separator {index} is a line, got {:?}", line.shape.kind);
+        };
+        assert_eq!(
+            (x1, y1),
+            (0.0, 0.0),
+            "separator {index} starts at its anchor"
+        );
+        assert_eq!(x2, 0.0, "separator {index} is vertical");
+        // Native: 2508265 EMU (197.50pt) of anchor height at 0.78 = 154.05pt;
+        // the anchor spans rows 4-14, whose printed tracks carry the #1514
+        // row snap, so the height is pinned loosely.
+        assert!(
+            (y2 - 154.05).abs() < 2.0 && (line.height - y2).abs() < 1e-9,
+            "separator {index} runs the anchor height, got {y2}pt"
+        );
+        let stroke = line
+            .shape
+            .stroke
+            .as_ref()
+            .unwrap_or_else(|| panic!("separator {index} is stroked"));
+        assert!(
+            (stroke.width - 0.78).abs() < 1e-6,
+            "the 1pt `a:ln` scales to 0.78pt with the fitted sheet, got {}",
+            stroke.width
+        );
+        assert_eq!(stroke.color, Color::new(217, 217, 217));
+    }
+    // Native draws them 256.27pt apart; the anchors sit at column 4 + 482419
+    // EMU and column 13 + 82971 EMU of the fitted grid.
+    let separation: f64 = budget.shapes[1].x_offset_pt - budget.shapes[0].x_offset_pt;
+    assert!(
+        (separation - 256.27).abs() < 1.0,
+        "the separators keep their native spacing, got {separation}pt"
+    );
+    assert!(
+        budget
+            .shapes
+            .iter()
+            .all(|line| (line.y_offset_pt - budget.shapes[0].y_offset_pt).abs() < 1e-9),
+        "both separators hang from the same row"
+    );
+}
+
 /// The reported monthly-budget workbook formats zero-valued entry cells with
 /// the third section of `#,##0_);[Red]\(#,##0\);\-\ \ `. Excel prints the
 /// escaped dash followed by both escaped spaces. All 71 cells are explicit

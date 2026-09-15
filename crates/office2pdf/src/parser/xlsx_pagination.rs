@@ -125,10 +125,49 @@ pub(super) fn split_sheet_page_by_width(
             } else {
                 Vec::new()
             },
+            shapes: if index == 0 {
+                page.shapes.clone()
+            } else {
+                Vec::new()
+            },
         });
     }
     end_sequence_at_last_inked_row(&mut result, last_group_inked_row_count);
     result
+}
+
+/// Shrink a worksheet shape whole: its anchor offset and extent, the line
+/// geometry inside that extent, and its stroke width.
+fn scale_sheet_shape(sheet_shape: &mut crate::ir::SheetShape, scale: f64) {
+    use crate::ir::ShapeKind;
+
+    sheet_shape.x_offset_pt *= scale;
+    sheet_shape.y_offset_pt *= scale;
+    sheet_shape.width *= scale;
+    sheet_shape.height *= scale;
+    match &mut sheet_shape.shape.kind {
+        ShapeKind::Line { x1, y1, x2, y2, .. } => {
+            *x1 *= scale;
+            *y1 *= scale;
+            *x2 *= scale;
+            *y2 *= scale;
+        }
+        ShapeKind::Polyline { points, .. } => {
+            for (x, y) in points.iter_mut() {
+                *x *= scale;
+                *y *= scale;
+            }
+        }
+        // Every other kind is normalised to its extent, which is scaled above.
+        ShapeKind::Rectangle
+        | ShapeKind::Ellipse
+        | ShapeKind::RoundedRectangle { .. }
+        | ShapeKind::Polygon { .. }
+        | ShapeKind::Path { .. } => {}
+    }
+    if let Some(stroke) = sheet_shape.shape.stroke.as_mut() {
+        stroke.width *= scale;
+    }
 }
 
 /// Whether a cell paints anything of its own: text, a fill, a border, or a
@@ -314,6 +353,12 @@ fn scale_sheet_page(
         if let Some(height) = image.image.height.as_mut() {
             *height *= scale;
         }
+    }
+    // A line shape is anchored to the same columns and rows, and Excel scales
+    // its stroke with the page: the budget workbook's `a:ln w="12700"`
+    // separators trace as 0.78pt lines on its 0.78-fitted export (#1566).
+    for sheet_shape in &mut page.shapes {
+        scale_sheet_shape(sheet_shape, scale);
     }
     for row in &mut page.table.rows {
         if let Some(height) = row.height.as_mut() {
@@ -718,6 +763,7 @@ pub(super) fn split_drawing_only_page(page: SheetPage) -> Vec<SheetPage> {
             if group > 0 {
                 paged.charts = Vec::new();
                 paged.text_boxes = Vec::new();
+                paged.shapes = Vec::new();
             }
             paged
         })

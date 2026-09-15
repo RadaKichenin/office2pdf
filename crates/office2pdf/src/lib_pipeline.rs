@@ -503,6 +503,7 @@ fn streaming_sheet_chunk(
         chunk.charts.clear();
         chunk.images.clear();
         chunk.text_boxes.clear();
+        chunk.shapes.clear();
     }
     chunk
 }
@@ -967,6 +968,7 @@ mod streaming_chunk_tests {
             charts: Vec::new(),
             images: Vec::new(),
             text_boxes: Vec::new(),
+            shapes: Vec::new(),
         }
     }
 
