@@ -1139,7 +1139,6 @@ fn horizontal_centering_inset_pt(page: &SheetPage, size: &PageSize) -> Option<f6
 enum SheetAnchor<'a> {
     Chart {
         sheet_chart: &'a crate::ir::SheetChart,
-        paint_offset_pt: Option<(f64, f64)>,
         /// The page height, which a page-column clip box reaches down to so
         /// that only its horizontal edges bound the chart (issue #1598).
         page_height_pt: f64,
@@ -1247,8 +1246,11 @@ fn sheet_drawing_layer(
         format!("#block(width: 100%, height: 0pt, spacing: 0pt)[#metadata(none)<{label}>]");
 
     // The page foreground does not inherit the table body's move. Apply its
-    // fitted sheet-space origin explicitly to drawing paint (#1542). Chart
-    // content retains its existing calibration through the chart writer.
+    // fitted sheet-space origin explicitly to every drawing (#1542). A chart's
+    // content shares that origin with its frame: Excel lays the plot out in
+    // sheet points inside the frame it paints, so seating the content on the
+    // converter's physical origin instead left it 0.854 sheet points low at
+    // 0.82 and needed a calibration that broke at 100% (issue #1607).
     let (paint_dx_pt, paint_dy_pt) = paint_offset_pt.unwrap_or((0.0, 0.0));
     let left_pt: f64 = page.margins.left + centering_inset_pt.unwrap_or(0.0) + paint_dx_pt;
     let top_pt: f64 = page.margins.top + paint_dy_pt;
@@ -1269,11 +1271,10 @@ fn sheet_drawing_layer(
             &mut foreground,
             &SheetAnchor::Chart {
                 sheet_chart,
-                paint_offset_pt,
                 page_height_pt: page.size.height,
             },
-            left_pt - paint_dx_pt,
-            top_pt - paint_dy_pt + placement.y_offset_pt,
+            left_pt,
+            top_pt + placement.y_offset_pt,
             ctx,
         );
     }
@@ -1336,7 +1337,6 @@ fn write_placed_sheet_anchor(
     match anchor {
         SheetAnchor::Chart {
             sheet_chart,
-            paint_offset_pt,
             page_height_pt,
         } => {
             let Some(placement) = sheet_chart.placement else {
@@ -1397,7 +1397,6 @@ fn write_placed_sheet_anchor(
                 &sheet_chart.chart,
                 (placement.width, placement.height),
                 sheet_frame_origin_pt,
-                paint_offset_pt.map(|(dx, dy)| (dx / coordinate_scale, dy / coordinate_scale)),
             );
             if fitted {
                 out.push(']');

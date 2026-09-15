@@ -110,30 +110,24 @@ pub(super) fn generate_chart(out: &mut String, chart: &Chart) {
 /// empty slide underneath (issue #548). Flowed charts have no frame and keep
 /// the intrinsic size.
 pub(super) fn generate_chart_in(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
-    generate_chart_in_with_sheet_origin(out, chart, frame, None, None);
+    generate_chart_in_with_sheet_origin(out, chart, frame, None);
 }
 
 /// Render a chart anchored on an Excel worksheet.
 ///
-/// `sheet_frame_origin_pt` retains the converter's unscaled physical frame origin
-/// used by the column-axis snapping calibration (#1471). Plot and text keep
-/// that calibration here; its unscaled inset discrepancy is tracked in #1607.
-/// `sheet_paint_offset_pt` aligns area paint and worksheet markers to the fitted
-/// sheet origin; column markers retain their separate vertical calibration.
+/// `sheet_frame_origin_pt` is the chart frame's top-left corner in Excel's
+/// unscaled sheet coordinate space, on the fitted sheet origin the frame is
+/// painted at (#1542). Excel lays the chart out in that space and snaps its
+/// column-axis chrome, columns and markers to whole sheet points there before
+/// applying the worksheet print scale (#1471, #1543), so the plot, text and
+/// area paint all share this one origin (issue #1607).
 pub(super) fn generate_sheet_chart_in(
     out: &mut String,
     chart: &Chart,
     frame: (f64, f64),
     sheet_frame_origin_pt: (f64, f64),
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
-    generate_chart_in_with_sheet_origin(
-        out,
-        chart,
-        Some(frame),
-        Some(sheet_frame_origin_pt),
-        sheet_paint_offset_pt,
-    );
+    generate_chart_in_with_sheet_origin(out, chart, Some(frame), Some(sheet_frame_origin_pt));
 }
 
 fn generate_chart_in_with_sheet_origin(
@@ -141,7 +135,6 @@ fn generate_chart_in_with_sheet_origin(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_origin_pt: Option<(f64, f64)>,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     // A framed chart is already bounded by its frame, so the page-break guard
     // only concerns the flowed case.
@@ -159,13 +152,7 @@ fn generate_chart_in_with_sheet_origin(
         out.push_str("#[\n");
         out.push_str(scope);
     }
-    generate_chart_body(
-        out,
-        chart,
-        frame,
-        sheet_frame_origin_pt,
-        sheet_paint_offset_pt,
-    );
+    generate_chart_body(out, chart, frame, sheet_frame_origin_pt);
     if font_scope.is_some() {
         out.push_str("]\n");
     }
@@ -195,38 +182,19 @@ fn generate_chart_body(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_origin_pt: Option<(f64, f64)>,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     match chart_variant(chart) {
         ChartVariant::AxisPlot => {
-            return generate_chart_axis(
-                out,
-                chart,
-                frame,
-                sheet_frame_origin_pt,
-                sheet_paint_offset_pt,
-            );
+            return generate_chart_axis(out, chart, frame, sheet_frame_origin_pt);
         }
         ChartVariant::LinePlot => {
-            return generate_chart_line_plot(
-                out,
-                chart,
-                frame,
-                sheet_frame_origin_pt,
-                sheet_paint_offset_pt,
-            );
+            return generate_chart_line_plot(out, chart, frame, sheet_frame_origin_pt);
         }
         ChartVariant::PiePlot => {
-            return generate_chart_pie_plot(out, chart, frame, sheet_paint_offset_pt);
+            return generate_chart_pie_plot(out, chart, frame);
         }
         ChartVariant::RadarPlot => {
-            return generate_chart_radar_plot(
-                out,
-                chart,
-                frame,
-                sheet_frame_origin_pt,
-                sheet_paint_offset_pt,
-            );
+            return generate_chart_radar_plot(out, chart, frame, sheet_frame_origin_pt);
         }
         ChartVariant::BorderedTable => {}
     }
@@ -514,12 +482,11 @@ pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, label: &str) -> Opt
 /// from a flat 0.45 (#1439).
 const LEGEND_KEY_LINE_BOX_SHARE: f64 = 0.45;
 
-/// Worksheet-space origin and the existing plot calibration, before printing
-/// applies the sheet scale. Legend samples use their independent placement.
+/// The chart frame's origin in worksheet space, before printing applies the
+/// sheet scale. Legend samples use their independent placement.
 #[derive(Clone, Copy)]
 struct WorksheetMarkerPlacement {
     frame_origin: (f64, f64),
-    plot_offset: (f64, f64),
 }
 
 impl WorksheetMarkerPlacement {
@@ -537,14 +504,14 @@ impl WorksheetMarkerPlacement {
             crate::ir::ChartLine::Automatic | crate::ir::ChartLine::Suppressed => false,
         };
         let phase: f64 = (size % 2.0) / 2.0;
-        let position = |value: f64, origin: f64, offset: f64| {
-            let sheet: f64 = origin + value + offset;
+        let position = |value: f64, origin: f64| {
+            let sheet: f64 = origin + value;
             let snapped: f64 = if floor { sheet.floor() } else { sheet.round() };
             snapped - phase - origin
         };
         (
-            position(x, self.frame_origin.0, self.plot_offset.0),
-            position(y, self.frame_origin.1, self.plot_offset.1),
+            position(x, self.frame_origin.0),
+            position(y, self.frame_origin.1),
         )
     }
 }
@@ -1731,16 +1698,23 @@ const CHART_COLUMN_TOP_PAD_EM: f64 = 0.607;
 /// Vertical chrome around an automatic Excel worksheet column plot.
 ///
 /// Re-zip-controlled native Excel for Mac 16.112 exports of the #1250 workbook
-/// isolate four factors. The top inset stays at 10.146pt through a 9pt value
+/// isolate four factors. The top inset stays at 11pt through a 9pt value
 /// axis, then grows by two thirds of a point per additional text point. With
 /// category and legend text at 9pt, suppressing their bands extends the plot by
-/// 13.943pt and 23.850pt respectively; the remaining 11.853pt is Excel's fixed
-/// bottom edge pad. Size sweeps make those two bands grow by 2.05pt and 79/60pt
-/// per text point. A frame-height sweep moves the bottom edge 1:1, so none of
-/// these quantities is a share of the frame.
-const EXCEL_COLUMN_TOP_INSET_AT_NINE_PT: f64 = 10.146;
+/// 13.943pt and 23.850pt respectively; the remaining 11pt is Excel's fixed
+/// bottom edge pad, the same flat inset it keeps at the top and right. Size
+/// sweeps make those two bands grow by 2.05pt and 79/60pt per text point. A
+/// frame-height sweep moves the bottom edge 1:1, so none of these quantities
+/// is a share of the frame.
+///
+/// Both edge insets are measured in sheet points from the frame Excel paints.
+/// The #1250 fit read 10.146pt and 11.853pt because the converter then seated
+/// the plot on its physical page origin, 0.854 sheet points below that frame
+/// at the 0.82 fit scale; the unscaled control of #1607, where the two origins
+/// coincide, and the 0.78 export of #1272 both read a whole 11pt.
+const EXCEL_COLUMN_TOP_INSET_AT_NINE_PT: f64 = 11.0;
 const EXCEL_COLUMN_TOP_INSET_GROWTH_EM: f64 = 2.0 / 3.0;
-const EXCEL_COLUMN_BOTTOM_EDGE_PAD_PT: f64 = 11.853;
+const EXCEL_COLUMN_BOTTOM_EDGE_PAD_PT: f64 = 11.0;
 const EXCEL_COLUMN_CATEGORY_BAND_AT_NINE_PT: f64 = 13.943;
 const EXCEL_COLUMN_CATEGORY_BAND_GROWTH_EM: f64 = 2.05;
 const EXCEL_BOTTOM_LEGEND_BAND_AT_NINE_PT: f64 = 23.850;
@@ -1750,16 +1724,20 @@ const EXCEL_BOTTOM_LEGEND_BAND_GROWTH_EM: f64 = 79.0 / 60.0;
 /// hosted Excel plot after its native bottom chrome is reserved.
 ///
 /// A native Excel for Mac 16.112.2 export of `Gift Budget and Tracker1.xlsx`
-/// puts the label box at 256.683pt in the chart-local frame. Once #1250 gives
-/// the plot its native 258.327pt bottom edge, that is a -3.644pt correction
+/// puts the label box at 257.536pt in the chart-local frame. Once #1250 gives
+/// the plot its native 259.180pt bottom edge, that is a -3.644pt correction
 /// from the generic 2pt gap. Four one-factor size probes establish the integer
 /// chart-grid response around that 9pt anchor.
 const EXCEL_CATEGORY_LABEL_BASE_Y_SHIFT_PT: f64 = -3.644;
 
 /// Chart-local correction for a 9pt bottom legend after its native 23.850pt
 /// band is reserved. The band moves the generic row origin 3.850pt upward, so
-/// the old -5.141pt correction becomes -1.291pt without moving the text.
-const EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT: f64 = -1.291;
+/// the old -5.141pt correction became -1.291pt without moving the text. The
+/// legend row is seated from the frame's bottom edge, so once the chart
+/// content shares the frame's fitted origin, 0.853 sheet points above the
+/// physical one that correction was taken on, the same native baseline needs
+/// -0.438pt (#1607).
+const EXCEL_BOTTOM_LEGEND_BASE_Y_SHIFT_PT: f64 = -0.438;
 const EXCEL_BOTTOM_LEGEND_Y_SHIFT_GROWTH_EM: f64 = 37.0 / 60.0;
 
 /// Clearance under the longest 45deg category label in a framed column plot.
@@ -3604,18 +3582,16 @@ fn write_chart_area_start(
     chart_area: Option<(f64, f64)>,
     content_extent: (f64, f64),
     title_band: ChartTitleBand,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) -> bool {
     let wraps_title: bool = title.is_some();
     if let Some(title) = title {
         let (area_w, area_h): (f64, f64) =
             chart_area.unwrap_or((content_extent.0, content_extent.1 + title_band.height));
-        write_offset_paint_box_start(
+        write_paint_box_start(
             out,
             (area_w, area_h),
             &chart_area_fill(&chart.chart_area_fill),
             &chart_area_stroke(&chart.chart_area_outline, chart.host),
-            sheet_paint_offset_pt,
         );
         if let (crate::ir::ChartHost::Presentation, Some(layout), Some(frame)) =
             (chart.host, chart.title_layout, chart_area)
@@ -3653,44 +3629,20 @@ fn write_chart_area_start(
     } else {
         chart_area_fill(&chart.chart_area_fill)
     };
-    write_offset_paint_box_start(
-        out,
-        content_extent,
-        &content_fill,
-        &content_stroke,
-        if wraps_title {
-            None
-        } else {
-            sheet_paint_offset_pt
-        },
-    );
+    write_paint_box_start(out, content_extent, &content_fill, &content_stroke);
     wraps_title
 }
 
-/// Paint a box on the fitted sheet origin while retaining its content layout.
-/// The chart plot and text use independently calibrated coordinates (#1542).
-fn write_offset_paint_box_start(
-    out: &mut String,
-    extent: (f64, f64),
-    fill: &str,
-    stroke: &str,
-    offset: Option<(f64, f64)>,
-) {
-    let width = format_f64(extent.0);
-    let height = format_f64(extent.1);
-    if let Some((dx, dy)) = offset {
-        let _ = writeln!(
-            out,
-            "#box(width: {width}pt, height: {height}pt)[#place(top + left, dx: {}pt, dy: {}pt, box(width: {width}pt, height: {height}pt, fill: {fill}, stroke: {stroke}))",
-            format_f64(dx),
-            format_f64(dy)
-        );
-    } else {
-        let _ = writeln!(
-            out,
-            "#box(width: {width}pt, height: {height}pt, fill: {fill}, stroke: {stroke})["
-        );
-    }
+/// Open the painted box the chart's content is laid out in. On a worksheet
+/// the enclosing `place` already sits on the fitted sheet origin, so the
+/// fill, outline and content share it (#1542, #1607).
+fn write_paint_box_start(out: &mut String, extent: (f64, f64), fill: &str, stroke: &str) {
+    let _ = writeln!(
+        out,
+        "#box(width: {}pt, height: {}pt, fill: {fill}, stroke: {stroke})[",
+        format_f64(extent.0),
+        format_f64(extent.1),
+    );
 }
 
 /// Close the inner content box and, for a titled chart, its full-area wrapper.
@@ -4293,10 +4245,10 @@ fn band_bars(band: f64, series_count: usize, layout: BarBandLayout) -> BandBars 
 /// `<c:overlap>` 0, 50 and -27 at gapWidth 150 — paint 50 columns whose every
 /// edge but one is `round(continuous edge)`; the one remaining edge is the
 /// gapWidth-0 first column's left, which stops at the plot's exact left edge
-/// rather than the rounded point beyond it (#1543). The sheet point is taken on the fitted sheet origin the
-/// markers already snap to, so the column lands where native paints it while
-/// the plot's own chrome keeps its calibration. Column tops stay continuous:
-/// native tops are not whole points. Bar charts are not measured and keep the
+/// rather than the rounded point beyond it (#1543). The sheet point is taken
+/// on the fitted sheet origin the frame, chrome and markers share, so the
+/// column lands where native paints it. Column tops stay continuous: native
+/// tops are not whole points. Bar charts are not measured and keep the
 /// continuous band.
 fn worksheet_column_span(
     start: f64,
@@ -4309,8 +4261,7 @@ fn worksheet_column_span(
         return (start, thickness);
     };
     let origin: f64 = placement.frame_origin.0;
-    let offset: f64 = placement.plot_offset.0;
-    let snap = |chart_local: f64| (origin + chart_local + offset).round() - origin;
+    let snap = |chart_local: f64| (origin + chart_local).round() - origin;
     let left: f64 = snap(start).max(plot_x);
     let right: f64 = snap(start + thickness).min(plot_x + plot_w);
     (left, (right - left).max(0.0))
@@ -4378,23 +4329,11 @@ fn generate_chart_axis(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_origin_pt: Option<(f64, f64)>,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
     let horizontal: bool = matches!(chart.chart_type, ChartType::Bar);
     let sheet_frame_top_pt: Option<f64> = sheet_frame_origin_pt.map(|origin| origin.1);
-    let worksheet_markers = sheet_frame_origin_pt.map(|frame_origin| {
-        let mut plot_offset = sheet_paint_offset_pt.unwrap_or((0.0, 0.0));
-        // The column plot's vertical coordinates already retain the native
-        // sheet-space calibration used by its value chrome (#1471/#1542).
-        // Applying the outer frame's vertical paint shift again moves them.
-        if !horizontal {
-            plot_offset.1 = 0.0;
-        }
-        WorksheetMarkerPlacement {
-            frame_origin,
-            plot_offset,
-        }
-    });
+    let worksheet_markers =
+        sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement { frame_origin });
     let categories: usize = chart.categories.len();
     let series: &[crate::ir::ChartSeries] = &chart.series;
     let series_count: usize = series.len().max(1);
@@ -4456,7 +4395,6 @@ fn generate_chart_axis(
             height: title_h,
             fixed: true,
         },
-        sheet_paint_offset_pt,
     );
 
     // The plotting rectangle: the one `c:plotArea/c:layout` states, else the
@@ -5234,12 +5172,9 @@ fn generate_chart_line_plot(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_origin_pt: Option<(f64, f64)>,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
-    let worksheet_markers = sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement {
-        frame_origin,
-        plot_offset: sheet_paint_offset_pt.unwrap_or((0.0, 0.0)),
-    });
+    let worksheet_markers =
+        sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement { frame_origin });
     const PLOT_W: f64 = 320.0;
     const PLOT_H: f64 = 210.0;
     const VALUE_GAP: f64 = 24.0; // value tick label gutter (left)
@@ -5351,7 +5286,6 @@ fn generate_chart_line_plot(
             height: title_h,
             fixed: false,
         },
-        sheet_paint_offset_pt,
     );
 
     // `<c:delete val="1"/>` switches an axis off; see `generate_chart_axis`.
@@ -5620,12 +5554,9 @@ fn generate_chart_radar_plot(
     chart: &Chart,
     frame: Option<(f64, f64)>,
     sheet_frame_origin_pt: Option<(f64, f64)>,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
 ) {
-    let worksheet_markers = sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement {
-        frame_origin,
-        plot_offset: sheet_paint_offset_pt.unwrap_or((0.0, 0.0)),
-    });
+    let worksheet_markers =
+        sheet_frame_origin_pt.map(|frame_origin| WorksheetMarkerPlacement { frame_origin });
     /// Intrinsic plot size for a flowed radar, matching the pie's.
     const RADAR_DIAMETER: f64 = 200.0;
     const RADAR_LEGEND_ROW_H: f64 = 14.0;
@@ -5705,7 +5636,6 @@ fn generate_chart_radar_plot(
             height: title_h,
             fixed: false,
         },
-        sheet_paint_offset_pt,
     );
 
     // Office puts the first category at twelve o'clock and runs clockwise, the
@@ -5922,12 +5852,7 @@ fn automatic_pie_plot_inset_pt(chart: &Chart) -> f64 {
 
 /// Render a pie chart as a circle of wedges, each sized by its share of the
 /// series total, with the legend on the edge `<c:legendPos>` asks for.
-fn generate_chart_pie_plot(
-    out: &mut String,
-    chart: &Chart,
-    frame: Option<(f64, f64)>,
-    sheet_paint_offset_pt: Option<(f64, f64)>,
-) {
+fn generate_chart_pie_plot(out: &mut String, chart: &Chart, frame: Option<(f64, f64)>) {
     const PIE_DIAMETER: f64 = 200.0;
     const PIE_LEGEND_ROW_H: f64 = 14.0;
 
@@ -5984,7 +5909,6 @@ fn generate_chart_pie_plot(
             height: title_h,
             fixed: false,
         },
-        sheet_paint_offset_pt,
     );
 
     // Office sweeps clockwise from the boundary `<c:firstSliceAng>` names,
