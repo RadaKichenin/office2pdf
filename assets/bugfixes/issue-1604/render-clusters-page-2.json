@@ -1,0 +1,743 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 274.9824,
+      "bbox_pt": {
+        "height": 5.04,
+        "width": 270.72,
+        "x": 811.92,
+        "y": 326.4
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Amount Spent zero-value segments Feb-Mar (71.5x2.2pt) and Aug-Dec (270.7x5.0pt), inspected in 3x 300 DPI GT/output/diff crops: after the fix the turquoise stroke is one solid 1.84pt line on both sides where before it showed two teal edges around a grey core (the #1604 defect). The diff that remains is a ring on each zero-value marker and a hairline along one stroke edge: native paints each marker as a 7x7 raster sprite scaled to 5.74pt with a soft halo while the output draws a crisp 5pt vector disc at the same centre (trace y 329.7978 native / 329.7987 output), and the stroke edges differ by their antialiasing only. Colour, width, centre and cap agree."
+      },
+      "id": "p2-d7d399836297",
+      "region": "right"
+    },
+    {
+      "area_pt2": 167.5008,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 35.76,
+        "x": 158.88,
+        "y": 265.92
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-60993a0ea446",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 90.8928,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 23.28,
+        "x": 147.12,
+        "y": 162.72
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-38addde3084c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 80.5248,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 18.72,
+        "x": 192.96,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-72b0c0a8a811",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 79.4304,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 17.52,
+        "x": 196.8,
+        "y": 165.36
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-b2da0f3dfb44",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 75.3984,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 17.28,
+        "x": 194.4,
+        "y": 248.64
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-4bd995e5183f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 70.4448,
+      "bbox_pt": {
+        "height": 2.16,
+        "width": 71.52,
+        "x": 414.24,
+        "y": 329.28
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Amount Spent zero-value segments Feb-Mar (71.5x2.2pt) and Aug-Dec (270.7x5.0pt), inspected in 3x 300 DPI GT/output/diff crops: after the fix the turquoise stroke is one solid 1.84pt line on both sides where before it showed two teal edges around a grey core (the #1604 defect). The diff that remains is a ring on each zero-value marker and a hairline along one stroke edge: native paints each marker as a 7x7 raster sprite scaled to 5.74pt with a soft halo while the output draws a crisp 5pt vector disc at the same centre (trace y 329.7978 native / 329.7987 output), and the stroke edges differ by their antialiasing only. Colour, width, centre and cap agree."
+      },
+      "id": "p2-f0ad941bf266",
+      "region": "center"
+    },
+    {
+      "area_pt2": 67.7952,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 17.28,
+        "x": 116.88,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-9a1d6af5fb01",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 67.1616,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 16.8,
+        "x": 161.04,
+        "y": 197.76
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-5a7078adf6c7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 66.528,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 17.28,
+        "x": 177.36,
+        "y": 165.36
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-1acf2fa542b2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 55.3536,
+      "bbox_pt": {
+        "height": 8.64,
+        "width": 15.36,
+        "x": 237.36,
+        "y": 180.96
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-a90dddc67ebe",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 53.6256,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 12.0,
+        "x": 148.8,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-6750401f4ee6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 44.928,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 9.84,
+        "x": 184.56,
+        "y": 179.76
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-9c902f2110ed",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 44.4096,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 18.0,
+        "x": 206.64,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-0ad5bc7e8074",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 41.6448,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 8.16,
+        "x": 151.44,
+        "y": 179.76
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-b208058ca17d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 38.1888,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 10.56,
+        "x": 194.64,
+        "y": 182.4
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-9c7c842adfa0",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 36.1152,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 9.36,
+        "x": 148.56,
+        "y": 216.96
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-5f1e32583f03",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.7536,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 6.96,
+        "x": 230.88,
+        "y": 146.16
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-25d1f9337d9f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.0624,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 8.16,
+        "x": 238.32,
+        "y": 148.08
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-ca09e5a4326a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.0624,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 6.24,
+        "x": 207.12,
+        "y": 179.76
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-dfa0c35b492e",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.0624,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 6.24,
+        "x": 174.96,
+        "y": 179.76
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-8269b69bfea7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.9472,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 8.16,
+        "x": 158.64,
+        "y": 232.08
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-dbdf2aa4125b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.6592,
+      "bbox_pt": {
+        "height": 17.76,
+        "width": 17.52,
+        "x": 169.44,
+        "y": 107.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Two glyph fragments of the 40pt Century Gothic sheet title GIFT BUDGET AND TRACKER (x 169-221pt, y 107.5pt): same glyphs, size, weight and baseline on both sides, edge-only differences at 300 DPI; the title is not among the audit's shifted instances."
+      },
+      "id": "p2-57d2ddf8efee",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 8.88,
+        "width": 5.52,
+        "x": 224.64,
+        "y": 163.2
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-05ecf4dffaab",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 31.68,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 6.24,
+        "x": 144.0,
+        "y": 251.28
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-78f66e4078c1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.3552,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 8.4,
+        "x": 132.72,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-9c30c4a53b26",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.4336,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 7.68,
+        "x": 237.12,
+        "y": 216.96
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-432778a833f6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.2032,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 10.8,
+        "x": 178.32,
+        "y": 251.28
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-7d3e0d4630eb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.648,
+      "bbox_pt": {
+        "height": 9.6,
+        "width": 7.44,
+        "x": 139.44,
+        "y": 265.92
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-a153441414e8",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.4176,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 9.12,
+        "x": 199.92,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-3f241adeb626",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.6896,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 8.16,
+        "x": 182.16,
+        "y": 216.96
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-b0eb1ec7ce00",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.1712,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 4.8,
+        "x": 125.76,
+        "y": 165.6
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-db6a3cb45ccd",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.7888,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 6.48,
+        "x": 187.68,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-a1071b5d0735",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.3856,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 4.8,
+        "x": 223.2,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-48a68da484ef",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 9.12,
+        "x": 107.04,
+        "y": 199.68
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-be8b12ca2876",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.9248,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.0,
+        "x": 228.72,
+        "y": 217.2
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-bdc2cc164c48",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.6944,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 7.68,
+        "x": 230.4,
+        "y": 268.56
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-f34a216bf157",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.0032,
+      "bbox_pt": {
+        "height": 4.8,
+        "width": 7.2,
+        "x": 1041.36,
+        "y": 464.16
+      },
+      "disposition": {
+        "issue": "#1659",
+        "kind": "issue",
+        "note": "The 'ts' tail of the Notes cell '6/16, Movie tickets' (7.2x4.8pt at x 1041pt): the run origin matches and the glyph bodies drift right along the string as Excel for Mac advances each glyph a whole point, inspected in the 2x crop."
+      },
+      "id": "p2-a9ec5d42ff0d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 5.52,
+        "x": 133.44,
+        "y": 234.24
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-eacad91e7aa0",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 5.52,
+        "x": 191.04,
+        "y": 234.24
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-cfe3e2184a20",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.7152,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 6.0,
+        "x": 89.52,
+        "y": 197.04
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-6d8fa062b070",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.3696,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 4.56,
+        "x": 140.4,
+        "y": 162.72
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-05becac2e6bb",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.312,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.32,
+        "x": 145.68,
+        "y": 217.2
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-1d0c8fbb6b95",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.2544,
+      "bbox_pt": {
+        "height": 17.76,
+        "width": 9.6,
+        "x": 211.68,
+        "y": 107.52
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Two glyph fragments of the 40pt Century Gothic sheet title GIFT BUDGET AND TRACKER (x 169-221pt, y 107.5pt): same glyphs, size, weight and baseline on both sides, edge-only differences at 300 DPI; the title is not among the audit's shifted instances."
+      },
+      "id": "p2-0c9e7c228fe3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.9088,
+      "bbox_pt": {
+        "height": 9.36,
+        "width": 4.8,
+        "x": 94.32,
+        "y": 165.6
+      },
+      "disposition": {
+        "issue": "#1606",
+        "kind": "issue",
+        "note": "Sidebar instruction block B4 (Segoe UI 14pt, top-aligned, wrapped, fixed row): all eight matched lines sit dy +0.79pt below native and dx +0.185pt right (native first baseline y 154.16, output 154.95 at the 0.82 fit scale); pitch 17.22pt on both sides. Whole-glyph offsets in the full-page diff and the eight shift crops. The vertical seat is the top-aligned wrapped first-baseline rule of #1606 (re-measured on the fitted source in that issue's body); the x remainder is the fitted text origin of #1719; the intra-string drift on long lines is #1659."
+      },
+      "id": "p2-9b109eea2a9e",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 45,
+    "duplicate": 0,
+    "total": 45,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

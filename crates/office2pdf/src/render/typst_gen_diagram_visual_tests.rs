@@ -9927,6 +9927,107 @@ fn category_axis_paints_before_overlapping_line_plot_markers() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// A line laid over columns can run along the category axis: the #982 workbook
+/// spends nothing in most months, so its `Amount Spent` line lies on the zero
+/// rule there. Native Excel strokes that rule after the columns and before the
+/// line, so the line's own colour shows where the two coincide. Inspect the
+/// compiled paint order, not markup order (#1604).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn category_axis_paints_between_columns_and_overlaid_line_series() {
+    use crate::ir::ChartLine;
+    use crate::render::pdf::{PaintedKind, PaintedPrimitive, compiled_paint_sequence};
+
+    const AXIS_WIDTH_PT: f64 = 0.6;
+    const LINE_WIDTH_PT: f64 = 1.84;
+    let stroke_width = |item: &PaintedPrimitive| -> f64 {
+        item.stroke
+            .as_ref()
+            .map(|stroke| stroke.thickness_pt)
+            .unwrap_or(0.0)
+    };
+    let mut failures = Vec::new();
+    for chart_type in [ChartType::Column, ChartType::Bar] {
+        for line_values in [vec![0.0, 0.0], vec![0.0, 75.0]] {
+            let mut chart = combo_budget_chart();
+            chart.chart_type = chart_type.clone();
+            chart.has_legend = false;
+            chart.series[2].values = line_values.clone();
+            chart.series[2].line_width_pt = Some(LINE_WIDTH_PT);
+            chart.category_axis_line = ChartLine::Explicit {
+                width_pt: Some(AXIS_WIDTH_PT),
+                color: Some(crate::ir::Color::new(217, 217, 217)),
+                alpha: None,
+            };
+            chart.value_axis_line = ChartLine::Suppressed;
+            chart.major_gridline_line = ChartLine::Suppressed;
+            let source = chart_source(chart);
+            let paints = compiled_paint_sequence(&source, &[], 0).unwrap();
+            let case = format!("{chart_type:?} with line values {line_values:?}");
+
+            let axes: Vec<(usize, &PaintedPrimitive)> = paints
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    item.kind == PaintedKind::Shape
+                        && (stroke_width(item) - AXIS_WIDTH_PT).abs() < 0.01
+                })
+                .collect();
+            assert_eq!(
+                axes.len(),
+                1,
+                "{case}: the declared category rule is drawn once"
+            );
+            let lines: Vec<(usize, &PaintedPrimitive)> = paints
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    item.kind == PaintedKind::Shape
+                        && (stroke_width(item) - LINE_WIDTH_PT).abs() < 0.01
+                })
+                .collect();
+            assert_eq!(
+                lines.len(),
+                1,
+                "{case}: the overlaid series is stroked once"
+            );
+            let last_column: usize = paints
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| {
+                    item.kind == PaintedKind::Shape
+                        && item.rectangle_fill.is_some()
+                        && item.bounds.2 - item.bounds.0 > 1.0
+                        && item.bounds.3 - item.bounds.1 > 1.0
+                })
+                .map(|(index, _)| index)
+                .max()
+                .expect("the stacked budget columns are painted");
+
+            let (axis_index, axis) = axes[0];
+            let (line_index, line) = lines[0];
+            // The zero-valued points put the series on the rule itself.
+            let reach: f64 = LINE_WIDTH_PT / 2.0;
+            let overlaps: bool = line.bounds.0 - reach <= axis.bounds.2
+                && line.bounds.2 + reach >= axis.bounds.0
+                && line.bounds.1 - reach <= axis.bounds.3
+                && line.bounds.3 + reach >= axis.bounds.1;
+            assert!(overlaps, "{case}: the series lies on the category rule");
+            if last_column >= axis_index {
+                failures.push(format!(
+                    "{case}: column paint {last_column} follows the axis paint {axis_index}"
+                ));
+            }
+            if axis_index >= line_index {
+                failures.push(format!(
+                    "{case}: axis paint {axis_index} follows the series paint {line_index}"
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Read actual compiled plot and legend strokes from declared series XML.
 /// Native Excel's cap/join controls also establish the omitted miter limit (#1590).
 #[cfg(not(target_arch = "wasm32"))]
