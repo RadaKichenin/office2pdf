@@ -5298,8 +5298,8 @@ fn sheet_advance_grid_tracking_pt(style: &TextStyle, text: &str) -> Option<f64> 
 ///
 /// Native Excel-for-Mac traces across the ten business workbooks predict the
 /// measured right-aligned origin residual run by run from this value (issue
-/// #1233). Centred lines deliberately stay unchanged: Excel's separate
-/// whole-point origin snap absorbs the half-residual in the measured corpus.
+/// #1233). Centred lines take no reserve: their whole-point origin is seated
+/// by [`centered_sheet_line_start_shift_pt`] instead (issue #1600).
 pub(super) fn sheet_trailing_advance_space_pt(style: &ParagraphStyle, runs: &[Run]) -> Option<f64> {
     let scale: f64 = sheet_advance_grid_scale()?;
     if !matches!(style.alignment, Some(Alignment::Right)) {
@@ -5337,6 +5337,107 @@ pub(super) fn sheet_trailing_advance_space_pt(style: &ParagraphStyle, runs: &[Ru
         round_half_up_to_grid(advances_em.last()? * sheet_size_pt, SHEET_ADVANCE_GRID_PT) * scale;
     let space_pt: f64 = rounded_pt - natural_pt;
     (space_pt != 0.0).then_some(space_pt)
+}
+
+/// The gridline-to-gridline box of a spreadsheet cell, in printed points,
+/// with the inset pair its text is laid out inside and the cell's `wrapText`
+/// flag.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct SheetCellBox {
+    pub(super) width_pt: f64,
+    pub(super) inset_left_pt: f64,
+    pub(super) inset_right_pt: f64,
+    pub(super) wraps_text: bool,
+}
+
+/// How far a centred sheet line has to move from Typst's exact centring to
+/// the whole-point origin Excel prints it at, in printed points, or `None`
+/// when this paragraph is not one the seat applies to.
+///
+/// Excel lays sheet text out on whole-point glyph advances (the grid above)
+/// and starts a centred line on a whole sheet point from the cell's left
+/// gridline: `floor((column - W + 2) / 2)` in an unwrapped cell and
+/// `floor((column - W + 1) / 2)` in a wrapped one, where `W` is the sum of the
+/// line's rounded advances. Probe-measured on 15 strings of even and odd `W`
+/// at 11, 14, 20 and 24pt in 65, 66, 80, 81, 99 and 100pt columns, every row
+/// exact; the same rule reproduces all 191 centred string cells of the ten
+/// business golden mocks (all wrapped) and the reported workbook's unwrapped
+/// headers, whose centres it had left up to 1.41pt short (issue #1600). The
+/// inset pair does not enter: a 20pt cell font, whose box steps to 4/3pt,
+/// seats exactly where the 11pt one does.
+///
+/// Typst centres the tracked line — the rounded gap advances plus the last
+/// glyph's natural one, see [`sheet_advance_grid_tracking_pt`] — inside the
+/// inset measure, so the seat is the difference between the two origins,
+/// evaluated at the declared size and scaled like the grid (issue #1238). A
+/// line the measure cannot hold wraps in Typst and keeps its symmetric
+/// centring, as does a hard-broken block, a small-caps run, or a face the
+/// measurement cannot read. So does a cell whose inset pair is not the
+/// symmetric split the XLSX parser gives a centred cell: an icon-set cell
+/// reserves the icon's advance on its left (issue #652), and where Excel
+/// seats a centred value beside an icon is unmeasured.
+pub(super) fn centered_sheet_line_start_shift_pt(
+    style: &ParagraphStyle,
+    runs: &[Run],
+    cell_box: &SheetCellBox,
+) -> Option<f64> {
+    let scale: f64 = sheet_advance_grid_scale()?;
+    if !matches!(style.alignment, Some(Alignment::Center))
+        || matches!(style.direction, Some(TextDirection::Rtl))
+        || (cell_box.inset_left_pt - cell_box.inset_right_pt).abs() > 1e-6
+    {
+        return None;
+    }
+    let shaped_runs: Vec<&Run> = runs.iter().filter(|run| !run.text.is_empty()).collect();
+    if shaped_runs.is_empty()
+        || shaped_runs.iter().any(|run| {
+            run.text
+                .chars()
+                .any(|ch| matches!(ch, '\n' | '\t' | PPTX_SOFT_LINE_BREAK_CHAR))
+        })
+    {
+        return None;
+    }
+
+    let mut whole_point_width_sheet_pt: f64 = 0.0;
+    let mut laid_out_width_sheet_pt: f64 = 0.0;
+    for run in shaped_runs {
+        if matches!(run.style.small_caps, Some(true)) {
+            return None;
+        }
+        let all_caps: String;
+        let shaped: &str = if matches!(run.style.all_caps, Some(true)) {
+            all_caps = run.text.to_uppercase();
+            &all_caps
+        } else {
+            &run.text
+        };
+        let size_pt: f64 = run.style.font_size.filter(|size| *size > 0.0)?;
+        let sheet_size_pt: f64 = size_pt / scale;
+        let advances_em: Vec<f64> = sheet_advance_grid_glyph_advances_em(&run.style, shaped)?;
+        let (last_advance_em, gap_advances_em) = advances_em.split_last()?;
+        let rounded_sheet_pt = |advance_em: &f64| -> f64 {
+            round_half_up_to_grid(advance_em * sheet_size_pt, SHEET_ADVANCE_GRID_PT)
+        };
+        let gaps_sheet_pt: f64 = gap_advances_em.iter().map(rounded_sheet_pt).sum();
+        whole_point_width_sheet_pt += gaps_sheet_pt + rounded_sheet_pt(last_advance_em);
+        laid_out_width_sheet_pt += gaps_sheet_pt + last_advance_em * sheet_size_pt;
+    }
+
+    let column_sheet_pt: f64 = cell_box.width_pt / scale;
+    let inset_left_sheet_pt: f64 = cell_box.inset_left_pt / scale;
+    let measure_sheet_pt: f64 =
+        column_sheet_pt - inset_left_sheet_pt - cell_box.inset_right_pt / scale;
+    if measure_sheet_pt <= 0.0 || laid_out_width_sheet_pt > measure_sheet_pt {
+        return None;
+    }
+    let seat_term: f64 = if cell_box.wraps_text { 1.0 } else { 2.0 };
+    let excel_start_sheet_pt: f64 =
+        ((column_sheet_pt - whole_point_width_sheet_pt + seat_term) / 2.0).floor();
+    let typst_start_sheet_pt: f64 =
+        inset_left_sheet_pt + (measure_sheet_pt - laid_out_width_sheet_pt) / 2.0;
+    let shift_pt: f64 = (excel_start_sheet_pt - typst_start_sheet_pt) * scale;
+    (shift_pt.abs() > 1e-9).then_some(shift_pt)
 }
 
 fn sheet_advance_grid_glyph_advances_em(style: &TextStyle, text: &str) -> Option<Vec<f64>> {

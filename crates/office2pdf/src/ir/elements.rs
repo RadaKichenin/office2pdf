@@ -1489,6 +1489,13 @@ pub struct TableCell {
     /// cell's own bottom border weighs (issue #1545). Never set on
     /// Word/PowerPoint cells.
     pub row_has_thick_bottom: bool,
+    /// Whether the worksheet cell carries Excel's `wrapText="1"` alignment
+    /// flag. Excel starts a centred line one sheet point further left in a
+    /// wrapped cell than in an unwrapped one of the same width and text
+    /// (issue #1600); the renderer needs the flag because an unwrapped cell
+    /// whose text fits leaves no other trace of it. Never set on
+    /// Word/PowerPoint cells.
+    pub wraps_text: bool,
 }
 
 impl Default for TableCell {
@@ -1511,6 +1518,7 @@ impl Default for TableCell {
             vertical_align: None,
             padding: None,
             row_has_thick_bottom: false,
+            wraps_text: false,
         }
     }
 }

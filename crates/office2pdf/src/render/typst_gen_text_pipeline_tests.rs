@@ -3373,3 +3373,251 @@ fn a_run_naming_a_light_member_states_its_weight_where_the_face_is_indexed() {
         "with no light member indexed the run must state no weight, got:\n{source}"
     );
 }
+
+/// One centred cell of a spreadsheet in a column of `column_width_pt`, laid
+/// out in the symmetric 2.5pt box a centred Excel cell takes, carrying the
+/// workbook's `wrapText` flag.
+fn centred_sheet_page(
+    text: &str,
+    style: TextStyle,
+    column_width_pt: f64,
+    horizontal_inset_pt: f64,
+    wraps_text: bool,
+) -> Page {
+    let mut page: Page = sheet_page_with_aligned_cell(text, style, Some(Alignment::Center));
+    let Page::Sheet(sheet) = &mut page else {
+        unreachable!("sheet_page_with_aligned_cell returns a sheet")
+    };
+    sheet.table.column_widths = vec![column_width_pt];
+    sheet.table.seats_bottom_aligned_text_on_descender = true;
+    let cell: &mut TableCell = &mut sheet.table.rows[0].cells[0];
+    cell.padding = Some(Insets {
+        top: 1.0,
+        right: horizontal_inset_pt,
+        bottom: 1.5,
+        left: horizontal_inset_pt,
+    });
+    cell.wraps_text = wraps_text;
+    page
+}
+
+/// Libertinus Serif 10pt "Total", the same face and string the advance-grid
+/// tests above measure.
+fn libertinus_total() -> TextStyle {
+    TextStyle {
+        font_family: Some("Libertinus Serif".to_string()),
+        font_size: Some(10.0),
+        ..TextStyle::default()
+    }
+}
+
+/// The first horizontal-only `#move(dx: …)` the generator emitted, in points.
+/// Seat wrappers that also carry `dy:` are a different emission and skipped.
+fn emitted_move_dx_pt(source: &str) -> Option<f64> {
+    source.split("#move(dx: ").skip(1).find_map(|after_move| {
+        let (value, _) = after_move.split_once("pt)[")?;
+        value.parse().ok()
+    })
+}
+
+/// Excel starts a centred sheet line on a whole sheet point: an unwrapped
+/// cell at `floor((column - W + 2) / 2)` from its left gridline and a wrapped
+/// one at `floor((column - W + 1) / 2)`, where `W` is the sum of the line's
+/// whole-point glyph advances. Probe-measured on 15 strings in 65-100pt
+/// columns at 11-24pt (issue #1600).
+///
+/// Libertinus Serif 10pt "Total" advances 5.97, 5.04, 3.16, 4.57 and 2.64pt:
+/// W = 6 + 5 + 3 + 5 + 3 = 22, and the tracked line Typst lays out is
+/// 19 + 2.64 = 21.64pt wide. In an 80pt column the symmetric 2.5pt box centres
+/// that line at 29.18pt from the gridline; Excel prints the unwrapped cell at
+/// 30pt and the wrapped one at 29pt.
+#[test]
+fn test_centred_sheet_line_starts_on_excels_whole_point_seat() {
+    let unwrapped = generate_typst(&make_doc(vec![centred_sheet_page(
+        "Total",
+        libertinus_total(),
+        80.0,
+        2.5,
+        false,
+    )]))
+    .unwrap()
+    .source;
+    let wrapped = generate_typst(&make_doc(vec![centred_sheet_page(
+        "Total",
+        libertinus_total(),
+        80.0,
+        2.5,
+        true,
+    )]))
+    .unwrap()
+    .source;
+
+    let unwrapped_dx: f64 = emitted_move_dx_pt(&unwrapped)
+        .unwrap_or_else(|| panic!("an unwrapped centred sheet line must be moved: {unwrapped}"));
+    let wrapped_dx: f64 = emitted_move_dx_pt(&wrapped)
+        .unwrap_or_else(|| panic!("a wrapped centred sheet line must be moved: {wrapped}"));
+    assert!(
+        (unwrapped_dx - 0.82).abs() < 1e-6,
+        "unwrapped: 30 - 29.18 = 0.82pt, got {unwrapped_dx}: {unwrapped}"
+    );
+    assert!(
+        (wrapped_dx + 0.18).abs() < 1e-6,
+        "wrapped: 29 - 29.18 = -0.18pt, got {wrapped_dx}: {wrapped}"
+    );
+}
+
+/// Triangulation on an odd column: 81pt gives `floor(61 / 2) = 30` unwrapped
+/// and `floor(60 / 2) = 30` wrapped, so both cells seat 0.32pt right of the
+/// 29.68pt symmetric centre. The rule is integer division on the column
+/// width, not a fixed offset from the wrapped seat.
+#[test]
+fn test_centred_sheet_line_seat_is_integer_division_on_the_column_width() {
+    for wraps_text in [false, true] {
+        let source = generate_typst(&make_doc(vec![centred_sheet_page(
+            "Total",
+            libertinus_total(),
+            81.0,
+            2.5,
+            wraps_text,
+        )]))
+        .unwrap()
+        .source;
+        let dx: f64 = emitted_move_dx_pt(&source)
+            .unwrap_or_else(|| panic!("wraps_text={wraps_text}: no move emitted: {source}"));
+        assert!(
+            (dx - 0.32).abs() < 1e-6,
+            "wraps_text={wraps_text}: 30 - 29.68 = 0.32pt, got {dx}: {source}"
+        );
+    }
+}
+
+/// A fitted sheet evaluates the seat at the declared size on the declared
+/// column and scales the result (issue #1238): at half scale the 0.82pt
+/// unwrapped correction prints as 0.41pt.
+#[test]
+fn test_scaled_sheet_centred_line_seat_is_evaluated_at_the_declared_size() {
+    let mut page = centred_sheet_page(
+        "Total",
+        TextStyle {
+            font_size: Some(5.0),
+            ..libertinus_total()
+        },
+        40.0,
+        1.25,
+        false,
+    );
+    let Page::Sheet(sheet) = &mut page else {
+        unreachable!("centred_sheet_page returns a sheet")
+    };
+    sheet.table.print_scale = Some(0.5);
+
+    let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+    let dx: f64 =
+        emitted_move_dx_pt(&source).unwrap_or_else(|| panic!("no move emitted: {source}"));
+    assert!(
+        (dx - 0.41).abs() < 1e-6,
+        "the declared-size seat scales to 0.41pt, got {dx}: {source}"
+    );
+}
+
+/// The seat is a centred, single-line, spreadsheet rule. Left- and
+/// right-aligned cells keep their own edges, a Word table keeps Typst's
+/// centring, a line that cannot fit the column is left to wrap as before,
+/// and a hard line break makes a block whose lines this rule does not place.
+#[test]
+fn test_centred_sheet_line_seat_is_scoped_to_fitting_single_lines() {
+    for alignment in [None, Some(Alignment::Left), Some(Alignment::Right)] {
+        let mut page = sheet_page_with_aligned_cell("Total", libertinus_total(), alignment);
+        let Page::Sheet(sheet) = &mut page else {
+            unreachable!("sheet_page_with_aligned_cell returns a sheet")
+        };
+        sheet.table.column_widths = vec![80.0];
+        sheet.table.seats_bottom_aligned_text_on_descender = true;
+        let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+        assert!(
+            !source.contains("#move(dx: "),
+            "{alignment:?} keeps its own edge: {source}"
+        );
+    }
+
+    let too_wide = generate_typst(&make_doc(vec![centred_sheet_page(
+        "Total",
+        libertinus_total(),
+        20.0,
+        2.5,
+        true,
+    )]))
+    .unwrap()
+    .source;
+    assert!(
+        !too_wide.contains("#move(dx: "),
+        "a line wider than its 15pt measure wraps and is not seated: {too_wide}"
+    );
+
+    let hard_break = generate_typst(&make_doc(vec![centred_sheet_page(
+        "Total\nsum",
+        libertinus_total(),
+        80.0,
+        2.5,
+        true,
+    )]))
+    .unwrap()
+    .source;
+    assert!(
+        !hard_break.contains("#move(dx: "),
+        "a hard-broken block is not a single seated line: {hard_break}"
+    );
+
+    let mut icon_cell_page = centred_sheet_page("Total", libertinus_total(), 80.0, 2.5, false);
+    let Page::Sheet(sheet) = &mut icon_cell_page else {
+        unreachable!("centred_sheet_page returns a sheet")
+    };
+    // An icon-set cell reserves the icon's advance on its left (issue #652);
+    // where Excel seats a centred value beside it is unmeasured.
+    sheet.table.rows[0].cells[0].padding = Some(Insets {
+        top: 1.0,
+        right: 2.5,
+        bottom: 1.5,
+        left: 2.5 + 16.0,
+    });
+    let icon_source = generate_typst(&make_doc(vec![icon_cell_page]))
+        .unwrap()
+        .source;
+    assert!(
+        !icon_source.contains("#move(dx: "),
+        "an asymmetric inset pair is outside the measured seat: {icon_source}"
+    );
+
+    let word_table = Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle {
+                        alignment: Some(Alignment::Center),
+                        ..ParagraphStyle::default()
+                    },
+                    runs: vec![Run {
+                        text: "Total".to_string(),
+                        style: libertinus_total(),
+                        href: None,
+                        footnote: None,
+                    }],
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+            minimum_height: None,
+        }],
+        column_widths: vec![80.0],
+        ..Table::default()
+    };
+    let word_source = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(
+        word_table,
+    )])]))
+    .unwrap()
+    .source;
+    assert!(
+        !word_source.contains("#move(dx: "),
+        "Excel's whole-point seat must not leak into Word tables: {word_source}"
+    );
+}

@@ -408,6 +408,7 @@ fn generate_table_rows(
             // A cell's own text column: the columns it spans, less the inset
             // that keeps its text off the border (issue #626).
             let enclosing_measure_pt: Option<f64> = ctx.available_measure_pt;
+            let enclosing_sheet_cell_box: Option<SheetCellBox> = ctx.sheet_cell_box.take();
             if !column_widths.is_empty() {
                 let inset: Insets = cell_inset_with_border(cell, default_cell_padding);
                 let span_width_pt: f64 = column_widths
@@ -417,6 +418,15 @@ fn generate_table_rows(
                     .sum();
                 ctx.available_measure_pt =
                     Some(span_width_pt - inset.left - inset.right).filter(|measure| *measure > 0.0);
+                // Excel seats a centred line on the gridline-to-gridline box,
+                // so the box keeps the inset both sides rather than the
+                // measure alone (issue #1600).
+                ctx.sheet_cell_box = ctx.sheet_print_scale().map(|_| SheetCellBox {
+                    width_pt: span_width_pt,
+                    inset_left_pt: inset.left,
+                    inset_right_pt: inset.right,
+                    wraps_text: cell.wraps_text,
+                });
             }
             generate_table_cell(
                 out,
@@ -435,6 +445,7 @@ fn generate_table_rows(
                 ctx,
             )?;
             ctx.available_measure_pt = enclosing_measure_pt;
+            ctx.sheet_cell_box = enclosing_sheet_cell_box;
 
             if cell.row_span > 1 {
                 for rs in rowspan_remaining
@@ -3215,6 +3226,7 @@ fn generate_cell_content(
                 .flatten(),
             breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
             available_measure_pt: ctx.available_measure_pt,
+            sheet_cell_box: ctx.sheet_cell_box,
         };
         match block {
             // A `TOC` field inside a table cell is not a shape Word produces.
@@ -3317,6 +3329,11 @@ struct CellParagraphCtx<'a> {
     /// The width one line of this cell has, in points: the column width less
     /// the cell's own inset. Bounds how wide a framed eojeol may be.
     available_measure_pt: Option<f64>,
+    /// The spreadsheet cell box this paragraph is laid out in, gridline to
+    /// gridline with its inset pair and the cell's `wrapText` flag, so a
+    /// centred line can be seated where Excel prints it (issue #1600). `None`
+    /// off a sheet.
+    sheet_cell_box: Option<SheetCellBox>,
 }
 
 /// The runs an empty `<w:p>` in a cell borrows its line box from.
@@ -3471,6 +3488,19 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
     // and following content geometry (issue #1494).
     let centered_sheet_odd_line_seat: Option<(f64, f64, f64, f64)> =
         centered_sheet_odd_line_seat(para, cell);
+    // Excel seats a centred sheet line's origin on a whole sheet point, one
+    // point apart for a wrapped and an unwrapped cell, where Typst centres the
+    // tracked line exactly (issue #1600). The seat is a translation of the
+    // laid-out line, so `move` carries it without touching the row, the
+    // measure, or the odd-stack seat wrapper below.
+    let centered_sheet_line_start_shift_pt: Option<f64> = cell
+        .sheet_cell_box
+        .as_ref()
+        .filter(|_| !cell.in_spill_cell)
+        .and_then(|cell_box| centered_sheet_line_start_shift_pt(style, &para.runs, cell_box));
+    if let Some(shift_pt) = centered_sheet_line_start_shift_pt {
+        let _ = write!(out, "#move(dx: {}pt)[", format_geometry(shift_pt));
+    }
     if centered_sheet_odd_line_seat.is_some() {
         out.push_str("#context {\n  let o2p-centered-sheet-body = [");
     }
@@ -3579,6 +3609,9 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
             format_geometry(line_advance_pt),
             format_geometry(shift_pt),
         );
+    }
+    if centered_sheet_line_start_shift_pt.is_some() {
+        out.push(']');
     }
 }
 
