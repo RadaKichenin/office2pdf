@@ -4833,54 +4833,12 @@ fn generate_chart_axis(
         }
     }
 
-    // A combo plot area's line-family series, over the columns they share the
-    // axis with. Each point sits at its category band's centre, where the
-    // band's own column is centred by `<c:crossBetween val="between"/>`, and at
-    // its own value rather than on top of the stack: the line records what was
-    // spent against the budget the columns total, not one more segment of it
-    // (issue #1067). Drawn after every column so no later category's bar buries
-    // it, which is the order Excel paints them in.
-    for s_index in overlay_slots.iter().copied() {
-        let s: &crate::ir::ChartSeries = &series[s_index];
-        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
-        let points: Vec<(f64, f64)> = s
-            .values
-            .iter()
-            .take(categories)
-            .enumerate()
-            .map(|(cat_index, value)| {
-                let frac: f64 = series_value_scale(s, scale, secondary_scale).fraction(*value);
-                if horizontal {
-                    // Bar charts run their categories bottom-up and place from
-                    // the plot box's own top edge, as the column loop above does.
-                    (
-                        plot_x + frac * plot_w,
-                        plot.dy + plot_h - (cat_index as f64 + 0.5) * row,
-                    )
-                } else {
-                    (
-                        plot_x + (cat_index as f64 + 0.5) * row,
-                        plot_y + plot_h - frac * plot_h,
-                    )
-                }
-            })
-            .collect();
-        if points.len() >= 2 {
-            let segments: String = polyline_curve_segments(&points);
-            let _ = writeln!(
-                out,
-                "#place(top + left, curve(stroke: {}, {segments}))",
-                series_stroke(s, &color)
-            );
-        }
-        for (x, y) in &points {
-            write_series_marker(out, s_index, s, *x, *y, &color, worksheet_markers);
-        }
-    }
-
     // The axis lines and their major tick marks, drawn after the bars so they
     // paint on top as Office paints them — an inward tick would otherwise
-    // disappear under the bar it crosses.
+    // disappear under the bar it crosses — but before any line series laid
+    // over the columns: where that line runs along the category axis (a run
+    // of zero values), Excel shows the line's colour, not the rule's, so the
+    // rule has to go down first (#1604).
     //
     // A bar chart's value axis runs along the bottom edge and its category axis
     // down the left one; a column chart's are the other way round.
@@ -4968,6 +4926,52 @@ fn generate_chart_axis(
                     write_tick_under_plot(out, plot_x + offset, bottom_axis_y, reach, stroke);
                 }
             }
+        }
+    }
+
+    // A combo plot area's line-family series, over the columns they share the
+    // axis with. Each point sits at its category band's centre, where the
+    // band's own column is centred by `<c:crossBetween val="between"/>`, and at
+    // its own value rather than on top of the stack: the line records what was
+    // spent against the budget the columns total, not one more segment of it
+    // (issue #1067). Drawn after every column and after the axis rules so
+    // neither a later category's bar nor the category axis buries it, which
+    // is the order Excel paints them in (#1604).
+    for s_index in overlay_slots.iter().copied() {
+        let s: &crate::ir::ChartSeries = &series[s_index];
+        let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
+        let points: Vec<(f64, f64)> = s
+            .values
+            .iter()
+            .take(categories)
+            .enumerate()
+            .map(|(cat_index, value)| {
+                let frac: f64 = series_value_scale(s, scale, secondary_scale).fraction(*value);
+                if horizontal {
+                    // Bar charts run their categories bottom-up and place from
+                    // the plot box's own top edge, as the column loop above does.
+                    (
+                        plot_x + frac * plot_w,
+                        plot.dy + plot_h - (cat_index as f64 + 0.5) * row,
+                    )
+                } else {
+                    (
+                        plot_x + (cat_index as f64 + 0.5) * row,
+                        plot_y + plot_h - frac * plot_h,
+                    )
+                }
+            })
+            .collect();
+        if points.len() >= 2 {
+            let segments: String = polyline_curve_segments(&points);
+            let _ = writeln!(
+                out,
+                "#place(top + left, curve(stroke: {}, {segments}))",
+                series_stroke(s, &color)
+            );
+        }
+        for (x, y) in &points {
+            write_series_marker(out, s_index, s, *x, *y, &color, worksheet_markers);
         }
     }
 
