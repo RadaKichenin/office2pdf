@@ -4,12 +4,13 @@ use crate::ir::MarkerSymbol;
 use crate::ir::{ChartAreaFill, ChartAreaOutline};
 use crate::render::typst_gen::diagrams::{
     CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
-    LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM, PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE,
-    PPTX_LEGEND_KEY_LABEL_GAP_PT, PPTX_RIGHT_LEGEND_Y_SHIFT_EM, PPTX_RIGHT_LEGEND_Y_SHIFT_PT, ROW,
-    SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP, axis_plot_rect, chart_area_title_h,
-    chart_category_band_pt, chart_category_gutter_pt, chart_category_rotated_label_x,
-    chart_category_rotated_label_y, chart_face_line_metrics_em, chart_text_advance_em,
-    chart_tick_band_pt, excel_legend_trailing_gutter_pt, powerpoint_right_legend_y_shift,
+    LEGEND_KEY_BASELINE_PT, LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM,
+    PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE, PPTX_LEGEND_KEY_LABEL_GAP_PT,
+    PPTX_RIGHT_LEGEND_Y_SHIFT_EM, PPTX_RIGHT_LEGEND_Y_SHIFT_PT, ROW, SERIES_LINE_PT,
+    SERIES_MARKER_SIZE_PT, TICK_GAP, axis_plot_rect, chart_area_title_h, chart_category_band_pt,
+    chart_category_gutter_pt, chart_category_rotated_label_x, chart_category_rotated_label_y,
+    chart_face_line_metrics_em, chart_text_advance_em, chart_tick_band_pt,
+    excel_legend_trailing_gutter_pt, legend_marker_cap_pt, powerpoint_right_legend_y_shift,
     pptx_column_data_label_seat_pt,
 };
 
@@ -3399,6 +3400,166 @@ fn a_marker_symbol_of_none_draws_no_marker_at_all() {
         )),
         "the legend key still samples the series line; got:\n{source}"
     );
+}
+
+/// The radius of the marker drawn on each line legend key, in emission
+/// order. A key is the one `#box(width: 19.2pt, …)[…]` per entry, and the
+/// marker inside it is the only `circle(` on that line.
+fn legend_key_circle_radii(source: &str) -> Vec<f64> {
+    let key_prefix: String = format!("#box(width: {}pt", format_f64(LEGEND_KEY_LEN_PT));
+    source
+        .lines()
+        .filter(|line| line.contains(key_prefix.as_str()))
+        .filter_map(|line| {
+            let open: usize = line.find("circle(radius: ")?;
+            let value: &str = &line[open + "circle(radius: ".len()..];
+            let end: usize = value.find("pt")?;
+            value[..end].parse::<f64>().ok()
+        })
+        .collect()
+}
+
+/// A one-series line chart of three points drawing `declared_marker_pt`
+/// circles under a legend set at `legend_pt`.
+fn line_chart_with_legend_size(legend_pt: f64, declared_marker_pt: f64) -> Chart {
+    let mut chart = line_chart_with_markers([Some(MarkerSymbol::Circle), Some(MarkerSymbol::Off)]);
+    chart.series[0].marker_style.size_pt = Some(declared_marker_pt);
+    chart.legend_text_style.size_pt = Some(legend_pt);
+    chart
+}
+
+#[test]
+fn a_legend_marker_never_exceeds_six_tenths_of_the_legend_font_size() {
+    // Excel for Mac 16.112, one factor per export on the #982 gift-budget
+    // workbook with the line series declaring a 24pt marker: the legend key's
+    // marker measures 3, 4, 4, 5, 6, 6, 7, 8 and 10 chart points at legend
+    // sizes 6, 7, 8, 9, 10, 11, 12, 14 and 18 — floor(0.6 x size), with the
+    // same values on a Verdana legend, whose painted key rectangle is a
+    // different height. The plotted markers keep their declared 24pt (#1617).
+    for (legend_pt, expected) in [
+        (6.0, 3.0),
+        (7.0, 4.0),
+        (8.0, 4.0),
+        (9.0, 5.0),
+        (10.0, 6.0),
+        (11.0, 6.0),
+        (12.0, 7.0),
+        (14.0, 8.0),
+        (18.0, 10.0),
+    ] {
+        let source = chart_source(line_chart_with_legend_size(legend_pt, 24.0));
+
+        assert_eq!(
+            legend_key_circle_radii(&source),
+            vec![expected / 2.0],
+            "a {legend_pt}pt legend must draw its 24pt series marker at {expected}pt; got:\n{source}"
+        );
+        let plotted: usize = source.matches("circle(radius: 12pt").count();
+        assert_eq!(
+            plotted, 3,
+            "the plot must keep one 24pt marker on each of its three points at a \
+             {legend_pt}pt legend; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_declared_marker_below_the_legend_cap_keeps_its_size() {
+    // The cap only limits. Native 9pt legend exports draw declared 2, 3 and 5pt
+    // markers at 2, 3 and 5pt and clamp 7 and 12 to 5; a 6pt legend draws a
+    // declared 2pt marker at 2pt and clamps 4, 5 and 7 to 3 (#1617).
+    for (legend_pt, declared, expected) in [
+        (9.0, 2.0, 2.0),
+        (9.0, 3.0, 3.0),
+        (9.0, 5.0, 5.0),
+        (9.0, 7.0, 5.0),
+        (9.0, 12.0, 5.0),
+        (6.0, 2.0, 2.0),
+        (6.0, 4.0, 3.0),
+        (6.0, 5.0, 3.0),
+        (6.0, 7.0, 3.0),
+    ] {
+        let source = chart_source(line_chart_with_legend_size(legend_pt, declared));
+
+        assert_eq!(
+            legend_key_circle_radii(&source),
+            vec![expected / 2.0],
+            "a {legend_pt}pt legend must draw a declared {declared}pt marker at \
+             {expected}pt; got:\n{source}"
+        );
+        let plotted: usize = source
+            .matches(&format!("circle(radius: {}pt", format_f64(declared / 2.0)))
+            .count();
+        assert!(
+            plotted >= 3,
+            "the plot must keep its declared {declared}pt marker on every point; got:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_small_legend_shrinks_the_line_sample_box_with_its_marker() {
+    // At 6pt the native legend keeps all four labels on one baseline. A 5pt
+    // sample box outgrows a 6pt line box and pushed the line series' label
+    // 1.06 printed points below the column labels (#1617 work record), so the
+    // box is no taller than the capped marker — and no shorter than today's
+    // 5pt allowance at ordinary sizes, where the calibrated key seat stays.
+    let source = chart_source(line_chart_with_legend_size(6.0, 5.0));
+    assert!(
+        source.contains(&format!(
+            "#box(width: {}pt, height: 3pt, baseline: {}pt)[",
+            format_f64(LEGEND_KEY_LEN_PT),
+            format_f64(LEGEND_KEY_BASELINE_PT)
+        )),
+        "a 6pt legend's line sample box must be 3pt tall; got:\n{source}"
+    );
+
+    for declared in [2.0, 5.0, 12.0] {
+        let source = chart_source(line_chart_with_legend_size(9.0, declared));
+        assert!(
+            source.contains(&format!(
+                "#box(width: {}pt, height: {}pt, baseline: {}pt)[",
+                format_f64(LEGEND_KEY_LEN_PT),
+                format_f64(SERIES_MARKER_SIZE_PT),
+                format_f64(LEGEND_KEY_BASELINE_PT)
+            )),
+            "a 9pt legend keeps the {}pt sample box for a declared {declared}pt marker; got:\n{source}",
+            format_f64(SERIES_MARKER_SIZE_PT)
+        );
+    }
+}
+
+#[test]
+fn the_legend_marker_cap_reaches_every_family_that_draws_a_line_key() {
+    // The line key is emitted from three places: the line family, a line series
+    // inside a bar/column plot area (#1067) and the radar family. A cap in any
+    // one of them still leaves the others oversized.
+    for (chart_type, plot_type, label) in [
+        (ChartType::Line, None, "line"),
+        (
+            ChartType::Other(crate::ir::RADAR_CHART_LABEL.to_string()),
+            None,
+            "radar",
+        ),
+        (
+            ChartType::Column,
+            Some(ChartType::Line),
+            "line over columns",
+        ),
+    ] {
+        let mut chart = line_chart_with_legend_size(6.0, 5.0);
+        chart.chart_type = chart_type;
+        for series in chart.series.iter_mut() {
+            series.plot_type = plot_type.clone();
+        }
+        let source = chart_source(chart);
+
+        assert_eq!(
+            legend_key_circle_radii(&source),
+            vec![1.5],
+            "{label}: a 6pt legend must draw the 5pt series marker at 3pt; got:\n{source}"
+        );
+    }
 }
 
 /// Every size a `#text(size: Npt)[label]` was emitted at, for one label.
@@ -10039,14 +10200,24 @@ fn declared_marker_paint_reaches_plot_and_legend_across_chart_families() {
                 },
             };
             let source = chart_source(chart);
-            let expected = format!(
-                "circle(radius: {}pt, fill: rgb(0, 136, 137), stroke: 0.75pt + rgb(17, 34, 51))",
-                format_f64(size / 2.0)
-            );
+            let paint: &str = "fill: rgb(0, 136, 137), stroke: 0.75pt + rgb(17, 34, 51))";
+            let plotted: String = format!("circle(radius: {}pt, {paint}", format_f64(size / 2.0));
             assert_eq!(
-                source.matches(&expected).count(),
-                4,
-                "three plotted markers and one matching legend key for {kind:?}: {source}"
+                source.matches(&plotted).count(),
+                3,
+                "three plotted markers at the declared size for {kind:?}: {source}"
+            );
+            // The legend key carries the same paint at the legend's own marker
+            // allowance (#1617); the chart declares no legend size here. A key
+            // under the allowance is the plotted markup itself, so it counts
+            // among the three matches above.
+            let key_size: f64 = size.min(legend_marker_cap_pt(CHART_DEFAULT_TEXT_PT));
+            let key: String = format!("circle(radius: {}pt, {paint}", format_f64(key_size / 2.0));
+            let expected_keys: usize = if key_size < size { 1 } else { 4 };
+            assert_eq!(
+                source.matches(&key).count(),
+                expected_keys,
+                "one legend key marker carrying the declared paint for {kind:?}: {source}"
             );
         }
     }

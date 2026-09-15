@@ -273,6 +273,32 @@ const CHART_SERIES_COLORS: [&str; 6] = [
 /// A declared size overrides this in both the plot and its legend key (#1185).
 pub(super) const SERIES_MARKER_SIZE_PT: f64 = 5.0;
 
+/// The marker a legend key may carry, as a share of the legend's font size.
+///
+/// Excel draws the key's marker no larger than the row's text can hold, and
+/// that allowance follows the font size alone: Excel for Mac 16.112 exports
+/// of the #982 gift-budget workbook with the series declaring a 24pt marker
+/// print the key marker at 3, 4, 4, 5, 6, 6, 7, 8 and 10 whole chart points
+/// for legend sizes 6, 7, 8, 9, 10, 11, 12, 14 and 18 — `floor(0.6 x size)`
+/// at every one, and identically on a Verdana legend whose painted key
+/// rectangle (0.45 x the face's hhea box) is a different height. The 10pt
+/// row separates the two: its rectangle is 5.985pt, its marker 6pt. Declared
+/// sizes under the allowance pass through unchanged (issue #1617).
+pub(super) const LEGEND_MARKER_CAP_EM: f64 = 0.6;
+
+/// The largest marker a legend set at `legend_text_pt` draws on a line key.
+///
+/// Whole chart points, rounded down. The epsilon keeps a product that lands
+/// on a whole point (10pt x 0.6) from flooring to the point below it.
+pub(super) fn legend_marker_cap_pt(legend_text_pt: f64) -> f64 {
+    (legend_text_pt * LEGEND_MARKER_CAP_EM + 1e-9).floor()
+}
+
+/// The marker size `series` declares, else [`SERIES_MARKER_SIZE_PT`].
+fn series_marker_size_pt(series: &crate::ir::ChartSeries) -> f64 {
+    series.marker_style.size_pt.unwrap_or(SERIES_MARKER_SIZE_PT)
+}
+
 /// Weight a line series' polyline is stroked at when the file states none.
 ///
 /// Shared with the legend key, which Excel draws as a sample of the line
@@ -469,7 +495,7 @@ struct WorksheetMarkerPlacement {
 
 impl WorksheetMarkerPlacement {
     fn center(self, series: &crate::ir::ChartSeries, x: f64, y: f64) -> (f64, f64) {
-        let size: f64 = series.marker_style.size_pt.unwrap_or(SERIES_MARKER_SIZE_PT);
+        let size: f64 = series_marker_size_pt(series);
         // Native worksheet sprites use whole sheet-point positions. Explicit
         // odd-width outlines (including the default 0.75pt) floor the point;
         // even widths and unstroked automatic/suppressed outlines round it.
@@ -522,22 +548,31 @@ fn write_series_marker(
     worksheet: Option<WorksheetMarkerPlacement>,
 ) {
     let (x, y) = worksheet.map_or((x, y), |placement| placement.center(series, x, y));
-    out.push_str(&series_marker_markup(series_index, series, x, y, color));
+    out.push_str(&series_marker_markup(
+        series_index,
+        series,
+        x,
+        y,
+        color,
+        series_marker_size_pt(series),
+    ));
 }
 
-/// The `#place`d markup for one series marker centred on (`x`, `y`), and the
-/// empty string for a series that draws none.
+/// The `#place`d markup for one series marker `size` points across centred on
+/// (`x`, `y`), and the empty string for a series that draws none.
 ///
 /// Returned rather than written so the legend key can embed the same marker the
-/// plot draws, instead of restating the shape cycle (#801).
+/// plot draws, instead of restating the shape cycle (#801). The size is a
+/// parameter because the legend draws the plot's marker at the row's own
+/// allowance (#1617); the plot passes the series' declared size.
 fn series_marker_markup(
     series_index: usize,
     series: &crate::ir::ChartSeries,
     x: f64,
     y: f64,
     color: &str,
+    size: f64,
 ) -> String {
-    let size: f64 = series.marker_style.size_pt.unwrap_or(SERIES_MARKER_SIZE_PT);
     let fill: String = if series.marker_style.fill_mode == crate::ir::ChartFillMode::Suppressed {
         "none".to_string()
     } else {
@@ -641,14 +676,31 @@ fn plots_as_line(chart: &Chart, series: &crate::ir::ChartSeries) -> bool {
 ///
 /// The whole series, not just its symbol, because the sample has to match the
 /// weight the line is plotted at as well (issue #1113).
-fn line_legend_key(series_index: usize, series: &crate::ir::ChartSeries, color: &str) -> String {
-    let key_mid: f64 = SERIES_MARKER_SIZE_PT / 2.0;
+///
+/// The marker is the plot's, no larger than the legend's own allowance
+/// ([`legend_marker_cap_pt`] of `legend_text_pt`): a 6pt legend prints a 5pt
+/// series marker at 3pt. The sample box shrinks with that allowance too — a
+/// 5pt box outgrows a 6pt line box and pushed the line series' label a point
+/// below the column labels it shares a row with — but never grows past the
+/// [`SERIES_MARKER_SIZE_PT`] the key's baseline offset is calibrated against,
+/// so ordinary-size legends keep their seat whatever the series declares
+/// (issue #1617).
+fn line_legend_key(
+    series_index: usize,
+    series: &crate::ir::ChartSeries,
+    color: &str,
+    legend_text_pt: f64,
+) -> String {
+    let marker_cap: f64 = legend_marker_cap_pt(legend_text_pt);
+    let marker_size: f64 = series_marker_size_pt(series).min(marker_cap);
+    let box_height: f64 = SERIES_MARKER_SIZE_PT.min(marker_cap);
+    let key_mid: f64 = box_height / 2.0;
     format!(
         "#box(width: {}pt, height: {}pt, baseline: {}pt)[\
          #place(top + left, dx: 0pt, dy: {}pt, line(end: ({}pt, 0pt), stroke: {}))\
          {}]",
         format_f64(LEGEND_KEY_LEN_PT),
-        format_f64(SERIES_MARKER_SIZE_PT),
+        format_f64(box_height),
         format_f64(LEGEND_KEY_BASELINE_PT),
         format_f64(key_mid),
         format_f64(LEGEND_KEY_LEN_PT),
@@ -658,7 +710,8 @@ fn line_legend_key(series_index: usize, series: &crate::ir::ChartSeries, color: 
             series,
             LEGEND_KEY_LEN_PT / 2.0,
             key_mid,
-            color
+            color,
+            marker_size,
         )
         .trim_end()
     )
@@ -5001,7 +5054,7 @@ fn generate_chart_axis(
         // swatch for a column, a stroke-and-marker sample for a line laid over
         // them (issue #1067).
         let key_markup: String = if overlaid[s_index] {
-            line_legend_key(s_index, s, &color)
+            line_legend_key(s_index, s, &color, chart_legend_text_pt(chart))
         } else {
             let fill: &str = if s.fill_mode == crate::ir::ChartFillMode::Suppressed {
                 "none"
@@ -5500,7 +5553,7 @@ fn generate_chart_line_plot(
                 horizontal_x_shift: 0.0,
             },
         );
-        let key: String = line_legend_key(s_index, s, &color);
+        let key: String = line_legend_key(s_index, s, &color, chart_legend_text_pt(chart));
         let _ = writeln!(
             out,
             "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt{})[{}]])",
@@ -5784,7 +5837,8 @@ fn generate_chart_radar_plot(
                     horizontal_x_shift: 0.0,
                 },
             );
-            let key: String = line_legend_key(series_index, series, &color);
+            let key: String =
+                line_legend_key(series_index, series, &color, chart_legend_text_pt(chart));
             let _ = writeln!(
                 out,
                 "#place(top + left, dx: {}pt, dy: {}pt, box[{key}#h({}pt)#text(size: {}pt{})[{}]])",

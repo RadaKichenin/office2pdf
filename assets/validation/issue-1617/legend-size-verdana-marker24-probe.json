@@ -1,0 +1,46 @@
+{
+ "name": "issue-1617-legend-size-verdana-marker24",
+ "base": "base-marker24-verdana.xlsx",
+ "part": "xl/charts/chart1.xml",
+ "factor": "c:legend a:defRPr/@sz (Verdana, marker 24)",
+ "page": 2,
+ "noise_floor": 0.5,
+ "variants": [
+  {
+   "value": "600",
+   "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+   "replace": "\\g<1>600\\g<2>",
+   "regex": true,
+   "count": 1
+  },
+  {
+   "value": "800",
+   "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+   "replace": "\\g<1>800\\g<2>",
+   "regex": true,
+   "count": 1
+  },
+  {
+   "value": "1000",
+   "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+   "replace": "\\g<1>1000\\g<2>",
+   "regex": true,
+   "count": 1
+  },
+  {
+   "value": "1200",
+   "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+   "replace": "\\g<1>1200\\g<2>",
+   "regex": true,
+   "count": 1
+  },
+  {
+   "value": "1400",
+   "find": "(?s)(<c:legend\\b[^>]*>.*?\\bsz=\")900(\".*?</c:legend>)",
+   "replace": "\\g<1>1400\\g<2>",
+   "regex": true,
+   "count": 1
+  }
+ ],
+ "base_note": "base-marker24-verdana.xlsx (marker 24 and legend a:latin typeface Segoe UI -> Verdana)"
+}

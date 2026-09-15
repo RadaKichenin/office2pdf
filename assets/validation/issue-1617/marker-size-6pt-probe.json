@@ -1,0 +1,32 @@
+{
+ "name": "issue-1617-marker-size-6pt",
+ "base": "base-legend6.xlsx",
+ "part": "xl/charts/chart1.xml",
+ "factor": "c:marker c:size/@val (legend 6pt)",
+ "page": 2,
+ "noise_floor": 0.5,
+ "variants": [
+  {
+   "value": "2",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"2\"/>",
+   "regex": false,
+   "count": 1
+  },
+  {
+   "value": "4",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"4\"/>",
+   "regex": false,
+   "count": 1
+  },
+  {
+   "value": "7",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"7\"/>",
+   "regex": false,
+   "count": 1
+  }
+ ],
+ "base_note": "base-legend6.xlsx (fixture with legend a:defRPr/@sz 900 -> 600)"
+}
