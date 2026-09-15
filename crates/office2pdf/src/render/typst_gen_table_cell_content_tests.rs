@@ -796,7 +796,9 @@ fn cell_line_boxes_em(source: &str) -> Vec<(f64, f64)> {
 }
 
 /// A spreadsheet row's line box does not vary with the script of its
-/// characters, and the box it keeps is the *bare* hhea line.
+/// characters, and the box it keeps is the *bare* hhea line — seated, in a
+/// fixed top-aligned track, on Excel's whole-point top seat rather than on
+/// the face's continuous ascent (issue #1606).
 ///
 /// Measured on a native Excel-for-Mac export of the probe workbook committed
 /// as `tests/fixtures/xlsx/issue_1060_sheet_row_line_box_probe.xlsx`, whose
@@ -862,7 +864,13 @@ fn spreadsheet_rows_share_one_line_box_whatever_script() {
     let korean: String = sheet_row_source("가나다라마 01");
     let latin: String = sheet_row_source("Latin only row 01");
 
-    let bare_ascent: String = format!("{}em", format_f64(ascender));
+    // The table declares no padding, so the cell takes the 5pt default inset
+    // Typst rests the top-aligned box on; the seat is measured from the
+    // track's top boundary (issue #1606).
+    let seated_ascent: String = format!(
+        "{}em",
+        format_f64((sheet_cell_top_baseline_from_track_top_pt(ascender, 14.0, None) - 5.0) / 14.0)
+    );
     assert_eq!(
         distinct_top_edges(&korean),
         distinct_top_edges(&latin),
@@ -870,8 +878,9 @@ fn spreadsheet_rows_share_one_line_box_whatever_script() {
     );
     assert_eq!(
         distinct_top_edges(&korean),
-        std::collections::BTreeSet::from([bare_ascent.as_str()]),
-        "Excel seats both on the bare hhea ascent, not {}em: {korean}",
+        std::collections::BTreeSet::from([seated_ascent.as_str()]),
+        "Excel seats both on the whole-point top seat of the bare hhea line, not on \
+         the East Asian {}em box: {korean}",
         format_f64(ascender + 0.15 * word_pitch_em)
     );
 }
@@ -4378,4 +4387,184 @@ fn wrapping_cell_source(family: &str, font_size_pt: f64, in_sheet: bool) -> Stri
     };
     let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
     generate_typst(&doc).unwrap().source
+}
+
+/// Excel seats a **top-aligned** fixed-track line a whole number of sheet
+/// points below the track's top boundary, and that number is the face's
+/// `hhea` ascender plus line gap at the declared size, offset by a constant
+/// and rounded together — not the separately rounded components of the
+/// centred seat, and not `ascent + 1`. The #1063 probes swept it on Arial:
+/// a font-size sweep in 60pt tracks (probe 1, block S), a 12pt line in
+/// 20/30/45/60pt tracks (probe 1, block H, all 12pt: the seat is
+/// track-independent), and a bordered/unbordered pairing in 40pt tracks
+/// (probe 2, identical either way). The public #982 workbook's nine-line
+/// Segoe UI 14 instruction block adds a face with no line gap: both the
+/// unscaled control and the 0.82-fitted original print its first baseline
+/// 16 sheet points below row 4's top. The #1060 probe's native export adds a
+/// Korean face: its `ht=36` top-aligned Malgun Gothic 14 rows, Korean and
+/// Latin alike, seat 16 sheet points below their track tops (issue #1606).
+#[test]
+fn top_aligned_sheet_cell_seat_reproduces_the_native_excel_probe() {
+    const ARIAL_ASCENT_WITH_GAP_EM: f64 = (1854.0 + 67.0) / 2048.0;
+    const SEGOE_UI_ASCENT_WITH_GAP_EM: f64 = 2210.0 / 2048.0;
+    const MALGUN_GOTHIC_ASCENT_WITH_GAP_EM: f64 = 2229.0 / 2048.0;
+
+    // (font size pt, baseline below the track's top edge pt)
+    let arial: [(f64, f64); 13] = [
+        (8.0, 9.0),
+        (10.0, 11.0),
+        (12.0, 12.0),
+        (14.0, 14.0),
+        (16.0, 16.0),
+        (18.0, 18.0),
+        (20.0, 20.0),
+        (24.0, 24.0),
+        (28.0, 27.0),
+        (30.0, 29.0),
+        (32.0, 31.0),
+        (36.0, 35.0),
+        (44.0, 42.0),
+    ];
+    for (font_size_pt, expected_pt) in arial {
+        let seated_pt: f64 =
+            sheet_cell_top_baseline_from_track_top_pt(ARIAL_ASCENT_WITH_GAP_EM, font_size_pt, None);
+        assert!(
+            (seated_pt - expected_pt).abs() < 1e-9,
+            "top-aligned Arial {font_size_pt}pt: Excel prints the baseline {expected_pt}pt \
+             below the track top, seated {seated_pt}pt"
+        );
+    }
+
+    assert_eq!(
+        sheet_cell_top_baseline_from_track_top_pt(SEGOE_UI_ASCENT_WITH_GAP_EM, 14.0, None),
+        16.0,
+        "the unscaled #982 control prints B4's first baseline 16pt below row 4's top"
+    );
+    assert_eq!(
+        sheet_cell_top_baseline_from_track_top_pt(MALGUN_GOTHIC_ASCENT_WITH_GAP_EM, 14.0, None),
+        16.0,
+        "the #1060 probe prints its top-aligned Malgun Gothic 14 rows 16pt below the track top"
+    );
+}
+
+/// The fitted #982 original evaluates the same top seat at the declared size
+/// and prints it through the 0.82 scale, one sheet point above the unscaled
+/// cadence — the shared fitted-sheet lift the centred seat carries for the
+/// physical-margin text origin (issues #1496, #1719): 15 sheet points print
+/// as 12.30pt against the native 12.42pt from that origin (issue #1606).
+#[test]
+fn scaled_top_aligned_sheet_cell_seat_prints_the_lifted_sheet_point() {
+    const SEGOE_UI_ASCENT_WITH_GAP_EM: f64 = 2210.0 / 2048.0;
+    const SCALE: f64 = 0.82;
+
+    let seated_pt: f64 = sheet_cell_top_baseline_from_track_top_pt(
+        SEGOE_UI_ASCENT_WITH_GAP_EM,
+        14.0 * SCALE,
+        Some(SCALE),
+    );
+    assert!(
+        (seated_pt - 15.0 * SCALE).abs() < 1e-9,
+        "the fitted top seat must print (16 - 1) x 0.82 = 12.30pt, seated {seated_pt}pt"
+    );
+}
+
+/// The table path must seat a top-aligned fixed-track sheet cell on that
+/// whole-point rule rather than at the inset plus the face's continuous
+/// ascent, at both print scales, while a wrapped second line keeps the
+/// face's own advance: the seat moves only the box's split around the
+/// baseline, never its height. The control uses Typst's embedded Libertinus
+/// face so it runs on every host (issue #1606).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn top_aligned_fixed_track_sheet_cell_starts_on_the_native_seat() {
+    const FAMILY: &str = "Libertinus Serif";
+    const DECLARED_ROW_HEIGHT_PT: f64 = 60.0;
+    const DECLARED_FONT_SIZE_PT: f64 = 14.0;
+
+    let Some((ascender_em, descender_em, _pitch_em)) =
+        crate::render::pdf::font_line_metrics_em(FAMILY)
+    else {
+        return;
+    };
+
+    for scale in [None, Some(0.82)] {
+        let factor: f64 = scale.unwrap_or(1.0);
+        let printed_font_size_pt: f64 = DECLARED_FONT_SIZE_PT * factor;
+        let inset_top_pt: f64 = 1.0 * factor;
+        let table = Table {
+            rows: vec![TableRow {
+                minimum_height: None,
+                cells: vec![TableCell {
+                    content: vec![Block::Paragraph(Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![Run {
+                            text: "Fill out as much as you can at the beginning of each new year."
+                                .to_string(),
+                            style: TextStyle {
+                                font_family: Some(FAMILY.to_string()),
+                                font_size: Some(printed_font_size_pt),
+                                ..TextStyle::default()
+                            },
+                            href: None,
+                            footnote: None,
+                        }],
+                    })],
+                    vertical_align: Some(CellVerticalAlign::Top),
+                    wraps_text: true,
+                    ..TableCell::default()
+                }],
+                height: Some(DECLARED_ROW_HEIGHT_PT * factor),
+            }],
+            column_widths: vec![150.0 * factor],
+            default_cell_padding: Some(Insets {
+                top: inset_top_pt,
+                right: 2.0 * factor,
+                bottom: 1.5 * factor,
+                left: 3.0 * factor,
+            }),
+            default_vertical_align: Some(CellVerticalAlign::Bottom),
+            seats_bottom_aligned_text_on_descender: true,
+            print_scale: scale,
+            ..Table::default()
+        };
+        let output = generate_typst(&make_doc(vec![make_flow_page(vec![Block::Table(table)])]))
+            .expect("the top-aligned sheet cell renders");
+        let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&output.source, 0)
+            .unwrap_or_else(|error| panic!("compile failed: {error}\n{}", output.source))
+            .into_iter()
+            .map(|run| run.baseline_pt)
+            .collect();
+        baselines.sort_by(f64::total_cmp);
+        baselines.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+        assert!(
+            baselines.len() >= 2,
+            "the control must wrap onto at least two lines: {baselines:?}\n{}",
+            output.source
+        );
+
+        let seat_pt: f64 =
+            sheet_cell_top_baseline_from_track_top_pt(ascender_em, printed_font_size_pt, scale);
+        let expected_first_pt: f64 = crate::defaults::DEFAULT_MARGIN_PT + seat_pt;
+        assert!(
+            (baselines[0] - expected_first_pt).abs() < 0.01,
+            "scale {scale:?}: the first baseline must sit on Excel's top seat at \
+             {expected_first_pt}pt, got {baselines:?}\n{}",
+            output.source
+        );
+        // The seat is not the inset plus the continuous ascent, which is what
+        // an unseated top-aligned box gives.
+        let unseated_pt: f64 =
+            crate::defaults::DEFAULT_MARGIN_PT + inset_top_pt + ascender_em * printed_font_size_pt;
+        assert!(
+            (baselines[0] - unseated_pt).abs() > 0.05,
+            "scale {scale:?}: the control cannot separate the seat from the unseated box \
+             ({unseated_pt}pt); choose another size"
+        );
+        let expected_advance_pt: f64 = (ascender_em + descender_em) * printed_font_size_pt;
+        assert!(
+            (baselines[1] - baselines[0] - expected_advance_pt).abs() < 0.01,
+            "scale {scale:?}: the wrapped line must keep the face's own advance \
+             {expected_advance_pt}pt, got {baselines:?}"
+        );
+    }
 }
