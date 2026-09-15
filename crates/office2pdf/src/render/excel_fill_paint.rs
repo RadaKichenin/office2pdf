@@ -2,6 +2,17 @@
 //!
 //! Expanding completed cell rectangles keeps automatic row sizes, merges, and
 //! page fragments intact. Backgrounds remain below borders and cell content.
+//!
+//! Excel also clips each printed page's fills to that page's grid region
+//! inset by one sheet point on the top and left edges (issue #1605): the
+//! public #982 workbook's native trace clips the unscaled A1:B8 sheet's fills
+//! to `[51, 55, 474, 418]` around raw rectangles starting at x=50/y=54, the
+//! fitted 0.82 explicit-area sheet at `[55.76, 54.12]` for a grid origin of
+//! `[54.94, 53.30]`, and that sheet's unscaled continuation page at x=473 for
+//! a raw fill starting at x=472. The bottom and right edges keep the bleed,
+//! and interior rows and columns keep their raw origin, so the clip only
+//! trims the page's first row and first column. Text is unaffected: Excel
+//! already seats cell content inside `[B+1, B_next]`.
 
 use std::collections::HashMap;
 use typst::introspection::Tag;
@@ -57,8 +68,22 @@ fn collect_tables(frame: &Frame, tables: &mut HashMap<Span, f64>) {
 
 fn adjust_frame(frame: &mut Frame, tables: &HashMap<Span, f64>) {
     let mut items: Vec<(Point, FrameItem)> = frame.items().cloned().collect();
+    // Where each tracked table's grid starts in this frame. Typst usually
+    // nests the grid in its own group, so its fills sit at the group's
+    // origin, but it inlines a single-item frame into its parent, and then
+    // the fills carry the parent's coordinates. The table's start tag is
+    // placed at the grid origin in whichever frame holds the fills.
+    let mut origins: HashMap<Span, Point> = HashMap::new();
+    for (position, item) in items.iter() {
+        if let FrameItem::Tag(Tag::Start(content, _)) = item
+            && content.to_packed::<TableElem>().is_some()
+            && tables.contains_key(&content.span())
+        {
+            origins.insert(content.span(), *position);
+        }
+    }
     let mut table_slots: HashMap<Span, Vec<usize>> = HashMap::new();
-    for (index, (_, item)) in items.iter_mut().enumerate() {
+    for (index, (position, item)) in items.iter_mut().enumerate() {
         match item {
             FrameItem::Group(group) => adjust_frame(&mut group.frame, tables),
             FrameItem::Shape(shape, span) if shape.fill.is_some() && shape.stroke.is_none() => {
@@ -68,8 +93,22 @@ fn adjust_frame(frame: &mut Frame, tables: &HashMap<Span, f64>) {
                 let Geometry::Rect(size) = &mut shape.geometry else {
                     continue;
                 };
-                size.x += Abs::pt(*scale);
-                size.y += Abs::pt(*scale);
+                let sheet_point = Abs::pt(*scale);
+                size.x += sheet_point;
+                size.y += sheet_point;
+                // The page clip trims the first column's left strip and the
+                // first row's top strip: exactly the fills whose track starts
+                // on the grid origin. A fill in an unfilled gutter's shadow
+                // keeps its raw origin, as native does (#1605).
+                let origin: Point = origins.get(span).copied().unwrap_or_default();
+                if position.x.approx_eq(origin.x) {
+                    position.x += sheet_point;
+                    size.x -= sheet_point;
+                }
+                if position.y.approx_eq(origin.y) {
+                    position.y += sheet_point;
+                    size.y -= sheet_point;
+                }
                 table_slots.entry(*span).or_default().push(index);
             }
             _ => {}
