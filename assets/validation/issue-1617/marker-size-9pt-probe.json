@@ -1,0 +1,39 @@
+{
+ "name": "issue-1617-marker-size-9pt",
+ "base": "../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+ "part": "xl/charts/chart1.xml",
+ "factor": "c:marker c:size/@val (legend 9pt)",
+ "page": 2,
+ "noise_floor": 0.5,
+ "variants": [
+  {
+   "value": "2",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"2\"/>",
+   "regex": false,
+   "count": 1
+  },
+  {
+   "value": "3",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"3\"/>",
+   "regex": false,
+   "count": 1
+  },
+  {
+   "value": "7",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"7\"/>",
+   "regex": false,
+   "count": 1
+  },
+  {
+   "value": "12",
+   "find": "<c:size val=\"5\"/>",
+   "replace": "<c:size val=\"12\"/>",
+   "regex": false,
+   "count": 1
+  }
+ ],
+ "base_note": "../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx"
+}
