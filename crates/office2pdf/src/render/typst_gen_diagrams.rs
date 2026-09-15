@@ -1865,7 +1865,7 @@ fn calibrated_chart_line_metrics_em(family: &str, bold: bool) -> Option<(f64, f6
 
 /// Advance one chart string in the source Office face where a native metric is
 /// part of the calibration, otherwise in the face rendering resolves locally.
-fn chart_text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
+pub(super) fn chart_text_advance_em(family: &str, bold: bool, text: &str) -> Option<f64> {
     let normalized: String = family
         .chars()
         .filter(|character| character.is_ascii_alphanumeric())

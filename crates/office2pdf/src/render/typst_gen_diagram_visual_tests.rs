@@ -8,8 +8,8 @@ use crate::render::typst_gen::diagrams::{
     PPTX_LEGEND_KEY_LABEL_GAP_PT, PPTX_RIGHT_LEGEND_Y_SHIFT_EM, PPTX_RIGHT_LEGEND_Y_SHIFT_PT, ROW,
     SERIES_LINE_PT, SERIES_MARKER_SIZE_PT, TICK_GAP, axis_plot_rect, chart_area_title_h,
     chart_category_band_pt, chart_category_gutter_pt, chart_category_rotated_label_x,
-    chart_category_rotated_label_y, chart_face_line_metrics_em, chart_tick_band_pt,
-    excel_legend_trailing_gutter_pt, powerpoint_right_legend_y_shift,
+    chart_category_rotated_label_y, chart_face_line_metrics_em, chart_text_advance_em,
+    chart_tick_band_pt, excel_legend_trailing_gutter_pt, powerpoint_right_legend_y_shift,
     pptx_column_data_label_seat_pt,
 };
 
@@ -6292,16 +6292,30 @@ fn an_excel_legend_gutter_tracks_its_face_and_size() {
     .iter()
     .map(|name| (*name).to_string())
     .collect();
+    // Each row also carries the source face's own design advance of `Birthday
+    // Budget` in its em. A runner without that face installed resolves a
+    // substitute whose labels measure differently, and the clearance cannot be
+    // asserted against that input; Calibri's advances are calibrated in-tree
+    // and reach every runner, which the assertion after the loop holds.
     let measurements = [
-        ("Calibri", 15.930_f64, 25.217_f64),
-        ("Arial", 16.704, 26.788),
-        ("Georgia", 16.847, 27.093),
-        ("Times New Roman", 15.998, 25.379),
-        ("Verdana", 18.058, 29.533),
-        ("Century Gothic", 17.664, 28.718),
-        ("Aptos", 16.366, 26.136),
+        ("Calibri", 13442.0 / 2048.0, 15.930_f64, 25.217_f64),
+        ("Arial", 14573.0 / 2048.0, 16.704, 26.788),
+        ("Georgia", 14820.0 / 2048.0, 16.847, 27.093),
+        ("Times New Roman", 13595.0 / 2048.0, 15.998, 25.379),
+        ("Verdana", 16660.0 / 2048.0, 18.058, 29.533),
+        ("Century Gothic", 15839.0 / 2048.0, 17.664, 28.718),
+        ("Aptos", 14042.0 / 2048.0, 16.366, 26.136),
     ];
-    for (family, at_nine, at_eighteen) in measurements {
+    let mut checked: Vec<&str> = Vec::new();
+    for (family, source_label_em, at_nine, at_eighteen) in measurements {
+        let Some(resolved_label_em) = chart_text_advance_em(family, false, "Birthday Budget")
+        else {
+            continue;
+        };
+        if (resolved_label_em - source_label_em).abs() > 1e-6 {
+            continue;
+        }
+        checked.push(family);
         for (size_pt, expected) in [(9.0, at_nine), (18.0, at_eighteen)] {
             let chart = excel_bottom_legend_chart(family, size_pt);
             let actual = excel_legend_trailing_gutter_pt(&chart, &names)
@@ -6312,6 +6326,10 @@ fn an_excel_legend_gutter_tracks_its_face_and_size() {
             );
         }
     }
+    assert!(
+        checked.contains(&"Calibri"),
+        "the calibrated Calibri row must be checked on every runner; checked {checked:?}"
+    );
 }
 
 #[test]
