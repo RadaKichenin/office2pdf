@@ -1,0 +1,38 @@
+{
+ "name": "issue-1616-label-width-18pt",
+ "base": "base-sz1800.xlsx",
+ "part": "xl/charts/chart1.xml",
+ "factor": "uniform series name (label width)",
+ "page": 2,
+ "noise_floor": 0.5,
+ "variants": [
+  {
+   "value": "Gift",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gift",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Budget",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Budget",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gift_Budget",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gift Budget",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Holiday_Budget",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Holiday Budget",
+   "regex": true,
+   "count": 8
+  }
+ ]
+}

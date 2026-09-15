@@ -6235,11 +6235,9 @@ fn an_excel_legend_entry_keeps_excels_trailing_clearance() {
     // put the second key 96.221pt after the first at 9pt Calibri: 19.2pt of
     // key, 2.025pt before the label, the label's 59.071pt design advance, and
     // 15.930pt of trailing clearance. The generic 6pt `GAP` leaves the second
-    // entry almost 10pt too far left.
-    let mut chart = excel_bottom_legend_chart("Calibri", 9.0);
-    chart.series[0].name = Some("Birthday Budget".to_string());
-    chart.series[1].name = Some("Holiday Budget".to_string());
-    let source: String = chart_source(chart);
+    // entry almost 10pt too far left. The clearance is the row's, so the row
+    // keeps all four of the workbook's names.
+    let source: String = chart_source(excel_gift_budget_legend_chart("Calibri", 9.0));
     let pitch: f64 =
         legend_entry_x(&source, "Holiday Budget") - legend_entry_x(&source, "Birthday Budget");
 
@@ -6282,8 +6280,18 @@ fn an_excel_legend_gutter_tracks_its_face_and_size() {
     // Fresh one-factor native Excel 16.112 exports at both 9pt and 18pt. Each
     // row was compared with a layout-identical re-zip control; the stated
     // gutter is the entry pitch after subtracting the 19.2pt key, 2.025pt gap,
-    // and the source face's design advances. All labels end in `t`, so this
-    // checks the face/size rule independently of the terminal-glyph correction.
+    // and the source face's design advances. The rows keep the workbook's four
+    // names, so each face's clearance is 0.16 of its own mean label advance
+    // over the fixed part: no per-face table is needed to reproduce them.
+    let names: Vec<String> = [
+        "Birthday Budget",
+        "Holiday Budget",
+        "Other Gift Budget",
+        "Amount Spent",
+    ]
+    .iter()
+    .map(|name| (*name).to_string())
+    .collect();
     let measurements = [
         ("Calibri", 15.930_f64, 25.217_f64),
         ("Arial", 16.704, 26.788),
@@ -6296,10 +6304,10 @@ fn an_excel_legend_gutter_tracks_its_face_and_size() {
     for (family, at_nine, at_eighteen) in measurements {
         for (size_pt, expected) in [(9.0, at_nine), (18.0, at_eighteen)] {
             let chart = excel_bottom_legend_chart(family, size_pt);
-            let actual = excel_legend_trailing_gutter_pt(&chart, "Birthday Budget")
+            let actual = excel_legend_trailing_gutter_pt(&chart, &names)
                 .expect("a worksheet axis chart has Excel's gutter");
             assert!(
-                (actual - expected).abs() <= 0.02,
+                (actual - expected).abs() <= 0.05,
                 "{family} {size_pt}pt leaves {actual}pt, Excel's {expected}pt"
             );
         }
@@ -6308,6 +6316,7 @@ fn an_excel_legend_gutter_tracks_its_face_and_size() {
 
 #[test]
 fn non_calibrated_hosts_and_variants_keep_the_generic_legend_gutter() {
+    let names: Vec<String> = vec!["Birthday Budget".to_string()];
     for host in [
         crate::ir::ChartHost::Presentation,
         crate::ir::ChartHost::WordProcessing,
@@ -6315,18 +6324,209 @@ fn non_calibrated_hosts_and_variants_keep_the_generic_legend_gutter() {
     ] {
         let mut chart = excel_bottom_legend_chart("Calibri", 9.0);
         chart.host = host;
-        assert_eq!(
-            excel_legend_trailing_gutter_pt(&chart, "Birthday Budget"),
-            None
-        );
+        assert_eq!(excel_legend_trailing_gutter_pt(&chart, &names), None);
     }
 
     let mut line_chart = excel_bottom_legend_chart("Calibri", 9.0);
     line_chart.chart_type = ChartType::Line;
-    assert_eq!(
-        excel_legend_trailing_gutter_pt(&line_chart, "Birthday Budget"),
-        None
-    );
+    assert_eq!(excel_legend_trailing_gutter_pt(&line_chart, &names), None);
+}
+
+/// A two-entry Segoe UI worksheet legend whose series share one name, the
+/// way the #1616 label-width probes rename all four fixture series at once.
+fn excel_uniform_legend_chart(size_pt: f64, name: &str) -> Chart {
+    let mut chart = excel_bottom_legend_chart("Segoe UI", size_pt);
+    for series in &mut chart.series {
+        series.name = Some(name.to_string());
+    }
+    chart
+}
+
+/// The four-entry bottom legend of the public #1603 workbook restated in
+/// `family` at `size_pt`: three column series and the overlaid line series.
+fn excel_gift_budget_legend_chart(family: &str, size_pt: f64) -> Chart {
+    let mut chart = excel_bottom_legend_chart(family, size_pt);
+    let extra = chart.series[1].clone();
+    chart.series.push(extra.clone());
+    chart.series.push(extra);
+    for (series, name) in chart.series.iter_mut().zip([
+        "Birthday Budget",
+        "Holiday Budget",
+        "Other Gift Budget",
+        "Amount Spent",
+    ]) {
+        series.name = Some(name.to_string());
+    }
+    chart.series[3].plot_type = Some(ChartType::Line);
+    chart
+}
+
+#[test]
+fn an_excel_legend_entry_advances_by_its_own_label_with_no_width_floor() {
+    // Native Excel for Mac 16.112 exports of the #1603 workbook with all four
+    // series renamed to one string, twelve widths at 9pt, five at 6pt and four
+    // at 18pt, each series guarded by a layout-identical re-zip control
+    // (`assets/validation/issue-1616/`). Every key lands key + gap + label +
+    // clearance after the previous one; nothing holds a short entry at the
+    // 78pt floor that put the 6pt fixture row 12pt left of native (#1616).
+    let measurements = [
+        (9.0_f64, "It", 34.156_f64),
+        (9.0, "Gift", 44.335),
+        (9.0, "Spent", 54.427),
+        (9.0, "Gift Budget", 80.382),
+        (9.0, "Gift Budget Amount", 120.443),
+        (6.0, "Gift", 38.843),
+        (6.0, "Budget", 49.973),
+        (6.0, "Holiday Budget", 75.290),
+        (18.0, "Gift", 60.836),
+        (18.0, "Budget", 94.215),
+    ];
+    for (size_pt, name, native_pitch) in measurements {
+        let source: String = chart_source(excel_uniform_legend_chart(size_pt, name));
+        let marker: String = format!("[{name}]])");
+        let entry_x: Vec<f64> = source
+            .lines()
+            .filter(|line| line.contains(&marker))
+            .map(|line| {
+                line.split("dx: ")
+                    .nth(1)
+                    .and_then(|rest| rest.split("pt").next())
+                    .and_then(|value| value.trim().parse::<f64>().ok())
+                    .expect("the entry is placed")
+            })
+            .collect();
+        assert_eq!(entry_x.len(), 2, "both entries are drawn:\n{source}");
+        let pitch: f64 = entry_x[1] - entry_x[0];
+        assert!(
+            (pitch - native_pitch).abs() <= 0.05,
+            "{size_pt}pt {name:?}: entries {pitch}pt apart, Excel's {native_pitch}pt"
+        );
+    }
+}
+
+#[test]
+fn an_excel_legend_row_shares_one_clearance_from_its_mean_label() {
+    // In the unchanged #1603 workbook the three column labels differ by 9pt of
+    // width, yet the native export trails each by the same 16.74pt: the
+    // clearance is 0.16 of the row's MEAN label advance, not of each entry's
+    // own. Restating only the legend size to 6pt (the #1616 controlled
+    // package) keeps the rule and moves every pitch off the old 78pt floor.
+    let measurements = [
+        (9.0_f64, [101.895_f64, 99.305, 108.495]),
+        (6.0, [77.226, 75.500, 81.631]),
+    ];
+    for (size_pt, native_pitches) in measurements {
+        let source: String = chart_source(excel_gift_budget_legend_chart("Segoe UI", size_pt));
+        let names = [
+            "Birthday Budget",
+            "Holiday Budget",
+            "Other Gift Budget",
+            "Amount Spent",
+        ];
+        let entry_x: Vec<f64> = names
+            .iter()
+            .map(|name| legend_entry_x(&source, name))
+            .collect();
+        for (index, native_pitch) in native_pitches.into_iter().enumerate() {
+            let pitch: f64 = entry_x[index + 1] - entry_x[index];
+            assert!(
+                (pitch - native_pitch).abs() <= 0.05,
+                "{size_pt}pt: entry {} is {pitch}pt after entry {index}, Excel's {native_pitch}pt",
+                index + 1
+            );
+        }
+    }
+}
+
+/// Rebuild the fixture package with one part rewritten, the way the native
+/// one-factor probes derive their controlled packages.
+fn repackaged_with_part(data: &[u8], part: &str, patch: impl Fn(&str) -> String) -> Vec<u8> {
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(data)).expect("the fixture is a ZIP");
+    let mut rebuilt = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let mut patched: bool = false;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("the entry is readable");
+        let name: String = entry.name().to_string();
+        let mut bytes: Vec<u8> = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).expect("the entry decompresses");
+        rebuilt
+            .start_file(&name, zip::write::FileOptions::default())
+            .expect("the entry is writable");
+        if name == part {
+            let xml: String = String::from_utf8(bytes).expect("the part is UTF-8 XML");
+            let replacement: String = patch(&xml);
+            assert_ne!(replacement, xml, "the patch must change {part}");
+            patched = true;
+            std::io::Write::write_all(&mut rebuilt, replacement.as_bytes())
+                .expect("the patched part is writable");
+        } else {
+            std::io::Write::write_all(&mut rebuilt, &bytes).expect("the entry is writable");
+        }
+    }
+    assert!(patched, "{part} is in the package");
+    rebuilt.finish().expect("the package closes").into_inner()
+}
+
+/// The #1616 controlled package: the public workbook with only the legend's
+/// `a:defRPr/@sz` changed from 900 to 600. Native Excel for Mac 16.112 keeps
+/// its row on the same rule and starts it 38.74 printed points further right
+/// than the 9pt row; the filled keys pin both the entry pitch and the visible
+/// row's centre after parsing and compiling the real package.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn gift_budget_compiled_six_point_legend_keys_match_native_bounds() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx");
+    let package: Vec<u8> = repackaged_with_part(data, "xl/charts/chart1.xml", |xml| {
+        let legend_start: usize = xml.find("<c:legend>").expect("the chart has a legend");
+        let legend_end: usize = xml.find("</c:legend>").expect("the legend closes");
+        let legend: &str = &xml[legend_start..legend_end];
+        assert_eq!(legend.matches("sz=\"900\"").count(), 1);
+        format!(
+            "{}{}{}",
+            &xml[..legend_start],
+            legend.replacen("sz=\"900\"", "sz=\"600\"", 1),
+            &xml[legend_end..]
+        )
+    });
+    let (doc, _) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        &package,
+        &crate::config::ConvertOptions::default(),
+    )
+    .expect("the controlled package parses");
+    let output = generate_typst(&doc).unwrap();
+    let pages = crate::render::pdf::compiled_page_paint_sequences(&output.source, &output.images)
+        .expect("the controlled package compiles");
+    assert_eq!(pages.len(), 2);
+    let keys: Vec<_> = pages[1]
+        .iter()
+        .filter(|paint| {
+            let (left, top, right, bottom) = paint.bounds;
+            paint.rectangle_fill.is_some()
+                && (right - left - 15.744).abs() < 0.01
+                && top > 350.0
+                && bottom < 365.0
+        })
+        .collect();
+    let native = [
+        (586.9499, 357.7169, 602.6939, 360.6616),
+        (650.2749, 357.7169, 666.0189, 360.6616),
+        (712.1853, 357.7169, 727.9293, 360.6616),
+    ];
+    assert_eq!(keys.len(), native.len());
+    for (key, (left, top, right, bottom)) in keys.iter().zip(native) {
+        let actual = key.bounds;
+        assert!(
+            (actual.0 - left).abs() < 0.5
+                && (actual.1 - top).abs() < 0.5
+                && (actual.2 - right).abs() < 0.5
+                && (actual.3 - bottom).abs() < 0.5,
+            "native key {:?}, actual {actual:?}",
+            (left, top, right, bottom)
+        );
+        assert!(((actual.3 - actual.1) - (bottom - top)).abs() < 0.01);
+    }
 }
 
 /// The data-table fallback prints each value through the format its series

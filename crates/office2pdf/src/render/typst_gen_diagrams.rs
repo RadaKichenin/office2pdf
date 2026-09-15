@@ -368,21 +368,28 @@ const LEGEND_KEY_LABEL_GAP_PT: f64 = 0.0;
 /// again in the unrelated `WithChart.xlsx` export.
 const EXCEL_LEGEND_KEY_LABEL_GAP_PT: f64 = 2.025;
 
-/// Fixed part of the clearance Excel leaves after a horizontal legend label.
+/// Fixed part of the clearance Excel leaves after every horizontal legend
+/// label.
 ///
 /// Native Excel for Mac 16.112 exports of `Gift Budget and Tracker1.xlsx`,
 /// varied one factor at a time and guarded by a layout-identical re-zip
-/// control, put the common intercept at 6.58..6.64pt across eight faces. The
-/// 6.625pt centre fits every 9/18pt pair below within 0.02pt.
-const EXCEL_LEGEND_TRAILING_FIXED_PT: f64 = 6.625;
+/// control: all four series renamed to one string at twelve widths (9pt),
+/// five (6pt) and four (18pt), plus the unchanged four-name row at 6, 9 and
+/// 18pt. With the mean-label share below fixed, the intercept fits 24 of the
+/// 25 rows within 0.016pt; the 9pt `Budget` row alone sits 0.22pt under it
+/// (`assets/validation/issue-1616/`).
+const EXCEL_LEGEND_TRAILING_FIXED_PT: f64 = 6.617;
 
-/// Share of the final glyph's advance that Excel adds to the trailing slope.
+/// Share of the row's mean label advance that Excel adds to that clearance.
 ///
-/// Changing only the final `t` of all four 9pt Segoe UI labels to `.`, `i`,
-/// `A`, `M`, or `W` moves the isolated trailing clearance by 1.43883pt per em
-/// of final-glyph advance. Dividing by the 9pt size gives 0.15987, within
-/// 0.003pt of this 0.16 factor on every variant.
-const EXCEL_LEGEND_TRAILING_LAST_GLYPH_EM: f64 = 0.16;
+/// The same clearance follows every entry of a row: the three column labels
+/// of the #1603 workbook differ by 9pt of width and all trail 16.74pt at 9pt,
+/// which is 0.16 of their 63.31pt mean. Renaming all four series to one string
+/// moves the clearance by 0.16 of that string's advance, 5.4pt to 79.8pt wide
+/// (slope 0.16007 free-fitted), and the earlier per-face "slopes" of 1.03 to
+/// 1.27pt per point of size were this share of each face's own mean label
+/// advance, as was the 0.16-per-em terminal-glyph effect of #1249.
+const EXCEL_LEGEND_TRAILING_MEAN_LABEL_SHARE: f64 = 0.16;
 
 /// Move a worksheet axis chart's bottom legend from the generic content centre
 /// to Excel's visible-row centre.
@@ -394,44 +401,20 @@ const EXCEL_LEGEND_TRAILING_LAST_GLYPH_EM: f64 = 0.16;
 /// rectangle centres at 505.4284pt, leaving this stable 4.3235pt correction.
 const EXCEL_BOTTOM_LEGEND_CENTER_X_SHIFT_PT: f64 = 4.3235;
 
-/// Excel's trailing-clearance slope for a label ending in `t`, by face.
-///
-/// The values are fixed-intercept fits through native 9/18pt exports; Segoe UI
-/// additionally uses every unconstrained integer size from 3 through 16 plus
-/// 18, 20 and 22pt. At 24pt the row first runs out of chart width and Excel
-/// compresses it, so that constrained-row regime is deliberately not folded
-/// into these intrinsic per-entry widths.
-fn excel_legend_trailing_slope_t_em(family: &str) -> f64 {
-    let normalized: String = family
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect();
-    match normalized.as_str() {
-        "segoeui" => 1.124_021,
-        "calibri" => 1.033_098,
-        "arial" => 1.120_107,
-        "georgia" => 1.136_827,
-        "timesnewroman" => 1.041_811,
-        "verdana" => 1.272_171,
-        "centurygothic" => 1.227_227,
-        "aptos" => 1.083_627,
-        // Segoe UI is the source workbook's face and the centre of the
-        // measured slopes, so it is the least surprising unmeasured fallback.
-        _ => 1.124_021,
-    }
-}
-
-/// Intrinsic clearance after one worksheet axis-chart legend label.
+/// The clearance Excel leaves after each label of a worksheet axis-chart
+/// legend row, shared by every entry of that row.
 ///
 /// Excel chartsheets and PowerPoint use a separate square-key layout, while
 /// Word has no native calibration, and the line/radar/pie emitters have
-/// different content rectangles, so only a worksheet axis chart
-/// enters this measured regime. The face slope is referenced to labels ending
-/// in `t`; when the source face can be measured, the terminal-glyph probe above
-/// adjusts it for the actual final character. Font-search-free builds retain
-/// the face/size calibration and omit only that sub-point correction.
-pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, label: &str) -> Option<f64> {
+/// different content rectangles, so only a worksheet axis chart enters this
+/// measured regime. The clearance is [`EXCEL_LEGEND_TRAILING_FIXED_PT`] plus
+/// [`EXCEL_LEGEND_TRAILING_MEAN_LABEL_SHARE`] of the mean design advance of
+/// the labels that can be measured in the legend face; a row none of whose
+/// labels can be measured keeps the generic layout, since there is no width
+/// to derive the clearance from. At 24pt the #1249 row first runs out of chart
+/// width and Excel compresses it, so that constrained-row regime is
+/// deliberately not folded into these intrinsic per-entry widths.
+pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, names: &[String]) -> Option<f64> {
     if !matches!(chart.host, crate::ir::ChartHost::Spreadsheet)
         || !matches!(chart_variant(chart), ChartVariant::AxisPlot)
     {
@@ -443,22 +426,17 @@ pub(super) fn excel_legend_trailing_gutter_pt(chart: &Chart, label: &str) -> Opt
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
-    let terminal_delta_em: f64 = label
-        .chars()
-        .last()
-        .filter(|last| *last != 't')
-        .and_then(|last| {
-            let last: String = last.to_string();
-            Some(
-                chart_text_advance_em(family, is_bold, &last)?
-                    - chart_text_advance_em(family, is_bold, "t")?,
-            )
-        })
-        .unwrap_or(0.0)
-        * EXCEL_LEGEND_TRAILING_LAST_GLYPH_EM;
+    let measured: Vec<f64> = names
+        .iter()
+        .filter_map(|name| chart_text_advance_em(family, is_bold, name))
+        .map(|advance| advance * size_pt)
+        .collect();
+    if measured.is_empty() {
+        return None;
+    }
+    let mean_label_pt: f64 = measured.iter().sum::<f64>() / measured.len() as f64;
     Some(
-        (EXCEL_LEGEND_TRAILING_FIXED_PT
-            + (excel_legend_trailing_slope_t_em(family) + terminal_delta_em) * size_pt)
+        (EXCEL_LEGEND_TRAILING_FIXED_PT + EXCEL_LEGEND_TRAILING_MEAN_LABEL_SHARE * mean_label_pt)
             .max(GAP),
     )
 }
@@ -1568,14 +1546,17 @@ const LEGEND_ROW_H: f64 = 14.0; // per-entry height when the legend stacks
 /// 1.6em relationship on that host/chart-family/edge only: horizontal bar legends
 /// use a separately measured automatic-layout regime (#1434).
 const PPTX_COLUMN_RIGHT_LEGEND_ROW_EM: f64 = 1.6;
-/// Floor for one entry's width in a legend that runs across the chart, and the
-/// flat width a legend down the side reserves for its gutter.
+/// Floor for one entry's width in a legend that runs across the chart outside
+/// the measured Excel regime, and the flat width a legend down the side
+/// reserves for its gutter.
 ///
 /// It was the horizontal pitch itself until #827: every entry advanced by it,
 /// so a name wider than 78pt ran under its neighbour. A horizontal entry now
 /// takes the greater of this and what its own text measures — see
 /// [`legend_entry_widths`] — which leaves a legend of short names exactly where
-/// it was.
+/// it was. An Excel worksheet axis chart whose labels can be measured takes no
+/// floor at all: native Excel advances a 6pt or a four-letter entry by its own
+/// text, and this floor held such rows 12pt left of the export (#1616).
 pub(super) const LEGEND_ENTRY_W: f64 = 78.0;
 
 /// PowerPoint's automatic chart layout combines a fixed edge clearance with a
@@ -3862,14 +3843,15 @@ fn chart_user_shape_run_markup(run: &crate::ir::Run) -> String {
 /// Width each legend entry occupies when the legend runs across the chart.
 ///
 /// The key, the gap to the label, and the label itself measured in the face the
-/// chart sets its text in. An Excel worksheet axis chart then closes
-/// the entry with its measured face/size-dependent clearance; other hosts and
-/// chart variants retain the generic [`GAP`]. [`LEGEND_ENTRY_W`] remains the
-/// floor, so a short entry cannot collapse below the established minimum
-/// (issues #827 and #1249).
+/// chart sets its text in. An Excel worksheet axis chart then closes the entry
+/// with the row's measured clearance and takes no floor: native Excel advances
+/// a 6pt or a four-letter entry by exactly its own text, and holding such an
+/// entry at [`LEGEND_ENTRY_W`] laid the 6pt #1616 row 12pt left of the export
+/// (issues #1249 and #1616). Other hosts and chart variants retain the generic
+/// [`GAP`] and the floor of #827.
 ///
-/// Falls back to the floor for any name that cannot be measured — wasm has no
-/// font search — so an entry is never narrower than its text.
+/// A name that cannot be measured — wasm has no font search — takes the floor
+/// whatever the regime, so an entry is never narrower than its text.
 fn legend_entry_widths(
     chart: &Chart,
     key_len_pt: f64,
@@ -3882,25 +3864,31 @@ fn legend_entry_widths(
         .text_font_family
         .as_deref()
         .unwrap_or(crate::defaults::TYPST_DEFAULT_FONT_FAMILY);
+    let excel_trailing: Option<f64> = excel_legend_trailing_gutter_pt(chart, names);
     names
         .iter()
         .map(|name| {
-            let label: f64 = chart_text_advance_em(family, is_bold, name)
-                .map_or(0.0, |advance| advance * size_pt);
-            let trailing: f64 = excel_legend_trailing_gutter_pt(chart, name).unwrap_or(GAP);
-            (key_len_pt + key_label_gap_pt + label + trailing).max(LEGEND_ENTRY_W)
+            let label: Option<f64> =
+                chart_text_advance_em(family, is_bold, name).map(|advance| advance * size_pt);
+            match (label, excel_trailing) {
+                (Some(label), Some(trailing)) => key_len_pt + key_label_gap_pt + label + trailing,
+                (Some(label), None) => {
+                    (key_len_pt + key_label_gap_pt + label + GAP).max(LEGEND_ENTRY_W)
+                }
+                (None, _) => LEGEND_ENTRY_W,
+            }
         })
         .collect()
 }
 
 /// The invisible tail and centre correction of an Excel bottom-legend row.
 ///
-/// The per-entry trailing clearance advances every following key, but after
-/// the final label there is no following entry, and Excel excludes that final
-/// clearance when centring the visible row. If the source face cannot be
-/// measured, no trim is attempted: the width floor may be the part closing the
-/// entry in a font-search-free build, and subtracting an assumed gutter would
-/// move an otherwise unchanged fallback.
+/// The shared trailing clearance advances every following key, but after the
+/// final label there is no following entry, and Excel excludes that final
+/// clearance when centring the visible row. If the final label cannot be
+/// measured, no trim is attempted: the width floor is then what closes the
+/// entry, and subtracting a clearance the entry never took would move an
+/// otherwise unchanged fallback.
 fn excel_bottom_legend_row_adjustment(
     chart: &Chart,
     key_len_pt: f64,
@@ -3926,10 +3914,10 @@ fn excel_bottom_legend_row_adjustment(
     else {
         return (0.0, 0.0);
     };
-    let trailing_pt: f64 = excel_legend_trailing_gutter_pt(chart, last).unwrap_or(GAP);
-    if key_len_pt + key_label_gap_pt + label_pt + trailing_pt < LEGEND_ENTRY_W {
+    let Some(trailing_pt) = excel_legend_trailing_gutter_pt(chart, names) else {
         return (0.0, 0.0);
-    }
+    };
+    debug_assert!(key_len_pt + key_label_gap_pt + label_pt + trailing_pt > 0.0);
     (trailing_pt, EXCEL_BOTTOM_LEGEND_CENTER_X_SHIFT_PT)
 }
 

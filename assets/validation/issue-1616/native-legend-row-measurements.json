@@ -1,0 +1,1009 @@
+{
+ "source": "Public fixture tests/fixtures/xlsx/issue_1603_gift_budget.xlsx (SHA-256 25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613); native Microsoft Excel for Mac 16.112 PDF exports through scripts/probe_harness.py --backend office on 2026-09-15, page 2 at the workbook's 0.82 fitted print scale. Values are chart points (page points / 0.82). Key left edges are the filled 19.2pt keys; the fourth (line) entry is located by its label origin. trailing = pitch - 19.2 key - 2.025 gap - label design advance.",
+ "model": {
+  "trailing_pt": "6.617 + 0.16 * mean(label design advances of the row)",
+  "entry_pitch_pt": "19.2 + 2.025 + label + trailing, no floor"
+ },
+ "runs": {
+  "legend-entry-width": [
+   {
+    "variant": "base",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     63.927,
+     61.335,
+     70.533,
+     57.456
+    ],
+    "mean_label_advance_pt": 63.3128,
+    "first_key_left_page_pt": 548.2121,
+    "entry_pitches_pt": [
+     101.8949,
+     99.3048,
+     108.4949
+    ],
+    "trailing_pt": [
+     16.7429,
+     16.7448,
+     16.7369
+    ],
+    "model_trailing_pt": 16.747,
+    "package_sha256": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613",
+    "page_pdf_sha256": "054c2a2b7fbb3cc616d8dc214301cb05600a1e6c09758b818976d2dad2b17e51"
+   },
+   {
+    "variant": "control",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     63.927,
+     61.335,
+     70.533,
+     57.456
+    ],
+    "mean_label_advance_pt": 63.3128,
+    "first_key_left_page_pt": 548.2121,
+    "entry_pitches_pt": [
+     101.8949,
+     99.3048,
+     108.4949
+    ],
+    "trailing_pt": [
+     16.7429,
+     16.7448,
+     16.7369
+    ],
+    "model_trailing_pt": 16.747,
+    "package_sha256": "f785320711bb14bd1ee1f861e0e9092f4ac5e92afb1ce3252bb083d9ee61b650",
+    "page_pdf_sha256": "00dc83a30b4cbe7383a3ca22b534883781edcbbc550d9b8cb13a8d157ab06631"
+   },
+   {
+    "variant": "variant-sz600",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     42.618,
+     40.89,
+     47.022,
+     38.304
+    ],
+    "mean_label_advance_pt": 42.2085,
+    "first_key_left_page_pt": 586.9499,
+    "entry_pitches_pt": [
+     77.2256,
+     75.5005,
+     81.6306
+    ],
+    "trailing_pt": [
+     13.3826,
+     13.3855,
+     13.3836
+    ],
+    "model_trailing_pt": 13.3704,
+    "package_sha256": "3bb015e487303589118619e99d9f3bb6920668a70fdc9f784472d36b5d1fc634",
+    "page_pdf_sha256": "39e9244b36ad9147483551e6cf196e90a5f4e19d1e50029e81bd9e02a4f99948"
+   },
+   {
+    "variant": "variant-sz900-gift",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gift",
+     "Gift",
+     "Gift",
+     "Gift"
+    ],
+    "label_advances_pt": [
+     14.22,
+     14.22,
+     14.22,
+     14.22
+    ],
+    "mean_label_advance_pt": 14.22,
+    "first_key_left_page_pt": 638.381,
+    "entry_pitches_pt": [
+     44.3351,
+     44.3352,
+     44.3351
+    ],
+    "trailing_pt": [
+     8.8901,
+     8.8902,
+     8.8901
+    ],
+    "model_trailing_pt": 8.8922,
+    "package_sha256": "5e13f64c469b09002a69f078ed446faf359b549af1ef35d5812eaabdcef89aa4",
+    "page_pdf_sha256": "afa482d3445de879cb653b741cf8ff251bcb74713023ad593bfc79b30c0194a3"
+   },
+   {
+    "variant": "variant-sz900-short",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Budget",
+     "Budget",
+     "Budget",
+     "Spent"
+    ],
+    "label_advances_pt": [
+     28.611,
+     28.611,
+     28.611,
+     22.923
+    ],
+    "mean_label_advance_pt": 27.189,
+    "first_key_left_page_pt": 614.5623,
+    "entry_pitches_pt": [
+     60.8,
+     60.8,
+     60.8
+    ],
+    "trailing_pt": [
+     10.964,
+     10.964,
+     10.964
+    ],
+    "model_trailing_pt": 10.9672,
+    "package_sha256": "48e2fef089e90106ff5035f707dbcf6d05979bc026f3b3834c72c2817921d39c",
+    "page_pdf_sha256": "ee8d6d7524106a2630b1c297840420c2444c7002ed085b461668cad60d90c12f"
+   }
+  ],
+  "label-width-9pt": [
+   {
+    "variant": "base",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     63.927,
+     61.335,
+     70.533,
+     57.456
+    ],
+    "mean_label_advance_pt": 63.3128,
+    "first_key_left_page_pt": 548.2121,
+    "entry_pitches_pt": [
+     101.8949,
+     99.3048,
+     108.4949
+    ],
+    "trailing_pt": [
+     16.7429,
+     16.7448,
+     16.7369
+    ],
+    "model_trailing_pt": 16.747,
+    "package_sha256": "25f5dc75dab19ea12042979a61842314ddc226e3e45d447e36b2a2a104112613",
+    "page_pdf_sha256": "358018a4e9675ee316237bcb141046d701dad81120e3733f719b6a6df28d3da7"
+   },
+   {
+    "variant": "control",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     63.927,
+     61.335,
+     70.533,
+     57.456
+    ],
+    "mean_label_advance_pt": 63.3128,
+    "first_key_left_page_pt": 548.2121,
+    "entry_pitches_pt": [
+     101.8949,
+     99.3048,
+     108.4949
+    ],
+    "trailing_pt": [
+     16.7429,
+     16.7448,
+     16.7369
+    ],
+    "model_trailing_pt": 16.747,
+    "package_sha256": "f785320711bb14bd1ee1f861e0e9092f4ac5e92afb1ce3252bb083d9ee61b650",
+    "page_pdf_sha256": "72e79463c750f93a5b95441f2ef0731b2ee18d12fdae1b5e314631b0b794c27a"
+   },
+   {
+    "variant": "variant-Amount_Spent",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Amount Spent",
+     "Amount Spent",
+     "Amount Spent",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     57.456,
+     57.456,
+     57.456,
+     57.456
+    ],
+    "mean_label_advance_pt": 57.456,
+    "first_key_left_page_pt": 558.9666,
+    "entry_pitches_pt": [
+     94.4879,
+     94.488,
+     94.488
+    ],
+    "trailing_pt": [
+     15.8069,
+     15.807,
+     15.807
+    ],
+    "model_trailing_pt": 15.81,
+    "package_sha256": "ccd00777f718c67498e150e0988ce910aa5c27c7d3e26c0883fa2356cb14f74e",
+    "page_pdf_sha256": "644e8b8c9d3639c337de8d9a4c21edcfd42901addefa1a1c3e37661a37547b5f"
+   },
+   {
+    "variant": "variant-Cost",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Cost",
+     "Cost",
+     "Cost",
+     "Cost"
+    ],
+    "label_advances_pt": [
+     17.712,
+     17.712,
+     17.712,
+     17.712
+    ],
+    "mean_label_advance_pt": 17.712,
+    "first_key_left_page_pt": 631.9614,
+    "entry_pitches_pt": [
+     48.3894,
+     48.3894,
+     48.3893
+    ],
+    "trailing_pt": [
+     9.4524,
+     9.4524,
+     9.4523
+    ],
+    "model_trailing_pt": 9.4509,
+    "package_sha256": "fc45577973875a5fee7f2ecba6c4578b36d5839356c7b28ea4aa6c3cf3a5a1c4",
+    "page_pdf_sha256": "6bb534ea94b332b8f15a76eb81142be0497e2d8abc3ebbd299c36e7d498c3068"
+   },
+   {
+    "variant": "variant-Gift_Budget",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gift Budget",
+     "Gift Budget",
+     "Gift Budget",
+     "Gift Budget"
+    ],
+    "label_advances_pt": [
+     45.297,
+     45.297,
+     45.297,
+     45.297
+    ],
+    "mean_label_advance_pt": 45.297,
+    "first_key_left_page_pt": 581.3021,
+    "entry_pitches_pt": [
+     80.3823,
+     80.3823,
+     80.3822
+    ],
+    "trailing_pt": [
+     13.8603,
+     13.8603,
+     13.8602
+    ],
+    "model_trailing_pt": 13.8645,
+    "package_sha256": "2083f4d239620804780fc875d0d3753af2edb4bc890f03677dc5a5d16f990e6c",
+    "page_pdf_sha256": "955e2605f8de5a6030715563388f2030aad0f7d913a67966cf55dbcde8d72771"
+   },
+   {
+    "variant": "variant-Gift_Budget_Amount",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gift Budget Amount",
+     "Gift Budget Amount",
+     "Gift Budget Amount",
+     "Gift Budget Amount"
+    ],
+    "label_advances_pt": [
+     79.83,
+     79.83,
+     79.83,
+     79.83
+    ],
+    "mean_label_advance_pt": 79.83,
+    "first_key_left_page_pt": 517.868,
+    "entry_pitches_pt": [
+     120.443,
+     120.4432,
+     120.4432
+    ],
+    "trailing_pt": [
+     19.388,
+     19.3882,
+     19.3882
+    ],
+    "model_trailing_pt": 19.3898,
+    "package_sha256": "508e47ec81ed202b8885c0489e04db951c8cc8e23cf3ae300add5f2676eb90ca",
+    "page_pdf_sha256": "d2b35cda0867796ca7b534c46e943532ffddbd0f811c0653a51259f6cf18cb85"
+   },
+   {
+    "variant": "variant-Gift_Budget_Lt",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gift Budget Lt",
+     "Gift Budget Lt",
+     "Gift Budget Lt",
+     "Gift Budget Lt"
+    ],
+    "label_advances_pt": [
+     55.053,
+     55.053,
+     55.053,
+     55.053
+    ],
+    "mean_label_advance_pt": 55.053,
+    "first_key_left_page_pt": 563.3933,
+    "entry_pitches_pt": [
+     91.6926,
+     91.6924,
+     91.6924
+    ],
+    "trailing_pt": [
+     15.4146,
+     15.4144,
+     15.4144
+    ],
+    "model_trailing_pt": 15.4255,
+    "package_sha256": "74f02e97af61a309ac722a6849b84cd8872b9f9b3830adb2f0bfe1b5ce56f3c8",
+    "page_pdf_sha256": "f6120995a53c66f6e5a71f5043b2ade5f0cf0611bcd2690ab22d5556fd2f966e"
+   },
+   {
+    "variant": "variant-Gift_Cost",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gift Cost",
+     "Gift Cost",
+     "Gift Cost",
+     "Gift Cost"
+    ],
+    "label_advances_pt": [
+     34.398,
+     34.398,
+     34.398,
+     34.398
+    ],
+    "mean_label_advance_pt": 34.398,
+    "first_key_left_page_pt": 601.3142,
+    "entry_pitches_pt": [
+     67.744,
+     67.7441,
+     67.7441
+    ],
+    "trailing_pt": [
+     12.121,
+     12.1211,
+     12.1211
+    ],
+    "model_trailing_pt": 12.1207,
+    "package_sha256": "fec0d125052c607549c0c62b204e719081815ab710a3654930d7c455b7a111b7",
+    "page_pdf_sha256": "49f6df5bc7d81e86dd071207667d344a4e17ac43c97dc17b9ad01fef7d3d7b9f"
+   },
+   {
+    "variant": "variant-Gifts_Budget",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gifts Budget",
+     "Gifts Budget",
+     "Gifts Budget",
+     "Gifts Budget"
+    ],
+    "label_advances_pt": [
+     49.113,
+     49.113,
+     49.113,
+     49.113
+    ],
+    "mean_label_advance_pt": 49.113,
+    "first_key_left_page_pt": 574.2856,
+    "entry_pitches_pt": [
+     84.8137,
+     84.8137,
+     84.8135
+    ],
+    "trailing_pt": [
+     14.4757,
+     14.4757,
+     14.4755
+    ],
+    "model_trailing_pt": 14.4751,
+    "package_sha256": "5c63462a7255caab2567dc81cf2e9078b49d6be6564e621a3160d037b3888b9a",
+    "page_pdf_sha256": "87286ed646c93270840548e21e1977d9b9dc6e82c2bc0836f87e70d58315802d"
+   },
+   {
+    "variant": "variant-Gt",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Gt",
+     "Gt",
+     "Gt",
+     "Gt"
+    ],
+    "label_advances_pt": [
+     9.225,
+     9.225,
+     9.225,
+     9.225
+    ],
+    "mean_label_advance_pt": 9.225,
+    "first_key_left_page_pt": 647.5559,
+    "entry_pitches_pt": [
+     38.5409,
+     38.541,
+     38.5409
+    ],
+    "trailing_pt": [
+     8.0909,
+     8.091,
+     8.0909
+    ],
+    "model_trailing_pt": 8.093,
+    "package_sha256": "f16b1f7485ca52c6978195bc108524b2592a3a612667396ac0b358e7f6d66dcf",
+    "page_pdf_sha256": "dc6daa37854f0fd02ed1fd1bda3c941886ee75137ed3bcffe66934a08abf09a4"
+   },
+   {
+    "variant": "variant-Holiday_Budget",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Holiday Budget",
+     "Holiday Budget",
+     "Holiday Budget",
+     "Holiday Budget"
+    ],
+    "label_advances_pt": [
+     61.335,
+     61.335,
+     61.335,
+     61.335
+    ],
+    "mean_label_advance_pt": 61.335,
+    "first_key_left_page_pt": 551.8399,
+    "entry_pitches_pt": [
+     98.9888,
+     98.9888,
+     98.9887
+    ],
+    "trailing_pt": [
+     16.4288,
+     16.4288,
+     16.4287
+    ],
+    "model_trailing_pt": 16.4306,
+    "package_sha256": "7a0778636f5a768e07a5db5ec779c9e87af0881877135d73873e7d54c1c0d1d5",
+    "page_pdf_sha256": "878c3b09d8ac94a6fbae68b8cc197a78fec38694692b1bb7b6f6bc4918f05754"
+   },
+   {
+    "variant": "variant-It",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "It",
+     "It",
+     "It",
+     "It"
+    ],
+    "label_advances_pt": [
+     5.445,
+     5.445,
+     5.445,
+     5.445
+    ],
+    "mean_label_advance_pt": 5.445,
+    "first_key_left_page_pt": 654.4989,
+    "entry_pitches_pt": [
+     34.1563,
+     34.1561,
+     34.1562
+    ],
+    "trailing_pt": [
+     7.4863,
+     7.4861,
+     7.4862
+    ],
+    "model_trailing_pt": 7.4882,
+    "package_sha256": "9b6881a1f78add8b419826d9a6039bb0b27e66426cc476a900b598524a3d2fbe",
+    "page_pdf_sha256": "77ff90ec1271b52bfeb60665eabf483b2d070620962b4fc54dfd9ecc34a11bb4"
+   },
+   {
+    "variant": "variant-Spent",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Spent",
+     "Spent",
+     "Spent",
+     "Spent"
+    ],
+    "label_advances_pt": [
+     22.923,
+     22.923,
+     22.923,
+     22.923
+    ],
+    "mean_label_advance_pt": 22.923,
+    "first_key_left_page_pt": 622.4008,
+    "entry_pitches_pt": [
+     54.4272,
+     54.4272,
+     54.4271
+    ],
+    "trailing_pt": [
+     10.2792,
+     10.2792,
+     10.2791
+    ],
+    "model_trailing_pt": 10.2847,
+    "package_sha256": "f35a1416d70e034c9d79c1de28c1a7bf293c9e422ccb1edd1872f6ca3f8fb18d",
+    "page_pdf_sha256": "5d303895b6bc5b04723272af27e4ec6e5e9ebd7190da94be2a21dadb906efffe"
+   },
+   {
+    "variant": "variant-Total_Cost",
+    "legend_size_pt": 9.0,
+    "labels": [
+     "Total Cost",
+     "Total Cost",
+     "Total Cost",
+     "Total Cost"
+    ],
+    "label_advances_pt": [
+     39.978,
+     39.978,
+     39.978,
+     39.978
+    ],
+    "mean_label_advance_pt": 39.978,
+    "first_key_left_page_pt": 591.0648,
+    "entry_pitches_pt": [
+     74.217,
+     74.2168,
+     74.2167
+    ],
+    "trailing_pt": [
+     13.014,
+     13.0138,
+     13.0137
+    ],
+    "model_trailing_pt": 13.0135,
+    "package_sha256": "3575a7de5a294cd1a6ee300276f81fa11999ed2a85016756407a46b864c53b21",
+    "page_pdf_sha256": "25e5a6abbd02fa2da370fa5ae4d2dc50bd0f8674898e6ac905d55741a5df2587"
+   }
+  ],
+  "label-width-6pt": [
+   {
+    "variant": "base",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     42.618,
+     40.89,
+     47.022,
+     38.304
+    ],
+    "mean_label_advance_pt": 42.2085,
+    "first_key_left_page_pt": 586.9499,
+    "entry_pitches_pt": [
+     77.2256,
+     75.5005,
+     81.6306
+    ],
+    "trailing_pt": [
+     13.3826,
+     13.3855,
+     13.3836
+    ],
+    "model_trailing_pt": 13.3704,
+    "package_sha256": "3f40e2a801046f458f2ac8a4631ddfbaa35802803d9229b65cec74d825e0c295",
+    "page_pdf_sha256": "db2b083326b98515dbe05155f4187119bebc84f15860fc9876a15b1ea7a01a09"
+   },
+   {
+    "variant": "control",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     42.618,
+     40.89,
+     47.022,
+     38.304
+    ],
+    "mean_label_advance_pt": 42.2085,
+    "first_key_left_page_pt": 586.9499,
+    "entry_pitches_pt": [
+     77.2256,
+     75.5005,
+     81.6306
+    ],
+    "trailing_pt": [
+     13.3826,
+     13.3855,
+     13.3836
+    ],
+    "model_trailing_pt": 13.3704,
+    "package_sha256": "3bb015e487303589118619e99d9f3bb6920668a70fdc9f784472d36b5d1fc634",
+    "page_pdf_sha256": "23cfda7e76e3ef90bf295da30eee1d6c18ba745ebef9b8997722e4040bc9d1e5"
+   },
+   {
+    "variant": "variant-Amount_Spent",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Amount Spent",
+     "Amount Spent",
+     "Amount Spent",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     38.304,
+     38.304,
+     38.304,
+     38.304
+    ],
+    "mean_label_advance_pt": 38.304,
+    "first_key_left_page_pt": 594.132,
+    "entry_pitches_pt": [
+     72.28,
+     72.2799,
+     72.2799
+    ],
+    "trailing_pt": [
+     12.751,
+     12.7509,
+     12.7509
+    ],
+    "model_trailing_pt": 12.7456,
+    "package_sha256": "e1c2604ca5dcc81fca450dec066ff3f85528b324b775ff05f2c6bbca5ca84ab5",
+    "page_pdf_sha256": "bd1bccfce265c3bb652536426356edb4df546474ba35a74763cf5b5deb5cef8c"
+   },
+   {
+    "variant": "variant-Budget",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Budget",
+     "Budget",
+     "Budget",
+     "Budget"
+    ],
+    "label_advances_pt": [
+     19.074,
+     19.074,
+     19.074,
+     19.074
+    ],
+    "mean_label_advance_pt": 19.074,
+    "first_key_left_page_pt": 629.454,
+    "entry_pitches_pt": [
+     49.9728,
+     49.9729,
+     49.9729
+    ],
+    "trailing_pt": [
+     9.6738,
+     9.6739,
+     9.6739
+    ],
+    "model_trailing_pt": 9.6688,
+    "package_sha256": "100a3868dd7edc9989b3c64e49802dab6a5a41bfb770239d6c616e4852653b47",
+    "page_pdf_sha256": "97a8e40b75d2bf9094a55e062a9ac37905ae1a1cfe994302daeb36b9bb99cf50"
+   },
+   {
+    "variant": "variant-Gift",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Gift",
+     "Gift",
+     "Gift",
+     "Gift"
+    ],
+    "label_advances_pt": [
+     9.48,
+     9.48,
+     9.48,
+     9.48
+    ],
+    "mean_label_advance_pt": 9.48,
+    "first_key_left_page_pt": 647.0781,
+    "entry_pitches_pt": [
+     38.8427,
+     38.8426,
+     38.8426
+    ],
+    "trailing_pt": [
+     8.1377,
+     8.1376,
+     8.1376
+    ],
+    "model_trailing_pt": 8.1338,
+    "package_sha256": "f3ee99ccd96c030e8def03b7fe2f628ff4dc5ba7b591d98ce78309762686c44d",
+    "page_pdf_sha256": "29309724c7847fcc526ed3478e23624ec1fec7817e2969ed6a90ab3240dff1b2"
+   },
+   {
+    "variant": "variant-Gift_Budget",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Gift Budget",
+     "Gift Budget",
+     "Gift Budget",
+     "Gift Budget"
+    ],
+    "label_advances_pt": [
+     30.198,
+     30.198,
+     30.198,
+     30.198
+    ],
+    "mean_label_advance_pt": 30.198,
+    "first_key_left_page_pt": 609.0101,
+    "entry_pitches_pt": [
+     62.8839,
+     62.8839,
+     62.8838
+    ],
+    "trailing_pt": [
+     11.4609,
+     11.4609,
+     11.4608
+    ],
+    "model_trailing_pt": 11.4487,
+    "package_sha256": "8b770ecde77c61d7b59f460822bc2346e14f9d8015afacd20faa965a31b3cd66",
+    "page_pdf_sha256": "7fd0b134a18bfad009459aa1bdca1144ef129da41ee9945dcf6cced16b88ba86"
+   },
+   {
+    "variant": "variant-Holiday_Budget",
+    "legend_size_pt": 6.0,
+    "labels": [
+     "Holiday Budget",
+     "Holiday Budget",
+     "Holiday Budget",
+     "Holiday Budget"
+    ],
+    "label_advances_pt": [
+     40.89,
+     40.89,
+     40.89,
+     40.89
+    ],
+    "mean_label_advance_pt": 40.89,
+    "first_key_left_page_pt": 589.3652,
+    "entry_pitches_pt": [
+     75.2902,
+     75.2901,
+     75.2901
+    ],
+    "trailing_pt": [
+     13.1752,
+     13.1751,
+     13.1751
+    ],
+    "model_trailing_pt": 13.1594,
+    "package_sha256": "3c6334cd98e115d69844da64a82e7a1577ae8251be59be7e8a927f9e8fe84519",
+    "page_pdf_sha256": "d64f7e9e856a6d332827d5f9b1b7ff70145791f8069c6c7680f1ec5599e07169"
+   }
+  ],
+  "label-width-18pt": [
+   {
+    "variant": "base",
+    "legend_size_pt": 18.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     127.854,
+     122.67,
+     141.066,
+     114.912
+    ],
+    "mean_label_advance_pt": 126.6255,
+    "first_key_left_page_pt": 431.929,
+    "entry_pitches_pt": [
+     175.9439,
+     170.7639,
+     189.1539
+    ],
+    "trailing_pt": [
+     26.8649,
+     26.8689,
+     26.8629
+    ],
+    "model_trailing_pt": 26.8771,
+    "package_sha256": "54793aa45ea85a8a72471b3cbfd0949a9d9a43cb868dbe06f2dfa2b608aeb318",
+    "page_pdf_sha256": "d13311b55c44e22c772db21b638bf2339f6224798c26efd8ddbaee448cb2a9b9"
+   },
+   {
+    "variant": "control",
+    "legend_size_pt": 18.0,
+    "labels": [
+     "Birthday Budget",
+     "Holiday Budget",
+     "Other Gift Budget",
+     "Amount Spent"
+    ],
+    "label_advances_pt": [
+     127.854,
+     122.67,
+     141.066,
+     114.912
+    ],
+    "mean_label_advance_pt": 126.6255,
+    "first_key_left_page_pt": 431.929,
+    "entry_pitches_pt": [
+     175.9439,
+     170.7639,
+     189.1539
+    ],
+    "trailing_pt": [
+     26.8649,
+     26.8689,
+     26.8629
+    ],
+    "model_trailing_pt": 26.8771,
+    "package_sha256": "6b9bec3e987b882d347e0433e782e6a057015d828d89b72b2720601e674fdf67",
+    "page_pdf_sha256": "f529ac2288032d29a2d2862b7f11b99a3fbd738e41e26f728f1f5d8fd9f4dfc5"
+   },
+   {
+    "variant": "variant-Budget",
+    "legend_size_pt": 18.0,
+    "labels": [
+     "Budget",
+     "Budget",
+     "Budget",
+     "Budget"
+    ],
+    "label_advances_pt": [
+     57.222,
+     57.222,
+     57.222,
+     57.222
+    ],
+    "mean_label_advance_pt": 57.222,
+    "first_key_left_page_pt": 559.3986,
+    "entry_pitches_pt": [
+     94.2151,
+     94.2152,
+     94.2152
+    ],
+    "trailing_pt": [
+     15.7681,
+     15.7682,
+     15.7682
+    ],
+    "model_trailing_pt": 15.7725,
+    "package_sha256": "4e7e5563db515aef1100e9ba5e6cd4aeb0d3d14c05b854bcfa866e0a6b38f27b",
+    "page_pdf_sha256": "7e59fbb494d5638a671234ebc547893c45564c561e0f1ad9c4fb9fc5d1a39667"
+   },
+   {
+    "variant": "variant-Gift",
+    "legend_size_pt": 18.0,
+    "labels": [
+     "Gift",
+     "Gift",
+     "Gift",
+     "Gift"
+    ],
+    "label_advances_pt": [
+     28.44,
+     28.44,
+     28.44,
+     28.44
+    ],
+    "mean_label_advance_pt": 28.44,
+    "first_key_left_page_pt": 612.2526,
+    "entry_pitches_pt": [
+     60.8361,
+     60.8363,
+     60.8361
+    ],
+    "trailing_pt": [
+     11.1711,
+     11.1713,
+     11.1711
+    ],
+    "model_trailing_pt": 11.1674,
+    "package_sha256": "8d9cc1bebf1aa7dd17d29573c92d2162e53021d906bea47df34316012e41d515",
+    "page_pdf_sha256": "c6bb5297d1899d10f8f2a747d4f95f81d40104435877d770121ebdf3beb398ca"
+   },
+   {
+    "variant": "variant-Gift_Budget",
+    "legend_size_pt": 18.0,
+    "labels": [
+     "Gift Budget",
+     "Gift Budget",
+     "Gift Budget",
+     "Gift Budget"
+    ],
+    "label_advances_pt": [
+     90.594,
+     90.594,
+     90.594,
+     90.594
+    ],
+    "mean_label_advance_pt": 90.594,
+    "first_key_left_page_pt": 498.0953,
+    "entry_pitches_pt": [
+     132.9302,
+     132.9302,
+     132.9302
+    ],
+    "trailing_pt": [
+     21.1112,
+     21.1112,
+     21.1112
+    ],
+    "model_trailing_pt": 21.112,
+    "package_sha256": "b2e79326722d357a1ba2b26c0a9814902bfe9ecbfc57b3cbb8aefd968d38a462",
+    "page_pdf_sha256": "634317122c4fa0bca92584b38d222a73253243db3bfbf3d4709ebb28b5c69847"
+   },
+   {
+    "variant": "variant-Holiday_Budget",
+    "legend_size_pt": 18.0,
+    "labels": [
+     "Holiday Budget",
+     "Holiday Budget",
+     "Holiday Budget",
+     "Holiday Budget"
+    ],
+    "label_advances_pt": [
+     122.67,
+     122.67,
+     122.67,
+     122.67
+    ],
+    "mean_label_advance_pt": 122.67,
+    "first_key_left_page_pt": 439.1891,
+    "entry_pitches_pt": [
+     170.1313,
+     170.1315,
+     170.1315
+    ],
+    "trailing_pt": [
+     26.2363,
+     26.2365,
+     26.2365
+    ],
+    "model_trailing_pt": 26.2442,
+    "package_sha256": "a79a921f91d50abcf30f3a689ca178827c9b4ce2cb74a1cbedbdf427cf7dcecd",
+    "page_pdf_sha256": "0e7a21b9db40154823a7ed4b7d28319aa5b5bf0f08c76411bfe0569f26baa612"
+   }
+  ]
+ }
+}
