@@ -308,6 +308,7 @@ fn test_generate_table_page_empty_rows() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })]);
     let output = generate_typst(&doc).unwrap();
     assert!(!output.source.is_empty());
@@ -2941,6 +2942,7 @@ fn sheet_page_with_aligned_cell(
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 

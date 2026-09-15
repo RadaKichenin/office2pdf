@@ -661,6 +661,7 @@ fn test_table_page_with_header() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -710,6 +711,7 @@ fn test_table_page_with_page_number_footer() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -805,6 +807,7 @@ fn sheet_page_with_footer_sections(
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 
@@ -1158,6 +1161,7 @@ fn test_table_page_no_header_footer() {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
     let doc = make_doc(vec![page]);
     let output = generate_typst(&doc).unwrap();
@@ -1255,6 +1259,7 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
         }],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
 
     let doc = make_doc(vec![page]);
@@ -1428,6 +1433,7 @@ fn sheet_page_with_chart_print_scale(print_scale: f64) -> SheetPage {
         }],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     }
 }
 
@@ -1509,6 +1515,7 @@ fn test_table_page_with_chart_at_end() {
         }],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     });
 
     let doc = make_doc(vec![page]);
@@ -3943,6 +3950,7 @@ fn centered_sheet_page(centers: bool, column_widths: Vec<f64>) -> Page {
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 
@@ -4095,6 +4103,68 @@ fn test_centered_sheet_moves_its_drawings_with_the_grid() {
     );
 }
 
+/// A worksheet line shape floats in the drawing layer like a picture does,
+/// and paints as a stroked line at its anchor's page offset: the budget
+/// workbook's separators are `a:ln w="12700"` connectors traced by Excel as
+/// 0.78pt #D9D9D9 lines on the fitted page (issue #1566).
+#[test]
+fn test_sheet_line_shape_paints_as_a_stroked_line_in_the_drawing_layer() {
+    use crate::ir::{ArrowHead, BorderLineStyle, BorderSide, Color, LineJoin, Shape, ShapeKind};
+
+    let Page::Sheet(mut sheet) = centered_sheet_page(false, vec![60.0; 5]) else {
+        unreachable!("centered_sheet_page builds a sheet page")
+    };
+    sheet.shapes.push(crate::ir::SheetShape {
+        anchor_row: 4,
+        x_offset_pt: 120.0,
+        y_offset_pt: 30.5,
+        width: 0.0,
+        height: 154.05,
+        shape: Shape {
+            kind: ShapeKind::Line {
+                x1: 0.0,
+                y1: 0.0,
+                x2: 0.0,
+                y2: 154.05,
+                head_end: ArrowHead::None,
+                tail_end: ArrowHead::None,
+            },
+            fill: None,
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: Some(BorderSide {
+                width: 0.78,
+                color: Color::new(217, 217, 217),
+                style: BorderLineStyle::Solid,
+                join: LineJoin::Round,
+            }),
+            rotation_deg: None,
+            opacity: None,
+            shadow: None,
+            top_bevel: None,
+        },
+    });
+    let source = generate_typst(&make_doc(vec![Page::Sheet(sheet)]))
+        .unwrap()
+        .source;
+
+    assert!(
+        source.contains(", foreground: "),
+        "a sheet whose only drawing is a line still floats a drawing layer: {source}"
+    );
+    // Offsets are page-relative: the 50pt left and 54pt top margins fold in.
+    assert!(
+        source.contains("#place(top + left, dy: 84.5pt)[#place(top + left, dx: 170pt)["),
+        "the line is placed at its anchor's page offset: {source}"
+    );
+    assert!(
+        source.contains(
+            "#line(start: (0pt, 0pt), end: (0pt, 154.05pt), stroke: (paint: rgb(217, 217, 217), thickness: 0.78pt, join: \"round\"))"
+        ),
+        "the line is stroked with its declared width and colour: {source}"
+    );
+}
+
 /// A sheet whose grid is one filled panel, with a picture anchored inside it.
 ///
 /// Modelled on the reported workbook's `Gift budget and tracker` sheet, whose
@@ -4161,6 +4231,7 @@ fn sheet_with_a_picture_over_a_filled_panel() -> Page {
             },
         }],
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 

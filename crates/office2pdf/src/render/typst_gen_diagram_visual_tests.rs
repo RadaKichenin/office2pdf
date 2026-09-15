@@ -5165,6 +5165,7 @@ fn anchored_excel_gift_chart_source(chart: Chart, chart_space_frame_top: f64) ->
         }],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })]);
     generate_typst(&doc).unwrap().source
 }

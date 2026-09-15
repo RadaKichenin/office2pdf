@@ -259,6 +259,7 @@ fn make_sheet_page(name: &str, width: f64, height: f64, margins: Margins, table:
         charts: vec![],
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 

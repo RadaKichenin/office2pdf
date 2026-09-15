@@ -293,6 +293,7 @@ fn empty_workbook_page(
         charts: Vec::new(),
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     })
 }
 
@@ -574,6 +575,101 @@ fn anchored_text_box(
     }
 }
 
+/// Convert a raw line-shape anchor into a render-ready sheet shape, sized
+/// like images. The line runs corner to corner of its anchor, mirrored by
+/// the `a:xfrm` flips; a zero-width anchor is a vertical rule (issue #1566).
+fn anchored_line_shape(
+    anchor: xlsx_drawing::RawLineAnchor,
+    sheet: &umya_spreadsheet::Worksheet,
+    ctx: &SheetContext,
+) -> crate::ir::SheetShape {
+    use crate::ir::{ArrowHead, Shape, ShapeKind};
+
+    let placed = anchored_image(
+        xlsx_drawing::RawImageAnchor {
+            from_row: anchor.geometry.from_row,
+            from_col: anchor.geometry.from_col,
+            from_col_off_emu: anchor.geometry.from_col_off_emu,
+            from_row_off_emu: anchor.geometry.from_row_off_emu,
+            to: anchor.geometry.to,
+            ext_emu: anchor.geometry.ext_emu,
+            data: Vec::new(),
+            format: crate::ir::ImageFormat::Png,
+        },
+        sheet,
+        ctx,
+    );
+    // `anchored_image` floors each extent at 1pt so a picture always has a
+    // box; a line's collapsed axis is a real zero.
+    let (width, height): (f64, f64) = line_anchor_extent(&anchor.geometry, &placed.image);
+    let (x1, x2): (f64, f64) = if anchor.flip_h {
+        (width, 0.0)
+    } else {
+        (0.0, width)
+    };
+    let (y1, y2): (f64, f64) = if anchor.flip_v {
+        (height, 0.0)
+    } else {
+        (0.0, height)
+    };
+    crate::ir::SheetShape {
+        anchor_row: placed.anchor_row,
+        x_offset_pt: placed.x_offset_pt,
+        y_offset_pt: placed.y_offset_pt,
+        width,
+        height,
+        shape: Shape {
+            kind: ShapeKind::Line {
+                x1,
+                y1,
+                x2,
+                y2,
+                head_end: ArrowHead::None,
+                tail_end: ArrowHead::None,
+            },
+            fill: None,
+            gradient_fill: None,
+            pattern_fill: None,
+            stroke: Some(anchor.stroke),
+            rotation_deg: None,
+            opacity: None,
+            shadow: None,
+            top_bevel: None,
+        },
+    }
+}
+
+/// The extent a line anchor spans, with an axis the anchor collapses — the
+/// same `from` and `to` column, or a zero `cx` — kept at zero rather than
+/// the 1pt floor a picture gets.
+fn line_anchor_extent(
+    geometry: &xlsx_drawing::ImageAnchorGeometry,
+    placed: &crate::ir::ImageData,
+) -> (f64, f64) {
+    let (collapses_width, collapses_height): (bool, bool) =
+        if let Some((to_col, to_col_off, to_row, to_row_off)) = geometry.to {
+            (
+                to_col == geometry.from_col && to_col_off == geometry.from_col_off_emu,
+                to_row == geometry.from_row && to_row_off == geometry.from_row_off_emu,
+            )
+        } else if let Some((cx, cy)) = geometry.ext_emu {
+            (cx == 0, cy == 0)
+        } else {
+            (false, false)
+        };
+    let width: f64 = if collapses_width {
+        0.0
+    } else {
+        placed.width.unwrap_or(0.0)
+    };
+    let height: f64 = if collapses_height {
+        0.0
+    } else {
+        placed.height.unwrap_or(0.0)
+    };
+    (width, height)
+}
+
 /// Convert a raw chart anchor into a render-ready sheet chart: the anchor's
 /// absolute placement resolved exactly as a picture's is, or no placement at
 /// all for a chart no drawing references (issue #982).
@@ -666,6 +762,7 @@ fn chartsheet_page(
         charts,
         images: Vec::new(),
         text_boxes: Vec::new(),
+        shapes: Vec::new(),
     }
 }
 
@@ -716,6 +813,7 @@ impl XlsxParser {
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data, &mut warnings);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
+        let mut line_shape_map = extract_line_shapes_with_anchors(data);
 
         let mut chunks = Vec::new();
 
@@ -760,8 +858,13 @@ impl XlsxParser {
                 let sheet_name = sheet.get_name().to_string();
                 let raw_images = image_map.remove(&sheet_name);
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
+                let raw_line_shapes = line_shape_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
-                if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
+                if raw_images.is_some()
+                    || raw_text_boxes.is_some()
+                    || raw_line_shapes.is_some()
+                    || raw_charts.is_some()
+                {
                     let stub_ctx = empty_sheet_context(
                         sheet,
                         normal_font.as_ref(),
@@ -779,12 +882,21 @@ impl XlsxParser {
                         .into_iter()
                         .map(|anchor| anchored_text_box(anchor, sheet, &stub_ctx))
                         .collect();
+                    let shapes: Vec<crate::ir::SheetShape> = raw_line_shapes
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|anchor| anchored_line_shape(anchor, sheet, &stub_ctx))
+                        .collect();
                     let charts: Vec<crate::ir::SheetChart> = raw_charts
                         .unwrap_or_default()
                         .into_iter()
                         .map(|anchor| anchored_chart(anchor, sheet, &stub_ctx))
                         .collect();
-                    if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
+                    if !images.is_empty()
+                        || !text_boxes.is_empty()
+                        || !shapes.is_empty()
+                        || !charts.is_empty()
+                    {
                         chunks.push(Document {
                             metadata: metadata.clone(),
                             // Drawings past the printable width split into
@@ -802,6 +914,7 @@ impl XlsxParser {
                                 charts,
                                 images,
                                 text_boxes,
+                                shapes,
                             })
                             .into_iter()
                             .map(Page::Sheet)
@@ -865,6 +978,13 @@ impl XlsxParser {
                 .map(|anchor| anchored_text_box(anchor, sheet, &ctx))
                 .collect();
             sheet_text_boxes.sort_by_key(|text_box| text_box.anchor_row);
+            let mut sheet_shapes: Vec<crate::ir::SheetShape> = line_shape_map
+                .remove(&sheet_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|anchor| anchored_line_shape(anchor, sheet, &ctx))
+                .collect();
+            sheet_shapes.sort_by_key(|sheet_shape| sheet_shape.anchor_row);
 
             let print_titles = find_print_titles(&book, sheet);
             let title_columns: Option<(usize, usize)> =
@@ -957,8 +1077,13 @@ impl XlsxParser {
                         vec![]
                     },
                     text_boxes: if first_chunk {
-                        first_chunk = false;
                         std::mem::take(&mut sheet_text_boxes)
+                    } else {
+                        vec![]
+                    },
+                    shapes: if first_chunk {
+                        first_chunk = false;
+                        std::mem::take(&mut sheet_shapes)
                     } else {
                         vec![]
                     },
@@ -1045,6 +1170,7 @@ impl Parser for XlsxParser {
         let mut chart_map = extract_charts_with_anchors(data);
         let mut image_map = extract_images_with_anchors(data, &mut warnings);
         let mut text_box_map = extract_text_boxes_with_anchors(data);
+        let mut line_shape_map = extract_line_shapes_with_anchors(data);
 
         let sheet_count = book.get_sheet_collection().len();
         let mut pages = Vec::with_capacity(sheet_count);
@@ -1086,8 +1212,13 @@ impl Parser for XlsxParser {
                 let sheet_name = sheet.get_name().to_string();
                 let raw_images = image_map.remove(&sheet_name);
                 let raw_text_boxes = text_box_map.remove(&sheet_name);
+                let raw_line_shapes = line_shape_map.remove(&sheet_name);
                 let raw_charts = chart_map.remove(&sheet_name);
-                if raw_images.is_some() || raw_text_boxes.is_some() || raw_charts.is_some() {
+                if raw_images.is_some()
+                    || raw_text_boxes.is_some()
+                    || raw_line_shapes.is_some()
+                    || raw_charts.is_some()
+                {
                     let stub_ctx = empty_sheet_context(
                         sheet,
                         normal_font.as_ref(),
@@ -1105,12 +1236,21 @@ impl Parser for XlsxParser {
                         .into_iter()
                         .map(|anchor| anchored_text_box(anchor, sheet, &stub_ctx))
                         .collect();
+                    let shapes: Vec<crate::ir::SheetShape> = raw_line_shapes
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|anchor| anchored_line_shape(anchor, sheet, &stub_ctx))
+                        .collect();
                     let charts: Vec<crate::ir::SheetChart> = raw_charts
                         .unwrap_or_default()
                         .into_iter()
                         .map(|anchor| anchored_chart(anchor, sheet, &stub_ctx))
                         .collect();
-                    if !images.is_empty() || !text_boxes.is_empty() || !charts.is_empty() {
+                    if !images.is_empty()
+                        || !text_boxes.is_empty()
+                        || !shapes.is_empty()
+                        || !charts.is_empty()
+                    {
                         // Drawings past the printable width split into
                         // page-columns as Excel prints them (issue #713).
                         pages.extend(
@@ -1127,6 +1267,7 @@ impl Parser for XlsxParser {
                                 charts,
                                 images,
                                 text_boxes,
+                                shapes,
                             })
                             .into_iter()
                             .map(Page::Sheet),
@@ -1224,6 +1365,13 @@ impl Parser for XlsxParser {
                 .map(|anchor| anchored_text_box(anchor, sheet, &ctx))
                 .collect();
             sheet_text_boxes.sort_by_key(|text_box| text_box.anchor_row);
+            let mut sheet_shapes: Vec<crate::ir::SheetShape> = line_shape_map
+                .remove(&sheet_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|anchor| anchored_line_shape(anchor, sheet, &ctx))
+                .collect();
+            sheet_shapes.sort_by_key(|sheet_shape| sheet_shape.anchor_row);
 
             if row_breaks.is_empty() {
                 // No page breaks — single page
@@ -1260,6 +1408,7 @@ impl Parser for XlsxParser {
                     charts: sheet_charts,
                     images: sheet_images,
                     text_boxes: sheet_text_boxes,
+                    shapes: sheet_shapes,
                 };
                 if let Some(numbers) = sheet_row_numbers.as_deref() {
                     print_headings::augment_page_with_print_headings(
@@ -1384,8 +1533,13 @@ impl Parser for XlsxParser {
                             vec![]
                         },
                         text_boxes: if first_segment {
-                            first_segment = false;
                             std::mem::take(&mut sheet_text_boxes)
+                        } else {
+                            vec![]
+                        },
+                        shapes: if first_segment {
+                            first_segment = false;
+                            std::mem::take(&mut sheet_shapes)
                         } else {
                             vec![]
                         },
