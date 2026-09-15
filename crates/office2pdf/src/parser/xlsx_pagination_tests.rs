@@ -395,31 +395,184 @@ fn test_a_populated_cell_on_the_next_page_column_is_never_overwritten_by_a_conti
     assert_eq!(kept.spill_continuation_offset_pt, None);
 }
 
-#[test]
-fn test_charts_stay_on_first_column_group() {
-    let mut page = make_page(
+fn placed_chart(x_offset_pt: f64, width: f64) -> crate::ir::SheetChart {
+    crate::ir::SheetChart {
+        anchor_row: 1,
+        placement: Some(crate::ir::SheetChartPlacement {
+            x_offset_pt,
+            y_offset_pt: 20.0,
+            width,
+            height: 100.0,
+            print_scale: 1.0,
+            clip_window: None,
+        }),
+        chart: bar_chart(),
+    }
+}
+
+fn chart_placements(page: &SheetPage) -> Vec<crate::ir::SheetChartPlacement> {
+    page.charts
+        .iter()
+        .map(|chart| chart.placement.expect("every test chart is anchored"))
+        .collect()
+}
+
+/// Two 300pt columns on a 400pt printable width: the page-columns are
+/// `[0, 300)` and `[300, 600)` in sheet points.
+fn two_page_column_sheet() -> SheetPage {
+    make_page(
         vec![300.0, 300.0],
         vec![TableRow {
             minimum_height: None,
             cells: vec![cell("A"), cell("B")],
             height: None,
         }],
+    )
+}
+
+#[test]
+fn test_a_chart_crossing_the_page_column_boundary_continues_on_the_next_page_column() {
+    let mut page = two_page_column_sheet();
+    // 200..400pt straddles the 300pt boundary.
+    page.charts = vec![placed_chart(200.0, 200.0)];
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+
+    // Excel clips the chart at the printed sheet edge of the first tile and
+    // paints the rest of it on the next one, shifted left by the width the
+    // first tile already printed (issue #1598).
+    let first: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[0]);
+    assert_eq!(first.len(), 1);
+    assert_eq!(first[0].x_offset_pt, 200.0);
+    assert_eq!(
+        first[0].clip_window,
+        Some(crate::ir::SheetClipWindow {
+            left_pt: 0.0,
+            width_pt: 300.0,
+        })
     );
-    page.charts = vec![crate::ir::SheetChart {
-        anchor_row: 1,
-        placement: Some(crate::ir::SheetChartPlacement {
-            x_offset_pt: 0.0,
-            y_offset_pt: 0.0,
-            width: 200.0,
-            height: 100.0,
-            print_scale: 1.0,
-        }),
-        chart: bar_chart(),
-    }];
+
+    let second: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[1]);
+    assert_eq!(second.len(), 1);
+    assert_eq!(second[0].x_offset_pt, -100.0);
+    assert_eq!(
+        second[0].clip_window,
+        Some(crate::ir::SheetClipWindow {
+            left_pt: 0.0,
+            width_pt: 300.0,
+        })
+    );
+    // The translation touches nothing but the horizontal offset.
+    assert_eq!(second[0].y_offset_pt, 20.0);
+    assert_eq!(second[0].width, 200.0);
+    assert_eq!(second[0].height, 100.0);
+    assert_eq!(second[0].print_scale, 1.0);
+}
+
+#[test]
+fn test_a_chart_inside_one_page_column_prints_only_there() {
+    let mut page = two_page_column_sheet();
+    // 0..200pt lies wholly inside the first tile; 350..450pt wholly inside
+    // the second.
+    page.charts = vec![placed_chart(0.0, 200.0), placed_chart(350.0, 100.0)];
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+
+    let first: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[0]);
+    assert_eq!(first.len(), 1);
+    assert_eq!(first[0].x_offset_pt, 0.0);
+    assert_eq!(first[0].width, 200.0);
+    assert_eq!(
+        first[0].clip_window.map(|window| window.width_pt),
+        Some(300.0)
+    );
+
+    let second: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[1]);
+    assert_eq!(second.len(), 1);
+    assert_eq!(second[0].x_offset_pt, 50.0);
+    assert_eq!(second[0].width, 100.0);
+    assert_eq!(
+        second[0].clip_window.map(|window| window.width_pt),
+        Some(300.0)
+    );
+}
+
+#[test]
+fn test_a_chart_ending_exactly_at_the_boundary_does_not_continue() {
+    let mut page = two_page_column_sheet();
+    page.charts = vec![placed_chart(100.0, 200.0)];
     let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[0].charts.len(), 1);
-    assert!(pages[1].charts.is_empty());
+    assert!(
+        pages[1].charts.is_empty(),
+        "a chart whose right edge sits on the boundary paints nothing past it"
+    );
+}
+
+#[test]
+fn test_an_unsplit_sheet_leaves_its_chart_unclipped() {
+    let mut page = make_page(
+        vec![100.0, 100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("A"), cell("B")],
+            height: None,
+        }],
+    );
+    page.charts = vec![placed_chart(50.0, 100.0)];
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(pages.len(), 1);
+    let placements: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[0]);
+    assert_eq!(placements[0].x_offset_pt, 50.0);
+    assert_eq!(
+        placements[0].clip_window, None,
+        "a sheet that fits one page-column draws its chart exactly as before"
+    );
+}
+
+#[test]
+fn test_a_continued_chart_starts_after_the_repeated_title_columns() {
+    let mut page = two_page_column_sheet();
+    page.charts = vec![placed_chart(200.0, 200.0)];
+    // Column A repeats on the overflow page-column, in front of column B.
+    let pages = split_sheet_page_by_width(page, Some((0, 1)), SheetFit::default(), true);
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[1].table.column_widths, vec![300.0, 300.0]);
+
+    let second: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[1]);
+    assert_eq!(second.len(), 1);
+    // The tile's own content begins after the 300pt title column, so the
+    // continuation is measured from there and its window excludes the
+    // repeated titles.
+    assert_eq!(second[0].x_offset_pt, 200.0);
+    assert_eq!(
+        second[0].clip_window,
+        Some(crate::ir::SheetClipWindow {
+            left_pt: 300.0,
+            width_pt: 300.0,
+        })
+    );
+}
+
+#[test]
+fn test_a_last_page_column_carrying_only_a_chart_continuation_is_printed() {
+    let mut page = make_page(
+        vec![300.0, 300.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell("A"), TableCell::default()],
+            height: None,
+        }],
+    );
+    page.charts = vec![placed_chart(200.0, 200.0)];
+    let pages = split_sheet_page_by_width(page, None, SheetFit::default(), true);
+    assert_eq!(
+        pages.len(),
+        2,
+        "the chart continuation is ink on the second page-column, so Excel prints it"
+    );
+    assert_eq!(pages[1].charts.len(), 1);
 }
 
 #[test]
@@ -481,6 +634,7 @@ fn test_fit_to_width_scales_an_anchored_chart_with_the_grid() {
             width: 600.0,
             height: 200.0,
             print_scale: 1.0,
+            clip_window: None,
         }),
         chart: bar_chart(),
     }];
@@ -522,6 +676,7 @@ fn test_fit_to_width_records_the_print_scale_on_an_anchored_chart() {
             width: 600.0,
             height: 200.0,
             print_scale: 1.0,
+            clip_window: None,
         }),
         chart: bar_chart(),
     }];
@@ -1145,6 +1300,35 @@ fn a_drawing_past_the_printable_edge_adds_a_page_column() {
     assert_eq!(pages[1].images.len(), 1);
     assert_eq!(pages[1].images[0].x_offset_pt, -50.0);
     assert_eq!(pages[1].images[0].clip_width_pt, Some(400.0));
+}
+
+#[test]
+fn a_chart_crossing_a_drawing_only_page_column_continues_on_the_next() {
+    let mut page = make_page(Vec::new(), Vec::new());
+    page.images.push(sheet_image(350.0, 100.0));
+    // 350..450pt crosses the 400pt printable edge.
+    page.charts = vec![placed_chart(350.0, 100.0)];
+    let pages = split_drawing_only_page(page);
+    assert_eq!(pages.len(), 2);
+
+    let first: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[0]);
+    assert_eq!(first[0].x_offset_pt, 350.0);
+    assert_eq!(
+        first[0].clip_window,
+        Some(crate::ir::SheetClipWindow {
+            left_pt: 0.0,
+            width_pt: 400.0,
+        })
+    );
+    let second: Vec<crate::ir::SheetChartPlacement> = chart_placements(&pages[1]);
+    assert_eq!(second[0].x_offset_pt, -50.0);
+    assert_eq!(
+        second[0].clip_window,
+        Some(crate::ir::SheetClipWindow {
+            left_pt: 0.0,
+            width_pt: 400.0,
+        })
+    );
 }
 
 #[test]

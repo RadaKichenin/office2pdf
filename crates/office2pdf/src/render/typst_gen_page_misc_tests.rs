@@ -1169,11 +1169,12 @@ fn test_table_page_no_header_footer() {
     assert!(!output.source.contains("footer:"));
 }
 
-#[test]
-fn test_table_page_with_anchored_chart_overlays_the_grid() {
+/// The single-series `Sales` bar chart the anchored-chart render tests float
+/// over a small grid.
+fn sales_bar_chart() -> crate::ir::Chart {
     use crate::ir::{Chart, ChartGrouping, ChartSeries, ChartType, DataLabels, LegendPosition};
 
-    let chart = Chart {
+    Chart {
         chart_type: ChartType::Bar,
         hole_size_percent: None,
         first_slice_angle_deg: None,
@@ -1231,7 +1232,12 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
         title_layout: None,
         plot_area_layout: None,
         user_shapes: Vec::new(),
-    };
+    }
+}
+
+#[test]
+fn test_table_page_with_anchored_chart_overlays_the_grid() {
+    let chart = sales_bar_chart();
 
     let page = Page::Sheet(SheetPage {
         name: "Sheet1".to_string(),
@@ -1254,6 +1260,7 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
                 width: 200.0,
                 height: 120.0,
                 print_scale: 1.0,
+                clip_window: None,
             }),
             chart,
         }],
@@ -1297,6 +1304,110 @@ fn test_table_page_with_anchored_chart_overlays_the_grid() {
         src.contains("#block(width: 200pt, height: 19pt")
             && src.contains("#box(width: 200pt, height: 101pt"),
         "the chart is laid out at the anchor's size"
+    );
+}
+
+#[test]
+fn test_a_chart_continued_onto_a_page_column_is_clipped_to_its_window() {
+    // Width pagination handed this page the second tile of a chart that
+    // crosses the boundary: shifted 100pt left of the tile's content edge
+    // and clipped to the tile's 300pt window (issue #1598).
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize {
+            width: 500.0,
+            height: 800.0,
+        },
+        margins: Margins::default(),
+        table: make_simple_table(vec![vec!["Row 1"], vec!["Row 2"]]),
+        header: None,
+        footer: None,
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: 1,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: -100.0,
+                y_offset_pt: 60.0,
+                width: 200.0,
+                height: 120.0,
+                print_scale: 1.0,
+                clip_window: Some(crate::ir::SheetClipWindow {
+                    left_pt: 0.0,
+                    width_pt: 300.0,
+                }),
+            }),
+            chart: sales_bar_chart(),
+        }],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+        shapes: Vec::new(),
+    });
+
+    let output = generate_typst(&make_doc(vec![page])).unwrap();
+    let src = &output.source;
+    let margin: f64 = crate::defaults::DEFAULT_MARGIN_PT;
+    // The clip box stands at the window's page position and reaches the page
+    // bottom, so only the horizontal edges bound the chart; the chart itself
+    // is placed inside it at its negative offset.
+    let clipped: String = format!(
+        "#place(top + left, dy: {}pt)[#place(top + left, dx: {}pt)[#box(width: 300pt, height: 800pt, clip: true)[#place(top + left, dx: -100pt)[",
+        margin + 60.0,
+        margin
+    );
+    assert!(
+        src.contains(&clipped),
+        "the continued chart is clipped to its page-column window: {src}"
+    );
+    assert!(
+        src.contains("#block(width: 200pt, height: 19pt")
+            && src.contains("#box(width: 200pt, height: 101pt"),
+        "the clipped chart is still laid out at its anchor's full size"
+    );
+}
+
+#[test]
+fn test_a_chart_continued_after_repeated_title_columns_starts_its_window_there() {
+    let page = Page::Sheet(SheetPage {
+        name: "Sheet1".to_string(),
+        size: PageSize {
+            width: 500.0,
+            height: 800.0,
+        },
+        margins: Margins::default(),
+        table: make_simple_table(vec![vec!["Row 1"], vec!["Row 2"]]),
+        header: None,
+        footer: None,
+        charts: vec![crate::ir::SheetChart {
+            anchor_row: 1,
+            placement: Some(crate::ir::SheetChartPlacement {
+                x_offset_pt: 40.0,
+                y_offset_pt: 60.0,
+                width: 200.0,
+                height: 120.0,
+                print_scale: 1.0,
+                clip_window: Some(crate::ir::SheetClipWindow {
+                    left_pt: 80.0,
+                    width_pt: 300.0,
+                }),
+            }),
+            chart: sales_bar_chart(),
+        }],
+        images: Vec::new(),
+        text_boxes: Vec::new(),
+        shapes: Vec::new(),
+    });
+
+    let output = generate_typst(&make_doc(vec![page])).unwrap();
+    let src = &output.source;
+    let margin: f64 = crate::defaults::DEFAULT_MARGIN_PT;
+    // The window begins after the 80pt of repeated titles, and the chart's
+    // offset is measured from that edge, so the inner place is 40pt in.
+    let clipped: String = format!(
+        "#place(top + left, dx: {}pt)[#box(width: 300pt, height: 800pt, clip: true)[#place(top + left, dx: -40pt)[",
+        margin + 80.0
+    );
+    assert!(
+        src.contains(&clipped),
+        "the window starts after the repeated title columns: {src}"
     );
 }
 
@@ -1428,6 +1539,7 @@ fn sheet_page_with_chart_print_scale(print_scale: f64) -> SheetPage {
                 width: 200.0,
                 height: 120.0,
                 print_scale,
+                clip_window: None,
             }),
             chart,
         }],
@@ -4409,6 +4521,7 @@ fn gift_drawing_origin_probe_with_chart(
         width: 1_015.978_4,
         height: 307.9732,
         print_scale: scale,
+        clip_window: None,
     });
     chart.chart.host = crate::ir::ChartHost::Spreadsheet;
     chart.chart.chart_type = ChartType::Column;

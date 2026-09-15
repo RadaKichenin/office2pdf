@@ -1,0 +1,1783 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 4581.3312,
+      "bbox_pt": {
+        "height": 181.2,
+        "width": 750.0,
+        "x": 380.16,
+        "y": 211.68
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-1906cbb3c84d",
+      "region": "right"
+    },
+    {
+      "area_pt2": 1078.9632,
+      "bbox_pt": {
+        "height": 1.44,
+        "width": 749.76,
+        "x": 380.16,
+        "y": 141.84
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-1109a8fb63cf",
+      "region": "top"
+    },
+    {
+      "area_pt2": 485.568,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 289.44,
+        "x": 840.48,
+        "y": 191.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-a51737e81794",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 426.7008,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 443.04,
+        "x": 380.16,
+        "y": 167.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-86368fc88b0c",
+      "region": "top"
+    },
+    {
+      "area_pt2": 417.2544,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 434.64,
+        "x": 380.4,
+        "y": 191.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-3fd7c28a2b31",
+      "region": "top"
+    },
+    {
+      "area_pt2": 365.3568,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 380.64,
+        "x": 380.16,
+        "y": 341.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-5b080070e227",
+      "region": "center"
+    },
+    {
+      "area_pt2": 326.304,
+      "bbox_pt": {
+        "height": 3.36,
+        "width": 446.64,
+        "x": 380.4,
+        "y": 163.92
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-22980f6d038e",
+      "region": "top"
+    },
+    {
+      "area_pt2": 312.768,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 434.4,
+        "x": 380.16,
+        "y": 192.72
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-54d6a836d04f",
+      "region": "top"
+    },
+    {
+      "area_pt2": 300.1536,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 416.88,
+        "x": 380.4,
+        "y": 240.72
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-9585e46d6997",
+      "region": "top"
+    },
+    {
+      "area_pt2": 299.9808,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 416.64,
+        "x": 380.16,
+        "y": 241.68
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-839ee854381e",
+      "region": "top"
+    },
+    {
+      "area_pt2": 293.5872,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 407.76,
+        "x": 380.4,
+        "y": 265.68
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-baa63392c529",
+      "region": "top"
+    },
+    {
+      "area_pt2": 293.5872,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 407.76,
+        "x": 380.16,
+        "y": 266.64
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-59beee16bedf",
+      "region": "top"
+    },
+    {
+      "area_pt2": 290.9952,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 303.12,
+        "x": 826.8,
+        "y": 167.52
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-2b53697d1652",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 287.1936,
+      "bbox_pt": {
+        "height": 0.96,
+        "width": 398.64,
+        "x": 380.16,
+        "y": 291.6
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-ee10a3cff9a0",
+      "region": "center"
+    },
+    {
+      "area_pt2": 287.0208,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 398.64,
+        "x": 380.4,
+        "y": 290.64
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-9297d67aa671",
+      "region": "center"
+    },
+    {
+      "area_pt2": 280.6272,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 389.76,
+        "x": 380.4,
+        "y": 315.6
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-809db674735a",
+      "region": "center"
+    },
+    {
+      "area_pt2": 280.4544,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 389.52,
+        "x": 380.16,
+        "y": 316.56
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-dcca0a8919c1",
+      "region": "center"
+    },
+    {
+      "area_pt2": 274.0608,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 380.64,
+        "x": 380.4,
+        "y": 340.56
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-37739d13c575",
+      "region": "center"
+    },
+    {
+      "area_pt2": 217.5552,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 302.16,
+        "x": 827.04,
+        "y": 166.56
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-881fafdc4815",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 126.8928,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 22.08,
+        "x": 226.08,
+        "y": 292.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-a1f6071fdc04",
+      "region": "left"
+    },
+    {
+      "area_pt2": 98.496,
+      "bbox_pt": {
+        "height": 35.76,
+        "width": 77.04,
+        "x": 422.88,
+        "y": 353.04
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-ac224d7984ab",
+      "region": "center"
+    },
+    {
+      "area_pt2": 78.7968,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 16.32,
+        "x": 138.24,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-1aa65848120a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 74.88,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 12.24,
+        "x": 236.4,
+        "y": 229.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-7a189cad9401",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 68.4288,
+      "bbox_pt": {
+        "height": 13.92,
+        "width": 10.08,
+        "x": 176.88,
+        "y": 208.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-b3183ade05b7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 67.7376,
+      "bbox_pt": {
+        "height": 22.32,
+        "width": 72.48,
+        "x": 671.76,
+        "y": 366.96
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-2bb39f2e3220",
+      "region": "center"
+    },
+    {
+      "area_pt2": 58.752,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 11.28,
+        "x": 161.76,
+        "y": 253.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-15cdb11e2330",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 57.1968,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 15.12,
+        "x": 252.24,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-5843173ea688",
+      "region": "left"
+    },
+    {
+      "area_pt2": 52.1856,
+      "bbox_pt": {
+        "height": 8.4,
+        "width": 9.6,
+        "x": 512.16,
+        "y": 513.6
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Tracker header and cell glyphs whose trace instances move horizontally only: Purchased? dx -0.91pt, budgeted dx -0.51pt, June dx -0.60pt, the centered-cell displacement of #1600; baselines match."
+      },
+      "id": "p2-5f9da1ce7867",
+      "region": "center"
+    },
+    {
+      "area_pt2": 49.6512,
+      "bbox_pt": {
+        "height": 21.84,
+        "width": 21.36,
+        "x": 198.72,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-23d8111a2aec",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 48.5568,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 8.4,
+        "x": 261.36,
+        "y": 229.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-99596e909051",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 48.4416,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 11.52,
+        "x": 201.12,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-5d1e9949c2bc",
+      "region": "left"
+    },
+    {
+      "area_pt2": 48.1536,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 10.8,
+        "x": 232.08,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-cfa1e0df6f9f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 47.808,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 10.56,
+        "x": 219.12,
+        "y": 253.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-2a662c8bb9b2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 47.1744,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 11.52,
+        "x": 1012.8,
+        "y": 515.76
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Tracker header and cell glyphs whose trace instances move horizontally only: Purchased? dx -0.91pt, budgeted dx -0.51pt, June dx -0.60pt, the centered-cell displacement of #1600; baselines match."
+      },
+      "id": "p2-26b19a619980",
+      "region": "right"
+    },
+    {
+      "area_pt2": 45.6192,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 9.36,
+        "x": 220.32,
+        "y": 315.12
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-e8e994d2e775",
+      "region": "left"
+    },
+    {
+      "area_pt2": 44.7552,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 8.16,
+        "x": 192.48,
+        "y": 313.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-a1fedfec9174",
+      "region": "left"
+    },
+    {
+      "area_pt2": 44.6976,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 6.0,
+        "x": 278.88,
+        "y": 208.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-4917c438a91b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 39.5136,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 7.68,
+        "x": 155.28,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-1ec34ec8c569",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 39.456,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 7.68,
+        "x": 270.96,
+        "y": 253.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-07ede78b1e57",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 39.1104,
+      "bbox_pt": {
+        "height": 7.68,
+        "width": 7.68,
+        "x": 717.36,
+        "y": 420.48
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-d315bb751620",
+      "region": "center"
+    },
+    {
+      "area_pt2": 38.88,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 7.2,
+        "x": 237.36,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-f6099832a326",
+      "region": "left"
+    },
+    {
+      "area_pt2": 38.6496,
+      "bbox_pt": {
+        "height": 17.28,
+        "width": 17.28,
+        "x": 497.52,
+        "y": 460.56
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-05da554e778c",
+      "region": "center"
+    },
+    {
+      "area_pt2": 37.9584,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.96,
+        "x": 182.4,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-6021a9ba044c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.4976,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 7.2,
+        "x": 220.56,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-4cc027d899b0",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.2672,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 9.36,
+        "x": 173.52,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-7bbea079b3cc",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 36.9792,
+      "bbox_pt": {
+        "height": 2.4,
+        "width": 22.32,
+        "x": 816.72,
+        "y": 191.04
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-2b64a27f1474",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 36.9216,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 13.44,
+        "x": 216.0,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-da843dac9685",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 36.576,
+      "bbox_pt": {
+        "height": 21.84,
+        "width": 12.24,
+        "x": 249.84,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-6182a50b5e79",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 36.288,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.96,
+        "x": 283.44,
+        "y": 169.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-a37848684db2",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 35.0784,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.48,
+        "x": 282.96,
+        "y": 253.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-6afb68c0d57d",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 34.848,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 5.04,
+        "x": 188.4,
+        "y": 229.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-adfa7cfcab34",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 34.7904,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.96,
+        "x": 208.08,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-d04116d6c10a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 34.1568,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 12.48,
+        "x": 129.6,
+        "y": 811.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-b9484e86d007",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 33.696,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.48,
+        "x": 241.2,
+        "y": 211.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-eed1396d2f28",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 33.2928,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.24,
+        "x": 206.4,
+        "y": 295.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-efb94a212881",
+      "region": "left"
+    },
+    {
+      "area_pt2": 32.6592,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 5.28,
+        "x": 277.68,
+        "y": 166.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-f2da58174e4f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 5.52,
+        "x": 190.56,
+        "y": 187.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-87dc297f4b9f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 32.0256,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 4.56,
+        "x": 164.64,
+        "y": 313.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-183fee4edd1c",
+      "region": "left"
+    },
+    {
+      "area_pt2": 31.104,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.44,
+        "x": 246.48,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-297c2ee7dd29",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 30.9888,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 7.2,
+        "x": 189.12,
+        "y": 337.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-b1a88217fe22",
+      "region": "left"
+    },
+    {
+      "area_pt2": 30.5856,
+      "bbox_pt": {
+        "height": 24.0,
+        "width": 6.96,
+        "x": 173.28,
+        "y": 607.68
+      },
+      "disposition": {
+        "class": "photo-resampling",
+        "kind": "accepted-rendering",
+        "note": "Gift picture: native embeds a 429x286 bitmap where the output keeps the 857x572 source, at the same origin and size (#1542 verified); the crop shows only resampling texture."
+      },
+      "id": "p2-604bd8f96502",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 29.5488,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 7.44,
+        "x": 201.6,
+        "y": 231.12
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-664bd8d843b3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.5488,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 9.12,
+        "x": 213.84,
+        "y": 295.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-4dc7a18b4f55",
+      "region": "left"
+    },
+    {
+      "area_pt2": 29.2608,
+      "bbox_pt": {
+        "height": 6.24,
+        "width": 8.88,
+        "x": 705.84,
+        "y": 422.16
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-b8f26b62f444",
+      "region": "center"
+    },
+    {
+      "area_pt2": 28.9728,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.96,
+        "x": 193.92,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-c9545c3732b6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 6.72,
+        "x": 285.84,
+        "y": 211.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-e6c6ee4d9c89",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.5696,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.0,
+        "x": 174.24,
+        "y": 253.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-3f12db5d3ca9",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 7.68,
+        "x": 273.6,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-1de27451c2b1",
+      "region": "left"
+    },
+    {
+      "area_pt2": 28.3392,
+      "bbox_pt": {
+        "height": 19.68,
+        "width": 1.44,
+        "x": 174.24,
+        "y": 122.4
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-1001b8eb3628",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.2816,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 4.32,
+        "x": 258.48,
+        "y": 250.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-2794b795e89b",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.1664,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.28,
+        "x": 228.48,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-917672007d8c",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 28.1088,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 3.84,
+        "x": 188.4,
+        "y": 313.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-3716bbf3f345",
+      "region": "left"
+    },
+    {
+      "area_pt2": 27.8784,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 6.72,
+        "x": 293.76,
+        "y": 210.0
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-2676783eb2d8",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 27.072,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 9.12,
+        "x": 115.92,
+        "y": 811.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-d2afd09d4ba3",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 26.9568,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 10.32,
+        "x": 248.64,
+        "y": 132.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-7a6d21cd84e8",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.784,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 3.36,
+        "x": 248.88,
+        "y": 208.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-b6a95e18bc34",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 26.1504,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.24,
+        "x": 234.0,
+        "y": 211.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-59b38eee33ca",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.92,
+      "bbox_pt": {
+        "height": 10.8,
+        "width": 4.32,
+        "x": 183.84,
+        "y": 229.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-c855d99ac902",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.92,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.2,
+        "x": 182.4,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-23e4191c6c1a",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.92,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 1.2,
+        "x": 280.56,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-9c631f8d7c42",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.8624,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 3.84,
+        "x": 163.2,
+        "y": 187.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-558efc0eb662",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.7472,
+      "bbox_pt": {
+        "height": 10.32,
+        "width": 3.36,
+        "x": 147.84,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-2d08ce082dcf",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 3.12,
+        "x": 146.88,
+        "y": 274.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-c774cd0b48ef",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.056,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.28,
+        "x": 245.76,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-118b05259511",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.9408,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 6.96,
+        "x": 213.12,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-e102be31af5d",
+      "region": "left"
+    },
+    {
+      "area_pt2": 24.8832,
+      "bbox_pt": {
+        "height": 7.92,
+        "width": 9.84,
+        "x": 248.64,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-f726ab9bfbc1",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 24.192,
+      "bbox_pt": {
+        "height": 19.68,
+        "width": 9.12,
+        "x": 221.28,
+        "y": 120.0
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-e82f473f1b12",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.7312,
+      "bbox_pt": {
+        "height": 9.84,
+        "width": 6.96,
+        "x": 936.72,
+        "y": 420.24
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-5a41da62ff59",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.1552,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 32.16,
+        "x": 889.92,
+        "y": 328.32
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-2b963fea28dc",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 7.44,
+        "x": 837.6,
+        "y": 421.2
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-802d42658721",
+      "region": "right"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 19.2,
+        "width": 1.2,
+        "x": 172.08,
+        "y": 122.64
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-4a99eb678821",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.9248,
+      "bbox_pt": {
+        "height": 10.56,
+        "width": 2.88,
+        "x": 182.16,
+        "y": 313.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-caa56675c8d8",
+      "region": "left"
+    },
+    {
+      "area_pt2": 22.752,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 5.52,
+        "x": 1007.04,
+        "y": 515.76
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Tracker header and cell glyphs whose trace instances move horizontally only: Purchased? dx -0.91pt, budgeted dx -0.51pt, June dx -0.60pt, the centered-cell displacement of #1600; baselines match."
+      },
+      "id": "p2-fef19993dad7",
+      "region": "right"
+    },
+    {
+      "area_pt2": 21.6576,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 4.8,
+        "x": 163.2,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-726883a175f0",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.6,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.76,
+        "x": 243.84,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-7168694d34b6",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.0816,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.76,
+        "x": 175.92,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-f94efe17b040",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.7936,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 3.84,
+        "x": 189.12,
+        "y": 294.0
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-58e6264f4305",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.7936,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 3.6,
+        "x": 253.92,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-7d7e759a0b2f",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.7936,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 3.84,
+        "x": 203.76,
+        "y": 190.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-4fc467843ac7",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.7936,
+      "bbox_pt": {
+        "height": 9.12,
+        "width": 5.52,
+        "x": 273.6,
+        "y": 168.0
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-e479d513e269",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 0.96,
+        "x": 264.48,
+        "y": 120.24
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-407ed2864554",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 21.6,
+        "width": 0.96,
+        "x": 163.92,
+        "y": 82.32
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-483434e4d6c3",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.736,
+      "bbox_pt": {
+        "height": 17.28,
+        "width": 1.2,
+        "x": 370.8,
+        "y": 460.56
+      },
+      "disposition": {
+        "class": "shape-edge-antialiasing",
+        "kind": "accepted-rendering",
+        "note": "Lower rose band left edge: the fill keeps size and colour and its trace edge differs by 0.28pt, below the 0.5pt gate."
+      },
+      "id": "p2-d153b390c99a",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.5632,
+      "bbox_pt": {
+        "height": 6.96,
+        "width": 6.24,
+        "x": 689.28,
+        "y": 421.2
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-36253bd2940e",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.3904,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 5.52,
+        "x": 533.28,
+        "y": 615.36
+      },
+      "disposition": {
+        "issue": "#1600",
+        "kind": "issue",
+        "note": "Tracker header and cell glyphs whose trace instances move horizontally only: Purchased? dx -0.91pt, budgeted dx -0.51pt, June dx -0.60pt, the centered-cell displacement of #1600; baselines match."
+      },
+      "id": "p2-56f059c37cb9",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 20.3904,
+      "bbox_pt": {
+        "height": 7.44,
+        "width": 4.08,
+        "x": 232.32,
+        "y": 316.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-110a426ca2f9",
+      "region": "left"
+    },
+    {
+      "area_pt2": 20.3904,
+      "bbox_pt": {
+        "height": 0.72,
+        "width": 28.32,
+        "x": 812.64,
+        "y": 204.24
+      },
+      "disposition": {
+        "issue": "#1607",
+        "kind": "issue",
+        "note": "Full page, 5% diff, the 70x310pt clip-edge crop and the 300 DPI bar, marker and legend crops of the first tile: the chart now ends at the printed sheet edge (gridlines cut at 1129.2pt against native 1130.0pt, no October label in the margin), and every remaining chart cluster is the 0.85pt-high plot content of #1607 (gridlines 142.16..390.34pt against native 143.01..391.19pt, value labels, legend row 0.61pt high). The plot-body cluster also carries the grey axis over the turquoise series (#1604), native raster marker sprites against vector circles at the same centres, and the July bar starting at 890pt against native 889pt (#1735)."
+      },
+      "id": "p2-4b6734bb1d79",
+      "region": "top-right"
+    },
+    {
+      "area_pt2": 20.3328,
+      "bbox_pt": {
+        "height": 7.2,
+        "width": 3.84,
+        "x": 211.92,
+        "y": 232.8
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-02bdaeccea27",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 20.16,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.48,
+        "x": 148.56,
+        "y": 811.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-5b6c771c165e",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 20.1024,
+      "bbox_pt": {
+        "height": 17.28,
+        "width": 6.48,
+        "x": 441.84,
+        "y": 79.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Sidebar, title, table and footer glyph-edge fragments; the matched crops show identical content, face, weight and baselines, and compare_layout reports no sidebar or title trace shift."
+      },
+      "id": "p2-65e4564985f3",
+      "region": "top"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 2,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 110,
+    "duplicate": 0,
+    "total": 110,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

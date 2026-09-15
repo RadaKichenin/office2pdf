@@ -1135,6 +1135,9 @@ enum SheetAnchor<'a> {
     Chart {
         sheet_chart: &'a crate::ir::SheetChart,
         paint_offset_pt: Option<(f64, f64)>,
+        /// The page height, which a page-column clip box reaches down to so
+        /// that only its horizontal edges bound the chart (issue #1598).
+        page_height_pt: f64,
     },
     Image(&'a crate::ir::SheetImage),
     TextBox(&'a crate::ir::SheetTextBox),
@@ -1262,6 +1265,7 @@ fn sheet_drawing_layer(
             &SheetAnchor::Chart {
                 sheet_chart,
                 paint_offset_pt,
+                page_height_pt: page.size.height,
             },
             left_pt - paint_dx_pt,
             top_pt - paint_dy_pt + placement.y_offset_pt,
@@ -1328,17 +1332,37 @@ fn write_placed_sheet_anchor(
         SheetAnchor::Chart {
             sheet_chart,
             paint_offset_pt,
+            page_height_pt,
         } => {
             let Some(placement) = sheet_chart.placement else {
                 return;
             };
+            // A page-column window from width pagination: the chart clips at
+            // the tile's printed edge and a continued copy starts at a
+            // negative offset, as Excel prints it (issue #1598). The box
+            // needs explicit sides because an inner `place` occupies
+            // nothing; it reaches the page bottom so it bounds the chart
+            // horizontally only.
+            if let Some(window) = placement.clip_window {
+                let _ = write!(
+                    out,
+                    "#place(top + left, dx: {}pt)[#box(width: {}pt, height: {}pt, clip: true)[",
+                    format_f64(left_pt + window.left_pt),
+                    format_f64(window.width_pt),
+                    format_f64(*page_height_pt),
+                );
+            }
             // The anchor sizes the chart, the way a slide's graphicFrame
             // extent does (issue #548); rendering at the intrinsic size
             // instead left the anchored band empty beneath it (issue #982).
+            let chart_dx_pt: f64 = match placement.clip_window {
+                Some(window) => placement.x_offset_pt - window.left_pt,
+                None => left_pt + placement.x_offset_pt,
+            };
             let _ = write!(
                 out,
                 "#place(top + left, dx: {}pt)[",
-                format_f64(left_pt + placement.x_offset_pt),
+                format_f64(chart_dx_pt),
             );
             // A fitted sheet prints its drawings shrunk whole, so the chart is
             // laid out at its full frame and the transform brings its text down
@@ -1374,6 +1398,9 @@ fn write_placed_sheet_anchor(
                 out.push(']');
             }
             out.push(']');
+            if placement.clip_window.is_some() {
+                out.push_str("]]");
+            }
         }
         SheetAnchor::TextBox(text_box) => {
             let _ = write!(

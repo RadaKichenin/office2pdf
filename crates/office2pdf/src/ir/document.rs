@@ -272,6 +272,26 @@ pub struct SheetChartPlacement {
     /// several chart layout paths switch model on whether a size was declared
     /// at all, so filling one in changes the chrome even at a scale of 1.
     pub print_scale: f64,
+    /// The page-column window the chart is clipped to, in points from the
+    /// page's content left edge, after `print_scale`. Set by width
+    /// pagination: Excel clips a chart at the printed edge of the tile it
+    /// crosses and paints the remainder on the next tile, where the copy
+    /// carries a negative `x_offset_pt` (issue #1598). `None` draws the chart
+    /// unclipped, as a sheet that fits one page-column does.
+    pub clip_window: Option<SheetClipWindow>,
+}
+
+/// The horizontal window of one printed page-column, in points from the
+/// page's content left edge.
+///
+/// A window starts after any repeated print-title columns, so a drawing
+/// continued from an earlier tile never paints over them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SheetClipWindow {
+    /// Where the tile's own columns begin.
+    pub left_pt: f64,
+    /// The tile's printed width.
+    pub width_pt: f64,
 }
 
 /// A worksheet text box anchored to a sheet row.
