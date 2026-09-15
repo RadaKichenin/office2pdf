@@ -2049,7 +2049,7 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
             })]);
             let output = generate_typst(&doc).unwrap();
             let paints = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
-            let origin = paints
+            let first_fill = paints
                 .iter()
                 .find(|paint| {
                     paint.rectangle_fill.as_ref() == Some(&pale_paint)
@@ -2058,6 +2058,9 @@ fn later_cell_fills_own_shared_boundaries_without_losing_outer_extensions() {
                 })
                 .expect("the first cell has a filled interior")
                 .bounds;
+            // The page clip trims one sheet point off the first cell's top
+            // and left (#1605); the grid origin sits that far before it.
+            let origin = (first_fill.0 - scale, first_fill.1 - scale);
             let visible_color = |x: f64, y: f64| {
                 paints
                     .iter()
@@ -2251,7 +2254,8 @@ fn row_order_determines_the_visible_fill_at_shared_corners() {
             .iter()
             .find(|p| p.rectangle_fill == Some(PaintColor::from_u8(248, 239, 240, 255)))
             .unwrap();
-        let (x, y) = (first.bounds.0 + 40.5, first.bounds.1 + 20.5);
+        // The first fill starts one sheet point inside the grid origin (#1605).
+        let (x, y) = (first.bounds.0 - 1.0 + 40.5, first.bounds.1 - 1.0 + 20.5);
         let visible = paints
             .iter()
             .rev()
@@ -2306,8 +2310,11 @@ fn automatic_row_fill_has_continuous_single_alpha_coverage() {
         })
         .expect("the automatic row wraps to several lines");
     let y = (main.bounds.1 + main.bounds.3) / 2.0;
+    // The page clip trims one sheet point off the first cell's left (#1605),
+    // so the grid origin sits one point before the painted fill.
+    let grid_left: f64 = main.bounds.0 - 1.0;
     for dx in [79.9, 80.5] {
-        let x = main.bounds.0 + dx;
+        let x = grid_left + dx;
         let mut rgb = [1.0_f32; 3];
         for paint in &paints {
             if paint.bounds.0 < x
@@ -2360,11 +2367,20 @@ fn test_word_and_centred_stroke_tables_do_not_bleed_their_fills() {
         .filter(|p| p.rectangle_fill == Some(PaintColor::from_u8(217, 217, 217, 255)))
         .collect();
     assert_eq!(fills.len(), 3);
-    for (index, fill) in fills.into_iter().enumerate() {
-        let bleed = if index == 0 { 1.0 } else { 0.0 };
-        assert!((fill.bounds.2 - fill.bounds.0 - 69.0 - bleed).abs() < 0.001);
-        assert!((fill.bounds.3 - fill.bounds.1 - 20.0 - bleed).abs() < 0.001);
+    // The Word and centred-stroke fills cover exactly their 69x20pt cell.
+    for fill in &fills[1..] {
+        assert!((fill.bounds.2 - fill.bounds.0 - 69.0).abs() < 0.001);
+        assert!((fill.bounds.3 - fill.bounds.1 - 20.0).abs() < 0.001);
+        assert!((fill.bounds.0 - fills[1].bounds.0).abs() < 0.001);
     }
+    // The Excel fill bleeds one point past its right and bottom boundaries
+    // and loses one point to the page clip on its left and top (#1605), so
+    // its box keeps the nominal size but starts one point inside the grid
+    // origin the other two tables share.
+    let excel = fills[0];
+    assert!((excel.bounds.0 - fills[1].bounds.0 - 1.0).abs() < 0.001);
+    assert!((excel.bounds.2 - fills[1].bounds.0 - 70.0).abs() < 0.001);
+    assert!((excel.bounds.3 - excel.bounds.1 - 20.0).abs() < 0.001);
 }
 
 /// The native Excel-for-Mac export places the first TableStyleLight1 body
@@ -2402,4 +2418,186 @@ fn structure_light1_table_band_bleeds_past_its_bottom_and_right_boundaries() {
         }),
         "the first body cell must fill through the bottom and right boundaries: {fills:?}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Excel page fill clip (issue #1605)
+//
+// Native Excel clips every page's cell fills to that page's grid region inset
+// by one sheet point on the top and left edges, while the bottom and right
+// edges keep the positive-axis bleed. The public #982 workbook traces the
+// unscaled A1:B8 sheet's clip as `[51, 55, 474, 418]` around raw fills that
+// start at x=50/y=54; the fitted 0.82 explicit-area sheet clips at
+// `[55.76, 54.12]` for a grid origin of `[54.94, 53.30]`; and the unscaled
+// explicit-area sheet's continuation page clips at x=473 for a raw fill that
+// starts at x=472. Later rows and columns keep their raw origin, so only the
+// page's first row loses its top strip and only its first column loses its
+// left strip.
+// ---------------------------------------------------------------------------
+
+/// A 2x2 filled sheet table on one page and the same table on each of two
+/// pages, as the XLSX parser emits a continuation page, each compiled at the
+/// unscaled and the fitted print scale.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn page_fills_lose_one_sheet_point_on_the_top_and_left_grid_edges() {
+    use crate::render::pdf::compiled_paint_sequence;
+    use typst::visualize::Color as PaintColor;
+
+    let pale = Color::new(248, 239, 240);
+    let rose = Color::new(218, 182, 186);
+    let pale_paint = PaintColor::from_u8(248, 239, 240, 255);
+    let rose_paint = PaintColor::from_u8(218, 182, 186, 255);
+    let mut failures: Vec<String> = Vec::new();
+    for scale in [1.0, 0.82] {
+        for page_count in [1usize, 2] {
+            let cell = |color: Color| TableCell {
+                background: Some(color),
+                content: Vec::new(),
+                padding: Some(Insets {
+                    top: 0.0,
+                    bottom: 0.0,
+                    left: 0.0,
+                    right: 0.0,
+                }),
+                ..TableCell::default()
+            };
+            let width: f64 = 40.0 * scale;
+            let height: f64 = 30.0 * scale;
+            let sheet_page = || {
+                let rows: Vec<TableRow> = (0..2)
+                    .map(|index| TableRow {
+                        cells: vec![cell(if index == 0 { pale } else { rose }), cell(rose)],
+                        height: Some(height),
+                        minimum_height: None,
+                    })
+                    .collect();
+                let mut table = boundary_band_table(rows, vec![width; 2]);
+                table.print_scale = Some(scale);
+                table.seats_bottom_aligned_text_on_descender = true;
+                Page::Sheet(SheetPage {
+                    name: "Fill clip".into(),
+                    size: PageSize {
+                        width: 300.0,
+                        height: 300.0,
+                    },
+                    margins: Margins {
+                        top: 30.0,
+                        bottom: 30.0,
+                        left: 30.0,
+                        right: 30.0,
+                    },
+                    table,
+                    header: None,
+                    footer: None,
+                    charts: Vec::new(),
+                    images: Vec::new(),
+                    text_boxes: Vec::new(),
+                    shapes: Vec::new(),
+                })
+            };
+            let doc = make_doc((0..page_count).map(|_| sheet_page()).collect());
+            let output = generate_typst(&doc).unwrap();
+            for page_index in 0..page_count {
+                let paints = compiled_paint_sequence(&output.source, &output.images, page_index)
+                    .unwrap_or_else(|error| panic!("page {page_index} failed to compile: {error}"));
+                let fills: Vec<(f64, f64, f64, f64)> = paints
+                    .iter()
+                    .filter(|paint| {
+                        let fill = paint.rectangle_fill.as_ref();
+                        fill == Some(&pale_paint) || fill == Some(&rose_paint)
+                    })
+                    .map(|paint| paint.bounds)
+                    .collect();
+                let label = format!("scale={scale}, pages={page_count}, page={page_index}");
+                if fills.len() < 4 {
+                    failures.push(format!(
+                        "{label}: expected at least four fills, got {fills:?}"
+                    ));
+                    continue;
+                }
+                // The second column's fills keep the raw grid origin: their
+                // left edge is the shared boundary, one column past the grid.
+                let second_column_left: f64 = fills
+                    .iter()
+                    .map(|fill| fill.0)
+                    .fold(f64::NEG_INFINITY, f64::max);
+                let second_row_top: f64 = fills
+                    .iter()
+                    .filter(|fill| fill.0 < second_column_left - 1.0)
+                    .map(|fill| fill.1)
+                    .filter(|top| {
+                        *top > fills
+                            .iter()
+                            .map(|fill| fill.1)
+                            .fold(f64::INFINITY, f64::min)
+                            + 1.0
+                    })
+                    .fold(f64::INFINITY, f64::min);
+                let grid_left: f64 = second_column_left - width;
+                let grid_top: f64 = second_row_top - height;
+                let first_left: f64 = fills
+                    .iter()
+                    .map(|fill| fill.0)
+                    .fold(f64::INFINITY, f64::min);
+                let first_top: f64 = fills
+                    .iter()
+                    .map(|fill| fill.1)
+                    .fold(f64::INFINITY, f64::min);
+                if (first_left - (grid_left + scale)).abs() > 0.01 {
+                    failures.push(format!(
+                        "{label}: first column fills start at x={first_left:.3}, expected the grid's \
+                         {grid_left:.3} plus the {scale} sheet point clip"
+                    ));
+                }
+                if (first_top - (grid_top + scale)).abs() > 0.01 {
+                    failures.push(format!(
+                        "{label}: first row fills start at y={first_top:.3}, expected the grid's \
+                         {grid_top:.3} plus the {scale} sheet point clip"
+                    ));
+                }
+                // The positive-axis bleed past the last column and row stays.
+                let last_right: f64 = fills
+                    .iter()
+                    .map(|fill| fill.2)
+                    .fold(f64::NEG_INFINITY, f64::max);
+                if (last_right - (grid_left + 2.0 * width + scale)).abs() > 0.01 {
+                    failures.push(format!(
+                        "{label}: the right bleed ends at x={last_right:.3}, expected {:.3}",
+                        grid_left + 2.0 * width + scale
+                    ));
+                }
+                let last_row_bottom: f64 = fills
+                    .iter()
+                    .map(|fill| fill.3)
+                    .fold(f64::NEG_INFINITY, f64::max);
+                let last_row_top: f64 = fills
+                    .iter()
+                    .map(|fill| fill.1)
+                    .fold(f64::NEG_INFINITY, f64::max);
+                if (last_row_bottom - (last_row_top + height + scale)).abs() > 0.01 {
+                    failures.push(format!(
+                        "{label}: the bottom bleed ends at y={last_row_bottom:.3}, expected {:.3}",
+                        last_row_top + height + scale
+                    ));
+                }
+                // Interior boundaries are untouched: the second column and
+                // row fills start exactly one track past the first.
+                let interior_lefts: Vec<f64> = fills
+                    .iter()
+                    .map(|fill| fill.0)
+                    .filter(|left| (*left - first_left).abs() > 0.01)
+                    .collect();
+                if interior_lefts
+                    .iter()
+                    .any(|left| (*left - second_column_left).abs() > 0.01)
+                {
+                    failures.push(format!(
+                        "{label}: interior column origins moved: {interior_lefts:?}"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
