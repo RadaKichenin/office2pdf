@@ -5116,7 +5116,9 @@ fn excel_gift_column_chart(size_pt: f64, number_format: Option<&str>) -> Chart {
 /// page it measures 833.10 x 252.54pt.
 const EXCEL_GIFT_CHART_FRAME: (f64, f64) = (1015.9784, 307.9732);
 const EXCEL_GIFT_PRINT_SCALE: f64 = 0.82;
-const EXCEL_GIFT_CHART_SPACE_FRAME_TOP: f64 = 143.866_536_585_365_85;
+/// The frame's top edge in sheet points, where native Excel paints it: the
+/// fitted export's 117.2703pt page seat undone by the 0.82 scale (#1542).
+const EXCEL_GIFT_CHART_SPACE_FRAME_TOP: f64 = 143.012_536_585_365_85;
 const EXCEL_GIFT_ANCHOR_Y: f64 = 79.256_692_913_385_83;
 
 /// The same anchored worksheet combo chart with its three vertical-layout
@@ -5185,20 +5187,23 @@ fn value_label_gridline_offset(source: &str, label: &str, tick_index: usize) -> 
 
 #[test]
 fn an_excel_worksheet_column_plot_uses_the_native_vertical_edges() {
-    // The native Excel export puts the chart-local plot at 10.146..258.327pt
-    // inside the 307.9732pt frame. The old shared PowerPoint chrome produced
-    // 10.463..257.373pt: 0.317pt low at the top, 0.954pt high at the bottom,
-    // and therefore 1.271pt short overall (issue #1250).
+    // The native Excel export puts the chart-local plot at 11.000..259.180pt
+    // inside the 307.9732pt frame, measured from the frame's own top edge in
+    // sheet points; the unscaled control of #1607 reads the same 11pt inset
+    // and 48.793pt bottom chrome. The old shared PowerPoint chrome produced a
+    // plot 1.271pt short (issue #1250), and the #1250 calibration of
+    // 10.146..258.327pt was taken against the converter's physical origin,
+    // 0.854 sheet points below the frame Excel paints (issue #1607).
     let chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
     let (_, top, _, bottom) = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false);
 
     assert!(
-        (top - 10.146).abs() <= 0.05,
-        "plot top {top}pt, Excel's 10.146pt"
+        (top - 11.0).abs() <= 0.05,
+        "plot top {top}pt, Excel's 11.000pt"
     );
     assert!(
-        (bottom - 258.327).abs() <= 0.05,
-        "plot bottom {bottom}pt, Excel's 258.327pt"
+        (bottom - 259.180).abs() <= 0.05,
+        "plot bottom {bottom}pt, Excel's 259.180pt"
     );
     assert!(
         ((bottom - top) - 248.181).abs() <= 0.05,
@@ -5560,11 +5565,11 @@ fn an_excel_worksheet_plot_top_follows_the_native_value_size_probes() {
     // changed. Excel floors the top chrome at the 9pt seat, then grows it by
     // approximately two thirds of a point per additional text point.
     let measurements = [
-        (7.0, 10.1460),
-        (9.0, 10.1460),
-        (11.0, 11.4610),
-        (14.0, 13.4560),
-        (18.0, 16.1186),
+        (7.0, 11.0000),
+        (9.0, 11.0000),
+        (11.0, 12.3150),
+        (14.0, 14.3100),
+        (18.0, 16.9726),
     ];
     for (size_pt, expected_top) in measurements {
         let chart = excel_gift_vertical_chart(size_pt, 9.0, 9.0);
@@ -5581,11 +5586,11 @@ fn an_excel_worksheet_plot_bottom_follows_both_native_text_band_probes() {
     // The bottom edge moves independently with the category and bottom-legend
     // bands: 2.05pt per category text point and 1.3167pt per legend text point.
     let category_measurements = [
-        (7.0, 262.4234),
-        (9.0, 258.3270),
-        (11.0, 254.2270),
-        (14.0, 248.0802),
-        (18.0, 239.8752),
+        (7.0, 263.2764),
+        (9.0, 259.1800),
+        (11.0, 255.0800),
+        (14.0, 248.9332),
+        (18.0, 240.7282),
     ];
     for (size_pt, expected_bottom) in category_measurements {
         let chart = excel_gift_vertical_chart(9.0, size_pt, 9.0);
@@ -5597,11 +5602,11 @@ fn an_excel_worksheet_plot_bottom_follows_both_native_text_band_probes() {
     }
 
     let legend_measurements = [
-        (7.0, 260.9604),
-        (9.0, 258.3270),
-        (11.0, 255.6937),
-        (14.0, 251.7434),
-        (18.0, 246.4717),
+        (7.0, 261.8134),
+        (9.0, 259.1800),
+        (11.0, 256.5467),
+        (14.0, 252.5964),
+        (18.0, 247.3247),
     ];
     for (size_pt, expected_bottom) in legend_measurements {
         let chart = excel_gift_vertical_chart(9.0, 9.0, size_pt);
@@ -5620,8 +5625,8 @@ fn an_excel_worksheet_plot_without_a_legend_reclaims_excels_legend_band() {
     chart.has_legend = false;
     let actual_bottom = axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false).3;
     assert!(
-        (actual_bottom - 282.177).abs() <= 0.05,
-        "plot bottom without legend {actual_bottom}pt, Excel's 282.177pt"
+        (actual_bottom - 283.030).abs() <= 0.05,
+        "plot bottom without legend {actual_bottom}pt, Excel's 283.030pt"
     );
 }
 
@@ -5633,7 +5638,10 @@ fn an_excel_worksheet_chart_seats_its_category_and_bottom_legend_bands() {
     // baseline at 359.980pt on the printed page. The pre-fix renderer put the
     // same baselines at 345.786pt and 364.196pt. Undoing the sheet's exact
     // 0.82 print scale makes those residuals 2.690pt and 5.141pt in chart-local
-    // coordinates (#1240).
+    // coordinates (#1240). Those seats were taken against the converter's
+    // physical frame origin; the chart-local tops below are the same native
+    // baselines measured from the frame Excel paints, 0.853 sheet points
+    // higher (#1607).
     //
     // Restate the combo chart in Calibri because its native metrics are held
     // by the crate and therefore do not depend on a CI runner having Segoe UI.
@@ -5652,12 +5660,12 @@ fn an_excel_worksheet_chart_seats_its_category_and_bottom_legend_bands() {
     let legend_top = legend_entry_y(&source, "Birthday Budget");
 
     assert!(
-        (category_top - 256.683).abs() <= 0.02,
-        "category-label band top {category_top}pt, native-derived 256.683pt; got:\n{source}"
+        (category_top - 257.536).abs() <= 0.02,
+        "category-label band top {category_top}pt, native-derived 257.536pt; got:\n{source}"
     );
     assert!(
-        (legend_top - 288.832).abs() <= 0.02,
-        "bottom-legend band top {legend_top}pt, native-derived 288.832pt; got:\n{source}"
+        (legend_top - 289.685).abs() <= 0.02,
+        "bottom-legend band top {legend_top}pt, native-derived 289.685pt; got:\n{source}"
     );
 }
 
@@ -5667,11 +5675,11 @@ fn excel_worksheet_band_seats_follow_the_native_size_probes() {
     // by the one-factor probes. Each series changes one text size and leaves
     // the frame, plot data and other two chart text bands at 9pt.
     let category_tops = [
-        (7.0, 260.7832),
-        (9.0, 256.6832),
-        (11.0, 251.5832),
-        (14.0, 244.4332),
-        (18.0, 235.2332),
+        (7.0, 261.6362),
+        (9.0, 257.5362),
+        (11.0, 252.4362),
+        (14.0, 245.2862),
+        (18.0, 236.0862),
     ];
     for (size_pt, expected_top) in category_tops {
         let mut chart = combo_budget_chart();
@@ -5689,11 +5697,11 @@ fn excel_worksheet_band_seats_follow_the_native_size_probes() {
     }
 
     let legend_tops = [
-        (7.0, 291.2322),
-        (9.0, 288.8322),
-        (11.0, 286.4322),
-        (14.0, 283.3322),
-        (18.0, 279.5322),
+        (7.0, 292.0852),
+        (9.0, 289.6852),
+        (11.0, 287.2852),
+        (14.0, 284.1852),
+        (18.0, 280.3852),
     ];
     for (size_pt, expected_top) in legend_tops {
         let mut chart = combo_budget_chart();

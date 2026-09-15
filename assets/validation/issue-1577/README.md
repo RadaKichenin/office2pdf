@@ -28,8 +28,11 @@ odd declared marker size then moves the center by minus half a sheet point on
 both axes. The rule predicts all 286 outline-control positions
 (`native-outline-controls.json`, `outline-placement-analysis.json`) and all 93
 value, normalized-anchor and size positions
-(`native-size-anchor-value-analysis.json`) within 0.00005pt. Column plots keep
-their existing vertical calibration and only add the fitted horizontal origin.
+(`native-size-anchor-value-analysis.json`) within 0.00005pt. At the time of
+this analysis column plots kept their earlier vertical calibration and only
+added the fitted horizontal origin; #1607 has since put every chart's content
+on the fitted sheet origin of its frame on both axes, which leaves these
+absolute sheet-point marker positions unchanged.
 
 `candidate-marker-centers.json` records the compiled candidate PDFs: the
 budget marker and all twelve gift markers match native within 0.0001pt.

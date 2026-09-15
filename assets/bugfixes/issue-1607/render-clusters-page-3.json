@@ -1,0 +1,167 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 96.48,
+      "bbox_pt": {
+        "height": 1.92,
+        "width": 79.92,
+        "x": 571.92,
+        "y": 391.2
+      },
+      "disposition": {
+        "issue": "#1745",
+        "kind": "issue",
+        "note": "4x zoomed 300 DPI crops of the Oct..Dec zero-value runs on the second tile: native cuts the 2.24pt series stroke at its whole-point plot clip (x 472..693, y 143..391) and keeps the grey axis visible below it; the output paints the full stroke. The eleven gridlines, the category labels and the marker centres match native after #1607."
+      },
+      "id": "p3-814a7f6b5c69",
+      "region": "center"
+    },
+    {
+      "area_pt2": 96.0768,
+      "bbox_pt": {
+        "height": 1.68,
+        "width": 79.68,
+        "x": 491.04,
+        "y": 391.2
+      },
+      "disposition": {
+        "issue": "#1745",
+        "kind": "issue",
+        "note": "4x zoomed 300 DPI crops of the Oct..Dec zero-value runs on the second tile: native cuts the 2.24pt series stroke at its whole-point plot clip (x 472..693, y 143..391) and keeps the grey axis visible below it; the output paints the full stroke. The eleven gridlines, the category labels and the marker centres match native after #1607."
+      },
+      "id": "p3-47a1ec949d8b",
+      "region": "center"
+    },
+    {
+      "area_pt2": 40.0896,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 7.44,
+        "x": 656.4,
+        "y": 582.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-18f408ad53f7",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 34.1568,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 12.48,
+        "x": 129.6,
+        "y": 811.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-ee7f0b77fd94",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 27.072,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 9.12,
+        "x": 115.92,
+        "y": 811.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-9114be56a843",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 26.1504,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 5.28,
+        "x": 678.48,
+        "y": 582.72
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-53c2b30c9aad",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.2336,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 5.04,
+        "x": 612.0,
+        "y": 585.36
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-593dc0dd2a0d",
+      "region": "bottom"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 1.68,
+        "width": 18.24,
+        "x": 471.6,
+        "y": 391.2
+      },
+      "disposition": {
+        "issue": "#1745",
+        "kind": "issue",
+        "note": "4x zoomed 300 DPI crops of the Oct..Dec zero-value runs on the second tile: native cuts the 2.24pt series stroke at its whole-point plot clip (x 472..693, y 143..391) and keeps the grey axis visible below it; the output paints the full stroke. The eleven gridlines, the category labels and the marker centres match native after #1607."
+      },
+      "id": "p3-6219ad4f2bda",
+      "region": "center"
+    },
+    {
+      "area_pt2": 20.16,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.48,
+        "x": 148.56,
+        "y": 811.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-81dc77e0486b",
+      "region": "bottom-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 3,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 9,
+    "duplicate": 0,
+    "total": 9,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

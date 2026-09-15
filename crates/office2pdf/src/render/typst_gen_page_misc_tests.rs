@@ -4626,13 +4626,123 @@ fn unscaled_drawing_frames_keep_their_existing_origin() {
     );
 }
 
-/// The fitted source's chart text already matches native Excel. Its paint
-/// origin correction must not displace those independent text seats beyond
-/// the existing visual gate. The physical-origin control uses the same chart
-/// and font resolution, so font availability cannot hide a translation.
+/// Native Excel for Mac 16.112 exports of the gift workbook put the column
+/// plot's top gridline 11 sheet points below the chart frame and its bottom
+/// axis rule 48.793 sheet points (11 + the 9pt category and legend bands)
+/// above the frame's bottom edge, at the fitted 0.82 print scale (frame top
+/// 117.2703pt, rules 126.2903..329.7977pt) and at the unscaled control (frame
+/// top 132.0126pt, rules 143.0126..391.1924pt) alike. The chart content
+/// therefore shares the frame's fitted sheet origin rather than keeping the
+/// converter's physical one, which sat 0.854 sheet points lower at 0.82 and
+/// left the unscaled plot 0.854pt high (issue #1607).
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn fitted_drawing_frames_preserve_matched_chart_text() {
+fn worksheet_column_plot_edges_follow_native_at_every_print_scale() {
+    for (scale, expected_top, expected_bottom) in
+        [(1.0, 143.0126, 391.1924), (0.82, 126.2903, 329.7977)]
+    {
+        let rules: Vec<f64> = gift_drawing_origin_probe(scale)
+            .into_iter()
+            .filter(|item| {
+                item.stroke.is_some()
+                    && item.bounds.2 - item.bounds.0 > 700.0 * scale
+                    && item.bounds.3 - item.bounds.1 < 1.0
+            })
+            .map(|item| (item.bounds.1 + item.bounds.3) / 2.0)
+            .collect();
+        assert!(
+            rules.len() >= 11,
+            "at {scale}: expected the plot's value rules, got {rules:?}"
+        );
+        let top: f64 = rules.iter().copied().fold(f64::INFINITY, f64::min);
+        let bottom: f64 = rules.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            (top - expected_top).abs() < 0.02,
+            "plot top rule at {scale}: got {top}pt, native {expected_top}pt"
+        );
+        assert!(
+            (bottom - expected_bottom).abs() < 0.02,
+            "plot bottom rule at {scale}: got {bottom}pt, native {expected_bottom}pt"
+        );
+    }
+}
+
+/// The translation the fitted sheet origin applies to the chart frame at
+/// `scale`, read off the compiled frame itself: its bounds with the grid on
+/// the physical origin against the same grid on the fitted one.
+#[cfg(not(target_arch = "wasm32"))]
+fn fitted_frame_shift(scale: f64) -> (f64, f64) {
+    use crate::render::pdf::PaintedKind;
+
+    let frame_origin = |fitted_grid: bool| {
+        gift_drawing_origin_probe_with_grid_scale(scale, fitted_grid)
+            .into_iter()
+            .find(|item| {
+                item.kind == PaintedKind::Shape
+                    && ((item.bounds.2 - item.bounds.0) - 1_015.978_4 * scale).abs() < 0.01
+                    && ((item.bounds.3 - item.bounds.1) - 307.9732 * scale).abs() < 0.01
+            })
+            .map(|item| (item.bounds.0, item.bounds.1))
+            .expect("the chart paints its full declared frame")
+    };
+    let physical = frame_origin(false);
+    let fitted = frame_origin(true);
+    let shift = (fitted.0 - physical.0, fitted.1 - physical.1);
+    assert!(
+        shift.0.abs() > 0.05 || shift.1.abs() > 0.05,
+        "the probe must move the frame onto a distinct fitted origin: {shift:?}"
+    );
+    shift
+}
+
+/// Check that every text run of a fitted chart followed its frame onto the
+/// fitted sheet origin: a run either moves by exactly the frame's shift, or
+/// it is value-axis chrome that Excel seats on absolute whole sheet points
+/// (#1471) and so moves by a whole number of printed sheet points instead.
+/// Returns how many runs moved with the frame exactly.
+#[cfg(not(target_arch = "wasm32"))]
+fn assert_text_runs_follow_the_frame(
+    context: &str,
+    scale: f64,
+    physical: &[(f64, f64, f64, f64)],
+    fitted: &[(f64, f64, f64, f64)],
+    (dx, dy): (f64, f64),
+) -> usize {
+    assert!(
+        !physical.is_empty(),
+        "{context}: the chart must contain text"
+    );
+    assert_eq!(
+        physical.len(),
+        fitted.len(),
+        "{context}: the runs must not reflow"
+    );
+    let mut exact: usize = 0;
+    for (index, (before, after)) in physical.iter().zip(fitted).enumerate() {
+        let moved_sheet_pt: f64 = (after.1 - before.1) / scale;
+        let with_frame: bool = (after.1 - before.1 - dy).abs() < 0.01;
+        let on_whole_sheet_points: bool =
+            (moved_sheet_pt - moved_sheet_pt.round()).abs() < 0.01 && moved_sheet_pt.abs() <= 2.0;
+        assert!(
+            (after.0 - before.0 - dx).abs() < 0.01 && (with_frame || on_whole_sheet_points),
+            "{context}, run {index}: did not follow the frame's ({dx}, {dy})pt shift: {before:?} -> {after:?}"
+        );
+        exact += usize::from(with_frame);
+    }
+    assert!(
+        exact > 0,
+        "{context}: no run followed the frame exactly, so the shift is not the frame's"
+    );
+    exact
+}
+
+/// Excel lays a chart out inside the frame it paints, so the fitted origin
+/// correction of #1542 carries the chart's text with the frame: every run
+/// moves by the frame's own shift, none stays on the physical origin
+/// (issue #1607).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fitted_drawing_frames_carry_chart_text_with_the_frame() {
     use crate::render::pdf::PaintedKind;
 
     let text_bounds = |fitted_grid| {
@@ -4642,49 +4752,75 @@ fn fitted_drawing_frames_preserve_matched_chart_text() {
             .map(|item| item.bounds)
             .collect::<Vec<_>>()
     };
+    let shift = fitted_frame_shift(0.82);
     let physical = text_bounds(false);
     let fitted = text_bounds(true);
-    assert!(!physical.is_empty(), "the chart must contain text");
-    assert_eq!(physical.len(), fitted.len());
-    for (index, (before, after)) in physical.into_iter().zip(fitted).enumerate() {
+    assert_text_runs_follow_the_frame("gift chart at 0.82", 0.82, &physical, &fitted, shift);
+    // The category labels and the legend sit under the plot's bottom rule
+    // (329.80pt on the page) and are not snapped, so they carry the frame's
+    // exact shift; only the value labels above it may re-round.
+    for (index, (before, after)) in physical.iter().zip(&fitted).enumerate() {
+        if before.1 < 330.0 {
+            continue;
+        }
         assert!(
-            (before.0 - after.0).abs() <= 0.5 && (before.1 - after.1).abs() <= 0.5,
-            "chart text run {index} moved beyond 0.5pt: {before:?} -> {after:?}"
+            (after.1 - before.1 - shift.1).abs() < 0.01,
+            "run {index} below the plot did not follow the frame's {}pt shift: {before:?} -> {after:?}",
+            shift.1
         );
     }
 }
 
-/// The source's plot grid already agrees with native Excel. A corrected outer
-/// drawing frame must not translate that independently positioned content.
+/// The plot's top and bottom rules are laid out from the frame's edges, so
+/// they follow the frame onto the fitted origin by exactly its shift. The
+/// interior gridlines snap to whole sheet points on that origin and are
+/// pinned against native by `worksheet_column_plot_edges_follow_native_at_every_print_scale`
+/// and the sheet-space snapping tests (issue #1607).
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn fitted_drawing_frames_preserve_matched_plot_grid() {
-    let grid = |fitted_grid| {
-        gift_drawing_origin_probe_with_grid_scale(0.82, fitted_grid)
+fn fitted_drawing_frames_carry_the_plot_edges_with_the_frame() {
+    let plot_edges = |fitted_grid| {
+        let rules: Vec<(f64, f64)> = gift_drawing_origin_probe_with_grid_scale(0.82, fitted_grid)
             .into_iter()
             .filter(|item| {
                 item.stroke.is_some()
                     && item.bounds.2 - item.bounds.0 > 700.0
                     && item.bounds.3 - item.bounds.1 < 1.0
             })
-            .map(|item| item.bounds)
-            .collect::<Vec<_>>()
+            .map(|item| (item.bounds.0, (item.bounds.1 + item.bounds.3) / 2.0))
+            .collect();
+        assert!(rules.len() >= 5, "the probe must contain plot gridlines");
+        let top = rules
+            .iter()
+            .copied()
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .expect("a top rule");
+        let bottom = rules
+            .iter()
+            .copied()
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .expect("a bottom rule");
+        (top, bottom)
     };
-    let before = grid(false);
-    let after = grid(true);
-    assert!(before.len() >= 5, "the probe must contain plot gridlines");
-    assert_eq!(before.len(), after.len());
-    for (index, (before, after)) in before.into_iter().zip(after).enumerate() {
+    let (dx, dy) = fitted_frame_shift(0.82);
+    let (before_top, before_bottom) = plot_edges(false);
+    let (after_top, after_bottom) = plot_edges(true);
+    for (name, before, after) in [
+        ("top", before_top, after_top),
+        ("bottom", before_bottom, after_bottom),
+    ] {
         assert!(
-            (before.0 - after.0).abs() < 0.01 && (before.1 - after.1).abs() < 0.01,
-            "gridline {index}: {before:?} -> {after:?}"
+            (after.0 - before.0 - dx).abs() < 0.01 && (after.1 - before.1 - dy).abs() < 0.01,
+            "plot {name} rule did not follow the frame's ({dx}, {dy})pt shift: {before:?} -> {after:?}"
         );
     }
 }
 
+/// The bottom legend's filled key is seated from the frame's bottom edge and
+/// follows it onto the fitted origin like the rest of the content.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn fitted_drawing_frames_preserve_independent_legend_geometry() {
+fn fitted_drawing_frames_carry_the_legend_key_with_the_frame() {
     use crate::render::pdf::PaintedKind;
 
     let key = |fitted_grid| {
@@ -4700,15 +4836,19 @@ fn fitted_drawing_frames_preserve_independent_legend_geometry() {
             .expect("the bottom legend contains a filled key")
             .bounds
     };
+    let (dx, dy) = fitted_frame_shift(0.82);
     let before = key(false);
     let after = key(true);
     for (before, after, offset) in [
-        (before.0, after.0, 0.0),
-        (before.1, after.1, 0.0),
-        (before.2, after.2, 0.0),
-        (before.3, after.3, 0.0),
+        (before.0, after.0, dx),
+        (before.1, after.1, dy),
+        (before.2, after.2, dx),
+        (before.3, after.3, dy),
     ] {
-        assert!((after - before - offset).abs() < 0.01);
+        assert!(
+            (after - before - offset).abs() < 0.01,
+            "legend key edge did not follow the frame's shift {offset}pt: {before} -> {after}"
+        );
     }
 }
 
@@ -4732,16 +4872,14 @@ fn fitted_drawing_frames_preserve_chart_text_flow_at_other_scales() {
                 .map(|item| item.bounds)
                 .collect::<Vec<_>>()
             };
-            let before = bounds(false);
-            let after = bounds(true);
-            assert!(!before.is_empty());
-            assert_eq!(before.len(), after.len(), "{chart_type:?} at {scale}");
-            for (index, (before, after)) in before.into_iter().zip(after).enumerate() {
-                assert!(
-                    (before.0 - after.0).abs() <= 0.5 && (before.1 - after.1).abs() <= 0.5,
-                    "{chart_type:?} at {scale}, run {index}: {before:?} -> {after:?}"
-                );
-            }
+            let shift = fitted_frame_shift(scale);
+            let _ = assert_text_runs_follow_the_frame(
+                &format!("{chart_type:?} at {scale}"),
+                scale,
+                &bounds(false),
+                &bounds(true),
+                shift,
+            );
         }
     }
 }
