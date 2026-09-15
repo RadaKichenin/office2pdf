@@ -33,6 +33,7 @@ fn cell(text: &str) -> TableCell {
         vertical_align: None,
         padding: None,
         row_has_thick_bottom: false,
+        wraps_text: false,
     }
 }
 

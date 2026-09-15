@@ -26,12 +26,14 @@
 //! offset — read off the GT's own trace, not fitted — leaves +0.006pt (sd
 //! 0.086) at a 2pt right inset against -0.994pt at 3pt: one whole point out.
 //!
-//! The centred figures carry no correction and want none. Excel centres the
-//! run on the *column*, not in that asymmetric box, so a symmetric split of
-//! the same 5pt total is what puts our centred runs on its own — which is why
-//! issue #657's warning that an asymmetric pair moves every centred run by
-//! half the difference is right, and only its conclusion that both sides are
-//! therefore 3pt is not.
+//! The centred figures carry no inset correction. Excel centres the run on
+//! the *column*, not in that asymmetric box, so a symmetric split of the same
+//! 5pt total is what puts our centred runs on its own — which is why issue
+//! #657's warning that an asymmetric pair moves every centred run by half the
+//! difference is right, and only its conclusion that both sides are therefore
+//! 3pt is not. The remaining sub-point residual of a centred run is Excel's
+//! whole-point origin seat, which the renderer applies from the cell's
+//! `wrapText` flag (issue #1600, `wraps_text` below).
 
 use super::*;
 
@@ -327,5 +329,59 @@ fn test_a_centred_cell_holds_the_column_centre_at_any_cell_font() {
          right {}",
         padding.left,
         padding.right,
+    );
+}
+
+/// A one-cell workbook whose centred cell states `wrapText`.
+fn workbook_with_centred_cell_wrap(wrap_text: bool) -> Vec<u8> {
+    let mut book = umya_spreadsheet::new_file();
+    {
+        let sheet = book.get_sheet_mut(&0).unwrap();
+        let cell = sheet.get_cell_mut("B3");
+        cell.set_value("Yes");
+        let alignment = cell.get_style_mut().get_alignment_mut();
+        alignment.set_horizontal(umya_spreadsheet::HorizontalAlignmentValues::Center);
+        alignment.set_wrap_text(wrap_text);
+    }
+    let mut cursor = Cursor::new(Vec::new());
+    umya_spreadsheet::writer::xlsx::write_writer(&book, &mut cursor).unwrap();
+    cursor.into_inner()
+}
+
+/// The workbook's one value-bearing cell.
+fn first_value_cell(data: &[u8]) -> TableCell {
+    let (doc, _warnings) = XlsxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("workbook should parse");
+    get_sheet_page(&doc, 0)
+        .table
+        .rows
+        .iter()
+        .flat_map(|row| row.cells.iter())
+        .find(|cell| !cell.content.is_empty())
+        .expect("the workbook has a value-bearing cell")
+        .clone()
+}
+
+/// Excel starts a centred line one sheet point further left in a wrapped
+/// cell than in an unwrapped one of the same width and text (issue #1600), so
+/// the flag has to reach the renderer even when the text fits on one line and
+/// leaves no spill behind.
+#[test]
+fn test_centred_cell_carries_its_wrap_text_flag_to_the_renderer() {
+    let wrapped: TableCell = first_value_cell(&workbook_with_centred_cell_wrap(true));
+    let unwrapped: TableCell = first_value_cell(&workbook_with_centred_cell_wrap(false));
+
+    assert!(
+        wrapped.wraps_text,
+        "a wrapText=\"1\" cell must carry the flag: {wrapped:?}"
+    );
+    assert!(
+        !unwrapped.wraps_text,
+        "an unwrapped cell must not carry the flag: {unwrapped:?}"
+    );
+    assert!(
+        wrapped.spill_width.is_none() && unwrapped.spill_width.is_none(),
+        "text that fits its column leaves no spill on either cell, so the spill cannot stand in for the flag"
     );
 }

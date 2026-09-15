@@ -1443,6 +1443,13 @@ pub(super) fn estimate_line_width_pt(text: &str, family: Option<&str>, font_size
         .sum::<f64>()
 }
 
+/// Whether a worksheet cell carries Excel's `wrapText="1"` alignment flag.
+fn cell_wraps_text(umya_cell: Option<&umya_spreadsheet::Cell>) -> bool {
+    umya_cell
+        .and_then(|cell| cell.get_style().get_alignment())
+        .is_some_and(|alignment| *alignment.get_wrap_text())
+}
+
 /// The width an unwrapped cell's single line may paint across, or `None` when
 /// the text fits its own column and needs no special handling.
 ///
@@ -1473,11 +1480,7 @@ fn compute_spill_width(
         return None;
     }
     // Explicit wrapText wraps inside the cell instead.
-    let has_wrap_text: bool = umya_cell
-        .and_then(|cell| cell.get_style().get_alignment().cloned())
-        .map(|alignment| *alignment.get_wrap_text())
-        .unwrap_or(false);
-    if has_wrap_text {
+    if cell_wraps_text(umya_cell) {
         return None;
     }
     // Embedded line breaks always wrap.
@@ -3065,6 +3068,7 @@ pub(super) fn build_rows_for_range(
                 spill_line_width_pt,
                 vertical_align: cell_vertical_align,
                 row_has_thick_bottom,
+                wraps_text: cell_wraps_text(umya_cell),
             });
         }
 

@@ -234,6 +234,10 @@ struct GenCtx {
     /// frame would be pushed onto a line of its own and overflow it
     /// (issue #626).
     available_measure_pt: Option<f64>,
+    /// The spreadsheet cell box the current paragraph is laid out in, so a
+    /// centred line can be seated on Excel's whole-point grid (issue #1600).
+    /// `None` outside a sheet table cell.
+    sheet_cell_box: Option<SheetCellBox>,
     /// Whether the table being generated is a slide's, and so paces its cell
     /// text on PowerPoint's flat 1.2em line rather than Word's hhea one.
     ///
@@ -294,6 +298,7 @@ impl GenCtx {
             at_document_start: true,
             breaks_hangul_at_eojeol: false,
             available_measure_pt: None,
+            sheet_cell_box: None,
         }
     }
 

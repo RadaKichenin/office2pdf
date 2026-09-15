@@ -540,6 +540,7 @@ impl<'a> PptxTableParser<'a> {
             vertical_align: self.cell_vertical_align.take(),
             padding: self.cell_padding.take(),
             row_has_thick_bottom: false,
+            wraps_text: false,
         });
         self.row_no_fill_cells.push(self.cell_fill_suppressed);
         self.row_suppressed_cell_borders
