@@ -400,6 +400,10 @@ fn generate_table_rows(
                         ctx,
                         &mut row_frame_estimate_cache,
                     ),
+                    paint_scale: ctx
+                        .sheet_print_scale()
+                        .filter(|scale| *scale > 0.0)
+                        .unwrap_or(1.0),
                 });
             // A cell's own text column: the columns it spans, less the inset
             // that keeps its text off the border (issue #626).
@@ -1091,6 +1095,7 @@ fn generate_table_cell(
                         border,
                         inset,
                         &band.vertical_extent,
+                        band.paint_scale,
                     );
                 }
                 TableBorderPaintModel::WordPositiveAxisBands => {
@@ -2361,6 +2366,17 @@ struct BoundaryBandCell<'a> {
     paint_model: TableBorderPaintModel,
     /// How far this cell's vertical bands may extend.
     vertical_extent: VerticalBandExtent,
+    /// The factor every painted band is multiplied by: a fitted sheet's
+    /// print scale, or 1 everywhere else.
+    ///
+    /// Excel evaluates the band convention at the declared size and scales
+    /// the paint with the page. The native export of the 0.78-scaled budget
+    /// sheet (issue #1564) fills each `thin` rule as a 0.78pt band
+    /// `[B, B + 0.78]` running 0.78pt past its end boundary, where the
+    /// unscaled 1pt band read as a heavier, upward-shifted rule at 300 DPI.
+    /// The layout inset keeps the declared half widths: the fitted seat model
+    /// of #1545 was calibrated against them.
+    paint_scale: f64,
 }
 
 /// How a cell's vertical border bands obtain their length (issue #619).
@@ -2792,69 +2808,87 @@ fn write_boundary_anchored_border_overlays(
     border: &CellBorder,
     inset: Insets,
     vertical_extent: &VerticalBandExtent,
+    paint_scale: f64,
 ) {
     // Horizontal bands can stay relative: a line's `100%` length resolves
     // against the cell's width, which the spreadsheet's fixed column tracks
     // always determine (and colspans span correctly through it).
     let horizontal_length: String = format!(
         "100% + {}pt",
-        format_geometry(inset.left + inset.right + BAND_RUN_END_EXTENSION_PT)
+        format_geometry(inset.left + inset.right + BAND_RUN_END_EXTENSION_PT * paint_scale)
     );
     if let Some(side) = &border.top {
+        let painted: BorderSide = scaled_band_side(side, paint_scale);
         for centre in band_centre_offsets(side) {
             write_boundary_band_line(
                 out,
                 "top + left",
                 -inset.left,
-                -inset.top + centre,
+                -inset.top + centre * paint_scale,
                 "0deg",
                 &horizontal_length,
-                side,
+                &painted,
             );
         }
     }
     if let Some(side) = &border.bottom {
+        let painted: BorderSide = scaled_band_side(side, paint_scale);
         for centre in band_centre_offsets(side) {
             write_boundary_band_line(
                 out,
                 "bottom + left",
                 -inset.left,
-                inset.bottom + centre,
+                inset.bottom + centre * paint_scale,
                 "0deg",
                 &horizontal_length,
-                side,
+                &painted,
             );
         }
     }
     if let Some(side) = &border.left {
+        let painted: BorderSide = scaled_band_side(side, paint_scale);
         for centre in band_centre_offsets(side) {
             write_vertical_boundary_band(
                 out,
-                side,
+                &painted,
                 "left",
-                -inset.left + centre,
+                -inset.left + centre * paint_scale,
                 inset,
                 vertical_extent,
+                paint_scale,
             );
         }
     }
     if let Some(side) = &border.right {
+        let painted: BorderSide = scaled_band_side(side, paint_scale);
         for centre in band_centre_offsets(side) {
             write_vertical_boundary_band(
                 out,
-                side,
+                &painted,
                 "right",
-                inset.right + centre,
+                inset.right + centre * paint_scale,
                 inset,
                 vertical_extent,
+                paint_scale,
             );
         }
     }
 }
 
+/// The side as it paints on a fitted sheet: the declared band width times
+/// the print scale, everything else unchanged. The conflict rule and the
+/// layout inset keep reading the declared width.
+fn scaled_band_side(side: &BorderSide, paint_scale: f64) -> BorderSide {
+    BorderSide {
+        width: side.width * paint_scale,
+        ..side.clone()
+    }
+}
+
 /// Paint one vertical band rule at `dx` from the cell's `horizontal_anchor`
-/// edge, spanning from the row's top boundary to 1pt past its bottom boundary
-/// per [`VerticalBandExtent`]'s answer for this cell.
+/// edge, spanning from the row's top boundary to one scaled point past its
+/// bottom boundary per [`VerticalBandExtent`]'s answer for this cell.
+#[allow(clippy::too_many_arguments)]
 fn write_vertical_boundary_band(
     out: &mut String,
     side: &BorderSide,
@@ -2862,11 +2896,12 @@ fn write_vertical_boundary_band(
     dx: f64,
     inset: Insets,
     vertical_extent: &VerticalBandExtent,
+    paint_scale: f64,
 ) {
     let top_anchor: String = format!("top + {horizontal_anchor}");
-    let (length, twins): (String, bool) = vertical_band_run(vertical_extent, inset);
+    let (length, twins): (String, bool) = vertical_band_run(vertical_extent, inset, paint_scale);
     if twins {
-        write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length);
+        write_vertical_twin_bands(out, side, dx, inset, &top_anchor, &length, paint_scale);
     } else {
         write_boundary_band_line(out, &top_anchor, dx, -inset.top, "90deg", &length, side);
     }
@@ -2875,26 +2910,31 @@ fn write_vertical_boundary_band(
 /// The concrete length one boundary-anchored vertical run takes, and whether
 /// it must be painted as twins because that length only estimates the row's
 /// frame.
-fn vertical_band_run(vertical_extent: &VerticalBandExtent, inset: Insets) -> (String, bool) {
+fn vertical_band_run(
+    vertical_extent: &VerticalBandExtent,
+    inset: Insets,
+    paint_scale: f64,
+) -> (String, bool) {
+    let run_end_extension_pt: f64 = BAND_RUN_END_EXTENSION_PT * paint_scale;
     match *vertical_extent {
         VerticalBandExtent::FrameHeight(frame_height_pt) => (
             format!(
                 "{}pt",
-                format_geometry(frame_height_pt + BAND_RUN_END_EXTENSION_PT)
+                format_geometry(frame_height_pt + run_end_extension_pt)
             ),
             false,
         ),
         VerticalBandExtent::TwinBands(frame_estimate_pt) => (
             format!(
                 "{}pt",
-                format_geometry(frame_estimate_pt + BAND_RUN_END_EXTENSION_PT)
+                format_geometry(frame_estimate_pt + run_end_extension_pt)
             ),
             true,
         ),
         VerticalBandExtent::TwinBandsEmFallback => (
             format!(
                 "1.2em + {}pt",
-                format_geometry(inset.top + inset.bottom + BAND_RUN_END_EXTENSION_PT)
+                format_geometry(inset.top + inset.bottom + run_end_extension_pt)
             ),
             true,
         ),
@@ -2902,8 +2942,9 @@ fn vertical_band_run(vertical_extent: &VerticalBandExtent, inset: Insets) -> (St
 }
 
 /// Two same-length rules: one hanging from the row's top boundary, one rising
-/// from 1pt past its bottom boundary. On a single-line auto row they coincide
-/// exactly; on a wrapped row they cover it from both ends.
+/// from one scaled point past its bottom boundary. On a single-line auto row
+/// they coincide exactly; on a wrapped row they cover it from both ends.
+#[allow(clippy::too_many_arguments)]
 fn write_vertical_twin_bands(
     out: &mut String,
     side: &BorderSide,
@@ -2911,6 +2952,7 @@ fn write_vertical_twin_bands(
     inset: Insets,
     top_anchor: &str,
     length: &str,
+    paint_scale: f64,
 ) {
     let bottom_anchor: String = top_anchor.replacen("top", "bottom", 1);
     write_boundary_band_line(out, top_anchor, dx, -inset.top, "90deg", length, side);
@@ -2918,7 +2960,7 @@ fn write_vertical_twin_bands(
         out,
         &bottom_anchor,
         dx,
-        inset.bottom + BAND_RUN_END_EXTENSION_PT,
+        inset.bottom + BAND_RUN_END_EXTENSION_PT * paint_scale,
         "-90deg",
         length,
         side,
