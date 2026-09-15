@@ -1,0 +1,94 @@
+{
+ "name": "issue-1616-label-width-9pt",
+ "base": "../../../tests/fixtures/xlsx/issue_1603_gift_budget.xlsx",
+ "part": "xl/charts/chart1.xml",
+ "factor": "uniform series name (label width)",
+ "page": 2,
+ "noise_floor": 0.5,
+ "variants": [
+  {
+   "value": "It",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "It",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gt",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gt",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Cost",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Cost",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Spent",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Spent",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gift_Cost",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gift Cost",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Total_Cost",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Total Cost",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gift_Budget",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gift Budget",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gifts_Budget",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gifts Budget",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gift_Budget_Lt",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gift Budget Lt",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Amount_Spent",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Amount Spent",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Holiday_Budget",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Holiday Budget",
+   "regex": true,
+   "count": 8
+  },
+  {
+   "value": "Gift_Budget_Amount",
+   "find": "(?:Birthday|Holiday|Other Gift) Budget|Amount Spent",
+   "replace": "Gift Budget Amount",
+   "regex": true,
+   "count": 8
+  }
+ ]
+}
