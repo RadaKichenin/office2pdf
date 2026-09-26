@@ -981,8 +981,14 @@ pub struct ChartMarkerStyle {
 }
 
 /// DrawingML's geometry at the endpoint of an open stroke.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `a:ln/@cap` spells this, and omitting the attribute selects `Flat`, which is
+/// why that is the default here. A native macOS PowerPoint export of a 3.5pt
+/// straight connector traces as PDF `linecap="0,0,0"` both with `cap="flat"`
+/// and with the attribute absent (issue #1682).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LineCap {
+    #[default]
     Flat,
     Round,
     Square,
@@ -1659,15 +1665,20 @@ pub enum LineJoin {
 
 /// A single border side.
 ///
-/// `join` describes a DrawingML `a:ln` and only shape and picture outlines
-/// render it; Word and Excel have no corresponding border property, so their
-/// sides leave it at the default and their codegen never writes it out.
+/// `join` and `cap` describe a DrawingML `a:ln` and only shape and picture
+/// outlines render them; Word and Excel have no corresponding border property,
+/// so their sides leave both at the default and their codegen never writes
+/// them out.
 #[derive(Debug, Clone)]
 pub struct BorderSide {
     pub width: f64,
     pub color: Color,
     pub style: BorderLineStyle,
     pub join: LineJoin,
+    /// End geometry from `a:ln/@cap`, resolved against the `<a:lnRef>` theme
+    /// line. `Flat` is both DrawingML's own default and Typst's, so it is the
+    /// only value the codegen leaves unwritten (issue #1682).
+    pub cap: LineCap,
 }
 
 /// Fractions of the source image cropped away from each edge.

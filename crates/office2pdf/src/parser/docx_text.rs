@@ -2,7 +2,7 @@ use super::{
     Alignment, Color, HyperlinkMap, LineSpacing, PairKerning, ParagraphStyle, TabAlignment,
     TabLeader, TabStop, TabStopOverride, TextStyle, VerticalTextAlign, apply_tab_stop_overrides,
 };
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, LineJoin, Run};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, LineCap, LineJoin, Run};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
 use crate::parser::xml_util;
 use crate::parser::xml_util::OOXML_XML_VERSION;
@@ -164,6 +164,7 @@ fn extract_paragraph_borders(
             color,
             style,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     };
 

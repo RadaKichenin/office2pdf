@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use super::super::tables::{BorderSideSpec, TableBorderSpec};
 use super::super::{Block, Color, TextStyle, parse_hex_color};
-use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder, Insets, LineJoin};
+use crate::ir::{Alignment, BorderLineStyle, BorderSide, CellBorder, Insets, LineCap, LineJoin};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 struct PartialInsets {
@@ -426,6 +426,7 @@ fn parse_border_side(element: &quick_xml::events::BytesStart<'_>) -> Option<Bord
         color,
         style,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     })
 }
 
@@ -847,6 +848,7 @@ mod tests {
                 color: Color::new(0, 0, 0xFF),
                 style: crate::ir::BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             ..TableBorderSpec::default()
         };

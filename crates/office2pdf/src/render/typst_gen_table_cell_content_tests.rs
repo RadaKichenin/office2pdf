@@ -1107,12 +1107,14 @@ fn cell_border_width_joins_the_inset() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         bottom: Some(BorderSide {
             width: 0.5,
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         left: None,
         right: None,
@@ -2506,6 +2508,7 @@ fn boundary_rule_does_not_make_a_roomy_sheet_row_tight() {
             color: Color::white(),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     };
     let make_cell = |text: &str, ruled: bool| TableCell {
@@ -2607,6 +2610,7 @@ fn boundary_rule_leaves_a_tight_sheet_row_tight() {
                         color: Color::white(),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -3838,6 +3842,7 @@ fn a_descender_seat_inside_the_border_inset_still_lands_on_the_row_boundary() {
             color: Color::black(),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         ..CellBorder::default()
     };

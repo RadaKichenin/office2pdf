@@ -875,6 +875,7 @@ impl<'a> PptxTableParser<'a> {
                 color,
                 style: self.border_line_dash_style,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             };
             match self.current_border_dir {
                 BorderDir::Left => self.border_left = Some(side),

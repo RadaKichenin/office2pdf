@@ -1980,12 +1980,7 @@ pub(super) fn parse_series_stroke_defaults(xml: &str) -> crate::ir::ChartStrokeG
 }
 
 fn read_line_cap(element: &quick_xml::events::BytesStart<'_>) -> Option<crate::ir::LineCap> {
-    match xml_util::get_attr_str(element, b"cap").as_deref() {
-        Some("flat") => Some(crate::ir::LineCap::Flat),
-        Some("rnd") => Some(crate::ir::LineCap::Round),
-        Some("sq") => Some(crate::ir::LineCap::Square),
-        _ => None,
-    }
+    crate::parser::drawingml::line_cap(element)
 }
 
 fn read_line_join(
