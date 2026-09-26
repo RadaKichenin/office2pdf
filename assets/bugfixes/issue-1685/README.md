@@ -153,7 +153,7 @@ def build(path, line):
 
 if __name__ == "__main__":
     for tag, line in (("240", 240), ("259", 259), ("absent", None), ("360", 360)):
-        out = f"/Volumes/T7/scratch/issue-1685/probe-{tag}.docx"
+        out = f"probe-{tag}.docx"
         build(out, line)
         print(out)
 ```
