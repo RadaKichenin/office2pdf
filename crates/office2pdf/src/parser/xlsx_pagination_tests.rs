@@ -2,7 +2,7 @@ use super::*;
 use crate::ir::ChartAreaOutline;
 use crate::ir::{
     AxisTickMark, Block, BorderLineStyle, BorderSide, CellBorder, Color, HFInline, HeaderFooter,
-    HeaderFooterParagraph, LineJoin, Margins, PageSize, Paragraph, ParagraphStyle, Run,
+    HeaderFooterParagraph, LineCap, LineJoin, Margins, PageSize, Paragraph, ParagraphStyle, Run,
     SheetLineExtent, TableBorderPaintModel, TextStyle,
 };
 
@@ -764,6 +764,7 @@ fn test_fit_to_width_scales_an_anchored_line_shape_with_the_grid() {
                 color: Color::new(217, 217, 217),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1427,6 +1428,7 @@ fn test_trailing_strip_rows_with_a_fill_or_border_are_ink() {
                         color: Color { r: 0, g: 0, b: 0 },
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     ..CellBorder::default()
                 }),

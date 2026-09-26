@@ -1059,6 +1059,7 @@ fn band_region_border_draws_the_rule_between_rows() {
         color: Color::new(0x44, 0x72, 0xC4),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     let mut styles = TableStyleMap::new();
     styles.insert(

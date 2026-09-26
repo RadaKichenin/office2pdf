@@ -14,7 +14,7 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::PptxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Block, Color, FixedElementKind, FixedPage, LineSpacing, Page, PatternPreset, ShapeKind,
+    Block, Color, FixedElementKind, FixedPage, LineCap, LineSpacing, Page, PatternPreset, ShapeKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -1751,4 +1751,48 @@ fn polygon_shadow_uses_its_exact_outline_as_the_gaussian_source() {
 #[test]
 fn polygon_shadow_offset_smoke() {
     assert_produces_valid_pdf("polygon_shadow_offset.pptx");
+}
+
+// ---------------------------------------------------------------------------
+// issue_1682_shape_line_cap.pptx
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smoke_issue_1682_shape_line_cap() {
+    assert_produces_valid_pdf("issue_1682_shape_line_cap.pptx");
+}
+
+/// The two slide connectors declare `cap="rnd"` and `cap="sq"` on a `p:cxnSp`
+/// outline, and the slide layout's own two connectors declare no cap at all.
+///
+/// A native macOS PowerPoint export of this deck traces the four strokes as
+/// PDF `linecap` `1`, `2`, `0` and `0` — round, projecting square and two butt
+/// ends — so all three geometries have to survive parsing (issue #1682).
+#[test]
+fn structure_connector_line_caps_reach_the_stroke() {
+    let pages = fixed_pages("issue_1682_shape_line_cap.pptx");
+    assert_eq!(pages.len(), 1);
+
+    let caps: Vec<(f64, LineCap)> = pages[0]
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Shape(shape) => shape
+                .stroke
+                .as_ref()
+                .map(|stroke| (stroke.width, stroke.cap)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        caps,
+        vec![
+            (3.5, LineCap::Flat),
+            (1.0, LineCap::Flat),
+            (20.0, LineCap::Round),
+            (20.0, LineCap::Square),
+        ],
+        "the layout's capless connectors stay flat while each slide connector \
+         carries the cap it declares"
+    );
 }

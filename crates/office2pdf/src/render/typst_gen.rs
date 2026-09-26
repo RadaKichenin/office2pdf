@@ -11,12 +11,12 @@ use crate::ir::{
     ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage, FloatingImage,
     FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline, HeaderFooter,
     HeaderFooterFrame, IconShading, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing,
-    Insets, LegendPosition, LineBox, LineJoin, LineSpacing, List, ListKind, Margins, MathEquation,
-    Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph, ParagraphStyle,
-    PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow,
-    Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader, TabStop, Table,
-    TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData, TextBoxVerticalAlign,
-    TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    Insets, LegendPosition, LineBox, LineCap, LineJoin, LineSpacing, List, ListKind, Margins,
+    MathEquation, Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph,
+    ParagraphStyle, PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo,
+    Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader,
+    TabStop, Table, TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData,
+    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{

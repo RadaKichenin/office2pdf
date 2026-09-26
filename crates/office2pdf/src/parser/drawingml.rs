@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
-use crate::ir::{Color, DeclaredFontClass, ImageFormat};
+use crate::ir::{Color, DeclaredFontClass, ImageFormat, LineCap};
 use crate::parser::xml_util::{get_attr_i64, get_attr_str, parse_hex_color};
 
 /// Detect and fully decode a supported raster image.
@@ -34,6 +34,23 @@ pub(crate) fn validated_raster_format(data: &[u8]) -> Option<ImageFormat> {
     };
     image::load_from_memory_with_format(data, detected).ok()?;
     Some(format)
+}
+
+/// The end geometry an `a:ln/@cap` names, or `None` when the element states no
+/// cap or names a value `ST_LineCap` does not define.
+///
+/// `None` and `flat` are the same rendered stroke — DrawingML's default is
+/// `flat` — but they are different facts: an absent attribute lets a referenced
+/// theme line decide, while `cap="flat"` overrides it. Chart lines and shape
+/// outlines read the same attribute, so one mapping serves both (issues #1590,
+/// #1682).
+pub(crate) fn line_cap(element: &BytesStart<'_>) -> Option<LineCap> {
+    match get_attr_str(element, b"cap").as_deref() {
+        Some("flat") => Some(LineCap::Flat),
+        Some("rnd") => Some(LineCap::Round),
+        Some("sq") => Some(LineCap::Square),
+        _ => None,
+    }
 }
 
 /// A format-agnostic view of a theme's color scheme.

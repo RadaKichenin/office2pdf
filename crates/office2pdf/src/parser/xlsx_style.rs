@@ -1,4 +1,4 @@
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, LineJoin, TextStyle};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, LineCap, LineJoin, TextStyle};
 use crate::parser::xml_util::parse_argb_color;
 
 use super::xlsx_cells::ThemeFontSlot;
@@ -332,6 +332,7 @@ pub(super) fn extract_border_side(
         color,
         style,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     })
 }
 

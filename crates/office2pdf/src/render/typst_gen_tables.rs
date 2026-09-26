@@ -1900,6 +1900,7 @@ fn printed_gridline_side() -> BorderSide {
         color: Color::black(),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 
@@ -1917,6 +1918,7 @@ fn print_heading_frame_side() -> BorderSide {
         color: Color::black(),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 

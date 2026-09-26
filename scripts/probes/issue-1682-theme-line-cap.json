@@ -1,0 +1,21 @@
+{
+  "name": "issue-1682-theme-line-cap",
+  "base": "../../tests/fixtures/pptx/1-slide.pptx",
+  "part": "ppt/theme/theme1.xml",
+  "factor": "lnStyleLst entry 1 cap, reached through the connector's <a:lnRef idx=\"1\">",
+  "page": 1,
+  "variants": [
+    {
+      "value": "rnd",
+      "find": "<a:ln w=\"6350\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\">",
+      "replace": "<a:ln w=\"6350\" cap=\"rnd\" cmpd=\"sng\" algn=\"ctr\">",
+      "count": 1
+    },
+    {
+      "value": "sq",
+      "find": "<a:ln w=\"6350\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\">",
+      "replace": "<a:ln w=\"6350\" cap=\"sq\" cmpd=\"sng\" algn=\"ctr\">",
+      "count": 1
+    }
+  ]
+}

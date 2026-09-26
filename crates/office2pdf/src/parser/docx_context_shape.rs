@@ -20,8 +20,8 @@ use docx_rs::FromXML;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::{
-    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, GradientFill, Insets, LineJoin,
-    Shape, ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
+    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, GradientFill, Insets, LineCap,
+    LineJoin, Shape, ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
 };
 use crate::parser::drawingml::{
     ParsedColor, SchemeColors, parse_color_from_empty, parse_color_from_start,
@@ -280,6 +280,7 @@ impl ShapeBuilder {
             color: self.line_color.unwrap_or(Color { r: 0, g: 0, b: 0 }),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     }
 }
