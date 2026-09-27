@@ -4948,7 +4948,7 @@ fn small_malgun_sheet_baselines_match_native_isolated_rows() {
 /// from the run formatting the mark resolves. The cell path had no runs and no
 /// sibling paragraph to borrow metrics from, so it emitted nothing at all and
 /// the row collapsed onto its own rule — 0.500pt rule-to-rule against our
-/// 13.149pt text rows, where native Word for Mac 16.113.1 prints 13.200pt for
+/// 13.149pt text rows, where native Word for Mac 16.113.2 prints 13.200pt for
 /// both (issue #1700).
 #[test]
 fn a_blank_only_cell_paragraph_holds_the_line_its_mark_resolves() {
@@ -4979,7 +4979,7 @@ fn a_blank_only_cell_paragraph_holds_the_line_its_mark_resolves() {
 /// Triangulation, measured rather than assumed: the probe of issue #1700 with
 /// `<w:pPr><w:rPr><w:sz w:val="48"/></w:rPr></w:pPr>` on every blank cell —
 /// one factor changed — prints its blank row 28.080pt tall in Word for Mac
-/// 16.113.1 against 13.200pt for the inheriting package, which is 24pt of
+/// 16.113.2 against 13.200pt for the inheriting package, which is 24pt of
 /// Arial's own line plus the 0.48pt rule. So the mark's size scales the line,
 /// and a fixed height or the neighbouring row's would both be wrong.
 #[test]

@@ -2119,7 +2119,7 @@ fn a_run_less_cell_paragraph_carries_its_resolved_mark_formatting() {
 }
 
 /// One factor changed: the mark states `<w:sz w:val="48"/>` of its own. Native
-/// Word for Mac 16.113.1 prints that blank row 28.080pt tall against 13.200pt
+/// Word for Mac 16.113.2 prints that blank row 28.080pt tall against 13.200pt
 /// for the inheriting package — 24pt of Arial's line plus the 0.48pt rule — so
 /// the mark's own size must outrank the inherited one while the family it says
 /// nothing about still comes from `w:rPrDefault`.

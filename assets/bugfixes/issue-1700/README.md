@@ -6,7 +6,7 @@ emitted nothing at all for such a cell and the row collapsed onto its own rule.
 
 ## What Word does
 
-Native Word for Mac 16.113.1 exports of two one-factor probe packages. Only the
+Native Word for Mac 16.113.2 exports of two one-factor probe packages. Only the
 blank row's paragraph changes between them; everything else — Arial 11pt stated
 in `w:rPrDefault` and in a defined `Normal`, `w:after="0"` with a plain
 `w:line="240"` single rule, three 3000-twip cells per row with `w:sz="4"`
