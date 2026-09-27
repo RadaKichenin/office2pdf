@@ -11,8 +11,8 @@ use crate::ir::{
     ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage, FloatingImage,
     FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline, HeaderFooter,
     HeaderFooterFrame, IconShading, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing,
-    Insets, LegendPosition, LineBox, LineCap, LineJoin, LineSpacing, List, ListKind, Margins,
-    MathEquation, Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph,
+    InlineTextBox, Insets, LegendPosition, LineBox, LineCap, LineJoin, LineSpacing, List, ListKind,
+    Margins, MathEquation, Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph,
     ParagraphStyle, PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo,
     Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader,
     TabStop, Table, TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData,
@@ -2747,6 +2747,7 @@ fn hf_paragraph_metric_runs(paragraph: &crate::ir::HeaderFooterParagraph) -> Vec
                 style: style.clone(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }),
             HFInline::Image(_) | HFInline::PositionedTab(_) => None,
         })

@@ -14,6 +14,7 @@ fn test_data_bar_codegen() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         data_bar: Some(DataBarInfo {
@@ -118,6 +119,7 @@ fn test_data_bar_fixed_row_height_codegen() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         data_bar: Some(DataBarInfo {
@@ -173,6 +175,7 @@ fn test_icon_text_codegen() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         icon_text: Some("↑".to_string()),
@@ -242,6 +245,7 @@ fn test_table_colspan_clamped_to_available_columns() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         col_span: 3,
@@ -286,6 +290,7 @@ fn test_table_colspan_clamped_mid_row() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         col_span: 3,
@@ -318,6 +323,7 @@ fn test_table_colspan_no_column_widths_inferred() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         col_span: 5,
@@ -370,6 +376,7 @@ fn test_generate_typst_with_metadata_title_and_author() {
                 text: "Hello".to_string(),
                 style: TextStyle::default(),
                 footnote: None,
+                inline_box: None,
                 href: None,
             }],
             style: ParagraphStyle::default(),
@@ -395,6 +402,7 @@ fn test_generate_typst_with_metadata_title_only() {
                 text: "Hello".to_string(),
                 style: TextStyle::default(),
                 footnote: None,
+                inline_box: None,
                 href: None,
             }],
             style: ParagraphStyle::default(),
@@ -415,6 +423,7 @@ fn test_generate_typst_without_metadata() {
             text: "Hello".to_string(),
             style: TextStyle::default(),
             footnote: None,
+            inline_box: None,
             href: None,
         }],
         style: ParagraphStyle::default(),
@@ -439,6 +448,7 @@ fn test_generate_typst_with_metadata_created_date() {
                 text: "Hello".to_string(),
                 style: TextStyle::default(),
                 footnote: None,
+                inline_box: None,
                 href: None,
             }],
             style: ParagraphStyle::default(),
@@ -464,6 +474,7 @@ fn test_generate_typst_with_metadata_date_only() {
                 text: "Hello".to_string(),
                 style: TextStyle::default(),
                 footnote: None,
+                inline_box: None,
                 href: None,
             }],
             style: ParagraphStyle::default(),
@@ -490,6 +501,7 @@ fn test_generate_typst_with_invalid_created_date() {
                 text: "Hello".to_string(),
                 style: TextStyle::default(),
                 footnote: None,
+                inline_box: None,
                 href: None,
             }],
             style: ParagraphStyle::default(),
@@ -684,6 +696,7 @@ fn test_font_substitution_calibri_produces_fallback_list() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -707,6 +720,7 @@ fn test_font_substitution_arial_produces_fallback_list() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -729,6 +743,7 @@ fn test_font_substitution_unknown_font_no_fallback() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -754,6 +769,7 @@ fn test_font_substitution_times_new_roman() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -776,6 +792,7 @@ fn test_font_family_infers_medium_weight_from_family_name() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -797,6 +814,7 @@ fn test_font_family_infers_extrabold_weight_from_family_name() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -818,6 +836,7 @@ fn test_generate_typst_prefers_office_font_order_when_context_present() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let context = FontSearchContext::for_test(
@@ -863,6 +882,7 @@ fn test_generate_heading_level_1() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -884,6 +904,7 @@ fn test_generate_heading_level_2() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -907,6 +928,7 @@ fn test_generate_heading_levels_3_to_6() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let result = generate_typst(&doc).unwrap().source;
@@ -934,6 +956,7 @@ fn test_generate_heading_with_styled_run() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -952,6 +975,7 @@ fn test_generate_regular_paragraph_no_heading() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -979,6 +1003,7 @@ fn test_spill_continuation_redraws_the_line_shifted_left_and_clipped_at_the_grid
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         spill_width: Some(40.0),
@@ -1030,6 +1055,7 @@ fn test_spill_width_codegen() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         spill_width: Some(200.0),
@@ -1085,6 +1111,7 @@ fn test_table_default_vertical_align_codegen() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 ..TableCell::default()
@@ -1126,6 +1153,7 @@ fn test_vert_text_box_remaps_insets() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         padding: Insets {
@@ -1182,6 +1210,7 @@ fn test_non_repeating_header_rows_emit_a_separate_header_block() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             ..TableCell::default()
@@ -1238,6 +1267,7 @@ fn test_header_without_non_repeating_rows_stays_a_single_block() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             ..TableCell::default()
@@ -1284,6 +1314,7 @@ fn test_data_bar_is_inset_from_the_row_edges() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         data_bar: Some(DataBarInfo {
@@ -1335,6 +1366,7 @@ fn test_data_bar_in_a_short_row_keeps_a_visible_height() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         data_bar: Some(DataBarInfo {
@@ -1383,6 +1415,7 @@ fn icon_cell(icon: &str, color: Color) -> TableCell {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         icon_text: Some(icon.to_string()),
@@ -2089,6 +2122,7 @@ fn make_sheet_text_box(anchor_row: u32, x_offset_pt: f64, height: f64) -> crate:
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         fill: None,

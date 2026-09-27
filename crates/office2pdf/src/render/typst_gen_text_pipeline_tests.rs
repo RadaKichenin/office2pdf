@@ -216,6 +216,7 @@ fn test_generate_rtl_paragraph() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -248,6 +249,7 @@ fn test_generate_mixed_rtl_ltr_paragraphs() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
         make_paragraph("English text"),
@@ -333,6 +335,7 @@ fn test_generate_paragraph_all_alignment_variants() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let output = generate_typst(&doc);
@@ -551,12 +554,14 @@ fn test_unstyled_run_with_parens_after_styled_run() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "(parenthetical note)".to_string(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -726,6 +731,7 @@ fn the_auto_space_marker_becomes_a_quarter_of_the_runs_size() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -759,6 +765,7 @@ fn the_auto_space_scales_with_the_run_not_the_document() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let result = generate_typst(&doc).unwrap().source;
@@ -792,6 +799,7 @@ fn korean_paragraph(text: &str, alignment: Option<Alignment>, family: Option<&st
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -1403,6 +1411,7 @@ fn the_frames_bottom_edge_scales_with_the_font_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let result = generate_typst(&doc).unwrap().source;
@@ -1436,6 +1445,7 @@ fn a_letter_spaced_run_is_not_framed() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1476,6 +1486,7 @@ fn a_letter_spaced_slide_run_declines_the_advance_grid() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1640,24 +1651,28 @@ fn a_docx_table_cell_breaks_only_an_overlong_latin_token() {
                     style: linked_style(Color::black()),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "WEL".to_string(),
                     style: linked_style(Color::new(255, 0, 0)),
                     href: href.clone(),
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "CO".to_string(),
                     style: linked_style(Color::new(0, 0, 255)),
                     href: href.clone(),
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "ME".to_string(),
                     style: linked_style(Color::new(0, 128, 0)),
                     href,
                     footnote: None,
+                    inline_box: None,
                 },
             ],
         })],
@@ -1759,6 +1774,7 @@ fn make_text_cell_styled(text: &str, family: &str, font_size: f64) -> TableCell 
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1779,6 +1795,7 @@ fn make_text_box_with_list(x: f64, y: f64, w: f64, h: f64, text: &str) -> FixedE
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -1875,6 +1892,7 @@ fn a_docx_list_item_keeps_each_hangul_eojeol_whole() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -2010,6 +2028,7 @@ fn styled_paragraph(text: &str, style: TextStyle) -> Block {
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -2256,6 +2275,7 @@ fn paragraph_of_runs(style: ParagraphStyle, texts: &[(&str, TextStyle)]) -> Bloc
                 style: run_style.clone(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             })
             .collect(),
     })
@@ -2400,6 +2420,7 @@ fn arabic_list_source(kind: crate::ir::ListKind, marker_text: Option<&str>) -> S
                         style: item_style,
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -2548,6 +2569,7 @@ fn test_unembedded_aptos_footer_uses_noto_sans_on_an_aptos_host() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2609,6 +2631,7 @@ fn italic_run(text: &str, family: &str) -> Run {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -3413,6 +3436,7 @@ fn a_run_naming_a_light_member_states_its_weight_where_the_face_is_indexed() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     };
 
     let light_indexed = resolve_font_search_context_from_fonts(&[noto_serif_at_weight(300)]);
@@ -3657,6 +3681,7 @@ fn test_centred_sheet_line_seat_is_scoped_to_fitting_single_lines() {
                         style: libertinus_total(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 ..TableCell::default()

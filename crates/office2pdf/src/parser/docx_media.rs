@@ -1,7 +1,8 @@
 use super::contexts::DocxConversionContext;
 use super::{
     Block, DrawingTextBoxInfo, FloatingImage, FloatingTextBox, HyperlinkMap, ImageData, ImageMap,
-    StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks, convert_table,
+    InlineTextBox, Paragraph, StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks,
+    convert_table,
 };
 use crate::parser::units::emu_to_pt;
 
@@ -217,15 +218,31 @@ fn extract_vml_style_dimension(style: Option<&str>, key: &str) -> Option<f64> {
     None
 }
 
+/// Where a `<w:drawing>` text box belongs in the document.
+pub(super) enum DrawingTextBoxPlacement {
+    /// The drawing is not a text box.
+    Absent,
+    /// `wp:anchor`: a box positioned by its own offsets, as its own block.
+    Floating(Vec<Block>),
+    /// `wp:inline`: a box on the line of the paragraph that anchors it,
+    /// carried by the run it was anchored to (issue #1690).
+    Inline(Box<InlineTextBox>),
+    /// `wp:inline` holding content the inline box cannot yet lay out — a table,
+    /// or a picture. Those keep the flattened flow blocks this path always
+    /// emitted.
+    /// TODO(#1889): lay a table or a picture out inside the inline box too.
+    InlineFlattened(Vec<Block>),
+}
+
 pub(super) fn extract_drawing_text_box_blocks(
     drawing: &docx_rs::Drawing,
     images: &ImageMap,
     hyperlinks: &HyperlinkMap,
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
-) -> Vec<Block> {
+) -> DrawingTextBoxPlacement {
     let Some(docx_rs::DrawingData::TextBox(text_box)) = &drawing.data else {
-        return Vec::new();
+        return DrawingTextBoxPlacement::Absent;
     };
 
     let layout: DrawingTextBoxInfo = ctx.drawing_text_boxes.consume_next();
@@ -245,37 +262,55 @@ pub(super) fn extract_drawing_text_box_blocks(
         }
     }
 
-    if text_box.position_type == docx_rs::DrawingPositionType::Anchor {
-        let wrap_mode = ctx.wraps.consume_next();
-        let offset_x = match text_box.position_h {
-            docx_rs::DrawingPosition::Offset(emu) => emu_to_pt(emu),
-            docx_rs::DrawingPosition::Align(_) => 0.0,
-        };
-        let offset_y = match text_box.position_v {
-            docx_rs::DrawingPosition::Offset(emu) => emu_to_pt(emu),
-            docx_rs::DrawingPosition::Align(_) => 0.0,
-        };
-        let (width, height) = resolve_drawing_text_box_size(text_box, layout);
-
-        vec![Block::FloatingTextBox(FloatingTextBox {
-            content: blocks,
-            wrap_mode,
+    if text_box.position_type != docx_rs::DrawingPositionType::Anchor {
+        let (width, height) = resolve_drawing_text_box_size(text_box, &layout);
+        // Only paragraphs lay out inside the box so far. A box holding a table
+        // or a picture keeps the flattened flow blocks this path always emitted,
+        // so its content still reaches the page (issue #1889).
+        let mut paragraphs: Vec<Paragraph> = Vec::with_capacity(blocks.len());
+        for block in &blocks {
+            match block {
+                Block::Paragraph(paragraph) => paragraphs.push(paragraph.clone()),
+                _ => return DrawingTextBoxPlacement::InlineFlattened(blocks),
+            }
+        }
+        return DrawingTextBoxPlacement::Inline(Box::new(InlineTextBox {
+            content: paragraphs,
             width,
             height,
-            shape_rotation_deg: None,
-            padding: crate::ir::Insets::default(),
-            vertical_align: crate::ir::TextBoxVerticalAlign::Top,
-            offset_x,
-            offset_y,
-        })]
-    } else {
-        blocks
+            padding: layout.padding,
+            stroke: layout.stroke,
+            fill: layout.fill,
+        }));
     }
+
+    let wrap_mode = ctx.wraps.consume_next();
+    let offset_x = match text_box.position_h {
+        docx_rs::DrawingPosition::Offset(emu) => emu_to_pt(emu),
+        docx_rs::DrawingPosition::Align(_) => 0.0,
+    };
+    let offset_y = match text_box.position_v {
+        docx_rs::DrawingPosition::Offset(emu) => emu_to_pt(emu),
+        docx_rs::DrawingPosition::Align(_) => 0.0,
+    };
+    let (width, height) = resolve_drawing_text_box_size(text_box, &layout);
+
+    DrawingTextBoxPlacement::Floating(vec![Block::FloatingTextBox(FloatingTextBox {
+        content: blocks,
+        wrap_mode,
+        width,
+        height,
+        shape_rotation_deg: None,
+        padding: crate::ir::Insets::default(),
+        vertical_align: crate::ir::TextBoxVerticalAlign::Top,
+        offset_x,
+        offset_y,
+    })])
 }
 
 fn resolve_drawing_text_box_size(
     text_box: &docx_rs::TextBox,
-    layout: DrawingTextBoxInfo,
+    layout: &DrawingTextBoxInfo,
 ) -> (f64, f64) {
     let width = layout.width_pt.unwrap_or_else(|| {
         if text_box.size.0 > 0 {

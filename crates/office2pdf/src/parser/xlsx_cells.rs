@@ -3166,6 +3166,7 @@ pub(super) fn build_rows_for_range(
                             .unwrap_or_else(|| text_style.clone()),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     })
                     .collect()
             } else if value.is_empty() {
@@ -3176,6 +3177,7 @@ pub(super) fn build_rows_for_range(
                     style: text_style.clone(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }]
             };
 

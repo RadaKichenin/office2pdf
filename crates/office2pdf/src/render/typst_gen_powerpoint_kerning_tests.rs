@@ -99,6 +99,7 @@ fn place_text(
         style: style.clone(),
         href: None,
         footnote: None,
+        inline_box: None,
     }];
     if marker {
         runs.push(Run {
@@ -109,6 +110,7 @@ fn place_text(
             },
             href: None,
             footnote: None,
+            inline_box: None,
         });
     }
     let document = make_doc(vec![make_fixed_page(

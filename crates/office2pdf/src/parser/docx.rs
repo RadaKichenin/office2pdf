@@ -11,10 +11,10 @@ const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, Caption, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
-    ImageParagraphSpacing, Insets, LineCap, LineJoin, LineSpacing, Page, PageNumbering,
-    PairKerning, Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop,
-    Table, TableCell, TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign,
-    WordCompatibilityMode,
+    ImageParagraphSpacing, InlineTextBox, Insets, LineCap, LineJoin, LineSpacing, Page,
+    PageNumbering, PairKerning, Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment,
+    TabLeader, TabStop, Table, TableCell, TableOfContents, TableRow, TextDirection, TextStyle,
+    VerticalTextAlign, WordCompatibilityMode,
 };
 use crate::parser::Parser;
 
@@ -35,8 +35,8 @@ use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
 };
 use self::media::{
-    extract_drawing_image, extract_drawing_text_box_blocks, extract_shape_image,
-    extract_vml_shape_text_box,
+    DrawingTextBoxPlacement, extract_drawing_image, extract_drawing_text_box_blocks,
+    extract_shape_image, extract_vml_shape_text_box,
 };
 #[cfg(test)]
 use self::sections::extract_page_size;
@@ -721,6 +721,7 @@ fn build_text_run(
         style: resolve_run_style(run_property, is_small_caps, resolved_style, style_map),
         href,
         footnote: None,
+        inline_box: None,
     })
 }
 
@@ -757,6 +758,10 @@ struct RunChildrenMedia {
     has_column_break: bool,
     has_page_break: bool,
     text_box_blocks: Vec<Block>,
+    /// The `wp:inline` text boxes this run anchors. They belong on the anchor
+    /// paragraph's own line, so they ride the run rather than becoming flow
+    /// blocks beneath it (issue #1690).
+    inline_text_boxes: Vec<InlineTextBox>,
 }
 
 /// Scan a run's children for drawings, VML shapes, and layout breaks.
@@ -773,6 +778,7 @@ fn extract_run_children_media(
     let mut has_column_break: bool = false;
     let mut has_page_break: bool = false;
     let mut text_box_blocks: Vec<Block> = Vec::new();
+    let mut inline_text_boxes: Vec<InlineTextBox> = Vec::new();
 
     for run_child in &run.children {
         if let docx_rs::RunChild::Drawing(drawing) = run_child {
@@ -795,9 +801,16 @@ fn extract_run_children_media(
                 {
                     inline_images.push(img_block);
                 }
-                text_box_blocks.extend(extract_drawing_text_box_blocks(
-                    drawing, images, hyperlinks, style_map, ctx,
-                ));
+                match extract_drawing_text_box_blocks(drawing, images, hyperlinks, style_map, ctx) {
+                    DrawingTextBoxPlacement::Absent => {}
+                    DrawingTextBoxPlacement::Floating(blocks)
+                    | DrawingTextBoxPlacement::InlineFlattened(blocks) => {
+                        text_box_blocks.extend(blocks);
+                    }
+                    DrawingTextBoxPlacement::Inline(inline_box) => {
+                        inline_text_boxes.push(*inline_box);
+                    }
+                }
                 if drawing.data.is_none()
                     && let Some(shape) = ctx.drawing_shapes.consume_next()
                 {
@@ -834,6 +847,7 @@ fn extract_run_children_media(
         has_column_break,
         has_page_break,
         text_box_blocks,
+        inline_text_boxes,
     }
 }
 
@@ -1012,6 +1026,7 @@ fn resolve_note_runs(content: &NoteContent, style_map: &StyleMap) -> Vec<Run> {
             style: merge_text_style(&note_run.explicit, note_style),
             href: None,
             footnote: None,
+            inline_box: None,
         })
         .collect()
 }
@@ -1223,6 +1238,7 @@ fn convert_paragraph_blocks(
                             style: TextStyle::default(),
                             href: None,
                             footnote: Some(resolve_note_runs(&content, style_map)),
+                            inline_box: None,
                         });
                     }
                     continue;
@@ -1328,6 +1344,19 @@ fn convert_paragraph_blocks(
                     ) {
                         runs.push(ir_run);
                     }
+                }
+
+                // An inline text box sits on this paragraph's line, after
+                // whatever text its own `w:r` carried, so it joins the runs
+                // rather than the flow blocks (issue #1690).
+                for inline_box in media.inline_text_boxes {
+                    runs.push(Run {
+                        text: String::new(),
+                        style: TextStyle::default(),
+                        href: None,
+                        footnote: None,
+                        inline_box: Some(Box::new(inline_box)),
+                    });
                 }
             }
             ParagraphItem::Hyperlink(hyperlink) => {

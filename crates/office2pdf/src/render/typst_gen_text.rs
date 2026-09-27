@@ -3316,6 +3316,10 @@ fn split_runs_on_hard_breaks(runs: &[Run]) -> Option<Vec<PowerPointHardBreakLine
                         style: run.style.clone(),
                         href: run.href.clone(),
                         footnote: run.footnote.clone(),
+                        // A run carrying an inline text box carries no text, so
+                        // it never reaches a split segment; the box travels on
+                        // the whole-run clone below.
+                        inline_box: None,
                     });
             }
             lines.push(PowerPointHardBreakLine {
@@ -3334,6 +3338,7 @@ fn split_runs_on_hard_breaks(runs: &[Run]) -> Option<Vec<PowerPointHardBreakLine
                     style: run.style.clone(),
                     href: run.href.clone(),
                     footnote: run.footnote.clone(),
+                    inline_box: None,
                 });
         } else if segment_start == 0 {
             lines
@@ -3565,6 +3570,16 @@ pub(super) enum EojeolWrap {
     },
 }
 
+impl EojeolWrap {
+    /// Fall back to syllable breaking when `condition` holds.
+    ///
+    /// The eojeol path rebuilds a line out of Hangul tokens, so anything in the
+    /// runs that is not text disappears from it.
+    fn without_eojeol_frames_if(self, condition: bool) -> Self {
+        if condition { Self::Syllable } else { self }
+    }
+}
+
 /// The longest token still framed when its width cannot be measured, in
 /// characters.
 ///
@@ -3635,10 +3650,13 @@ fn generate_runs_with_metrics(
     eojeol_wrap: EojeolWrap,
     run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
+    // The eojeol path rebuilds the line from Hangul tokens, and a run carrying
+    // an inline text box holds no text to tokenise — it would be dropped, and
+    // the box with it. Such a paragraph keeps the plain path (issue #1690).
     let EojeolWrap::Eojeol {
         line_box_em,
         measure_pt,
-    } = eojeol_wrap
+    } = eojeol_wrap.without_eojeol_frames_if(runs.iter().any(|run| run.inline_box.is_some()))
     else {
         for (index, run) in runs.iter().enumerate() {
             generate_run_at_with_metrics(out, run, index == 0, run_line_metrics);
@@ -3904,6 +3922,7 @@ fn push_overlong_character(chunk: &mut Vec<EojeolPiece>, source: &EojeolPiece, c
             style: source.run.style.clone(),
             href: source.run.href.clone(),
             footnote: None,
+            inline_box: None,
         },
     });
 }
@@ -4060,6 +4079,7 @@ fn push_eojeol_piece(
             style: run.style.clone(),
             href: run.href.clone(),
             footnote: None,
+            inline_box: None,
         },
     };
     if !is_delimiter {
@@ -4263,8 +4283,12 @@ fn split_runs_on_tabs(runs: &[Run]) -> Vec<Vec<Run>> {
     let mut segments: Vec<Vec<Run>> = vec![Vec::new()];
 
     for run in runs {
-        if run.footnote.is_some() || !run.text.contains('\t') {
-            if run.footnote.is_some() || !run.text.is_empty() {
+        // A run carrying a footnote or an inline text box has no text of its
+        // own, so the emptiness test below would drop it along with the box
+        // (issue #1690).
+        let carries_object: bool = run.footnote.is_some() || run.inline_box.is_some();
+        if carries_object || !run.text.contains('\t') {
+            if carries_object || !run.text.is_empty() {
                 segments
                     .last_mut()
                     .expect("split_runs_on_tabs should always have a segment")
@@ -4287,6 +4311,7 @@ fn split_runs_on_tabs(runs: &[Run]) -> Vec<Vec<Run>> {
                         style: run.style.clone(),
                         href: run.href.clone(),
                         footnote: None,
+                        inline_box: None,
                     });
             }
         }
@@ -4331,6 +4356,7 @@ fn extract_decimal_anchor_runs(runs: &[Run]) -> Option<Vec<Run>> {
                 style: run.style.clone(),
                 href: run.href.clone(),
                 footnote: None,
+                inline_box: None,
             });
         }
 
@@ -4531,6 +4557,55 @@ fn generate_run_at_with_metrics(
     generate_run_seated_with_metrics(out, run, opens_line, None, run_line_metrics);
 }
 
+/// Write an inline DrawingML text box as one item on its paragraph's line.
+///
+/// A Typst `box` takes part in the line that holds it, so the line grows to the
+/// box's height and the text after it keeps the same baseline — which is how
+/// Word lays out a `wp:inline` drawing. On the issue's package that puts the
+/// anchor baseline at 108.00pt, the box on 72.00-108.00pt, and every line below
+/// it where Word puts it (issue #1690).
+///
+/// The content is placed out of flow because Typst otherwise aligns an inline
+/// box on the *first baseline of its content*, which leaves the box hanging
+/// below the line instead of standing on it: measured at 85.92pt for that same
+/// anchor baseline. With the content placed, the box's own bottom edge is its
+/// baseline. The anchored text box path uses the same `#place(top + left)`.
+fn write_inline_text_box(out: &mut String, inline_box: &InlineTextBox) {
+    let padding: &Insets = &inline_box.padding;
+    let inner_width: f64 = (inline_box.width - padding.left - padding.right).max(0.0);
+    let _ = write!(
+        out,
+        "#box(width: {}pt, height: {}pt, inset: {}",
+        format_f64(inline_box.width),
+        format_f64(inline_box.height),
+        super::format_insets(padding),
+    );
+    if let Some(fill) = inline_box.fill {
+        let _ = write!(out, ", fill: {}", rgb(&fill));
+    }
+    super::write_shape_stroke(out, &inline_box.stroke);
+    let _ = write!(
+        out,
+        ")[#place(top + left)[#block(width: {}pt)[",
+        format_f64(inner_width)
+    );
+    for paragraph in &inline_box.content {
+        // The box carries its own flow: Word lays its paragraphs out by the
+        // same model as the body's, so they take the same emitter. It writes
+        // markup into `out` and has no failure path of its own; the `Result` is
+        // the block generator's uniform signature.
+        let _ = generate_paragraph(
+            out,
+            paragraph,
+            None,
+            DEFAULT_TAB_WIDTH_PT,
+            false,
+            Some(inner_width),
+        );
+    }
+    out.push_str("]]]");
+}
+
 /// As [`generate_run_at`], plus the descent the run's line box carries below
 /// the baseline, in points, when the caller knows it.
 ///
@@ -4550,6 +4625,13 @@ fn generate_run_seated_with_metrics(
     seat_bottom_pt: Option<f64>,
     run_line_metrics: Option<RunLineMetrics<'_>>,
 ) {
+    // The box is the run's whole content: Word anchors a `wp:inline` drawing to
+    // a run that carries no text of its own (issue #1690).
+    if let Some(inline_box) = run.inline_box.as_deref() {
+        write_inline_text_box(out, inline_box);
+        return;
+    }
+
     if let Some(ref content) = run.footnote {
         // The note's runs carry the style its `w:pStyle` and `w:rPr` resolved
         // to, so they emit through the ordinary run path rather than as a bare
