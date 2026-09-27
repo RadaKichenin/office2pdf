@@ -228,10 +228,11 @@ jobs:
         run: |
           cargo test --locked -p office2pdf --no-default-features --profile ci --lib font_feature
           cargo test --locked -p office2pdf --no-default-features --profile ci --test font_features
-          # Built under the ci profile so it reuses the dependencies compiled
-          # above instead of a second, dev-profile pass. office2pdf itself
-          # rebuilds once more because the CLI also enables `pdf-ops`.
-          cargo build --locked -p office2pdf-cli --no-default-features --profile ci
+          # Checked, not built: a ci-profile build of the CLI here recompiled
+          # dependencies at opt-level 2 for 4-6 min on Linux and macOS. A check
+          # does no codegen, so the profile only picks the target directory
+          # (and with it Windows' cached entry).
+          cargo check --locked -p office2pdf-cli --no-default-features --profile ci
 
   clippy:
     name: Clippy
