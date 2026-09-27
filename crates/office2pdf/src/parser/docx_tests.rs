@@ -1056,6 +1056,8 @@ mod layout_rtl_tests;
 mod math_chart_metadata_tests;
 #[path = "docx_paragraph_cursor_tests.rs"]
 mod paragraph_cursor_tests;
+#[path = "docx_tracked_paragraph_mark_tests.rs"]
+mod tracked_paragraph_mark_tests;
 
 #[test]
 fn issue_189_footer_preserves_inline_image_and_rtl_text() {

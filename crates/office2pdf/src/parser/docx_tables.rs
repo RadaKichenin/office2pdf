@@ -2,7 +2,7 @@ use super::contexts::{DocxConversionContext, ResolvedTableStyle, apply_table_tex
 use super::{
     Alignment, Block, BorderLineStyle, BorderSide, CellBorder, CellVerticalAlign, Color,
     HyperlinkMap, ImageMap, Insets, LineCap, LineJoin, MAX_TABLE_DEPTH, StyleMap, Table, TableCell,
-    TableRow, convert_paragraph_blocks, parse_hex_color,
+    TableRow, convert_paragraph_blocks, parse_hex_color, withheld_paragraph_block,
 };
 use crate::ir::TableBorderPaintModel;
 use crate::parser::units::{emu_to_pt, twips_to_pt};
@@ -1073,6 +1073,9 @@ fn extract_cell_content(
             _ => {}
         }
     }
+    // The cell's flow ends here, so a paragraph a removed mark withheld has no
+    // later paragraph of this cell to merge into (issue #1710).
+    blocks.extend(withheld_paragraph_block(ctx));
     blocks
 }
 

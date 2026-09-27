@@ -23,13 +23,14 @@ use self::contexts::scan_table_headers;
 use self::contexts::{
     BidiContext, ChartContext, ContextualSpacingContext, DocxConversionContext,
     DrawingShapeContext, DrawingTextBoxContext, DrawingTextBoxInfo, FieldContext, MathContext,
-    NoteContent, NoteContext, ParagraphContextualSpacing, ParagraphShadingContext,
-    SmallCapsContext, TableHeaderContext, TableStyleContext, VmlTextBoxContext, VmlTextBoxInfo,
-    WordWrapContext, WpgDrawingInfo, WrapContext, build_chart_context_from_xml,
-    build_math_context_from_xml, build_note_context_from_xml, build_wrap_context_from_xml,
-    extract_column_layout_from_section_property, is_note_reference_run, read_zip_text,
-    scan_column_layouts, scan_page_numbering, scan_style_paragraph_shading, scan_style_word_wrap,
-    seq_identifier, toc_caption_identifier, toc_heading_depth,
+    NoteContent, NoteContext, ParagraphContextualSpacing, ParagraphMarkContext,
+    ParagraphShadingContext, SmallCapsContext, TableHeaderContext, TableStyleContext,
+    VmlTextBoxContext, VmlTextBoxInfo, WordWrapContext, WpgDrawingInfo, WrapContext,
+    build_chart_context_from_xml, build_math_context_from_xml, build_note_context_from_xml,
+    build_wrap_context_from_xml, extract_column_layout_from_section_property,
+    is_note_reference_run, read_zip_text, scan_column_layouts, scan_page_numbering,
+    scan_style_paragraph_shading, scan_style_word_wrap, seq_identifier, toc_caption_identifier,
+    toc_heading_depth,
 };
 use self::lists::{
     NumberingMap, TaggedElement, build_numbering_map, extract_num_info, group_into_lists,
@@ -310,6 +311,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                     doc_xml.as_deref(),
                     styles_xml.as_deref(),
                 ),
+                paragraph_marks: ParagraphMarkContext::from_xml(doc_xml.as_deref()),
                 fields: FieldContext::default(),
                 default_paragraph_style_is_defined: styles_xml
                     .as_deref()
@@ -353,6 +355,7 @@ fn build_zip_preparse_assets(data: &[u8]) -> ZipPreParseAssets {
                 paragraph_shading: ParagraphShadingContext::from_xml(None),
                 word_wraps: WordWrapContext::from_xml(None),
                 contextual_spacing: ContextualSpacingContext::from_xml(None, None),
+                paragraph_marks: ParagraphMarkContext::from_xml(None),
                 fields: FieldContext::default(),
                 default_paragraph_style_is_defined: false,
                 paragraph_property_defaults_are_declared: false,
@@ -433,16 +436,30 @@ impl Parser for DocxParser {
         let mut pages: Vec<Page> = Vec::new();
         let mut section_layout_index: usize = 0;
         for (idx, child) in docx.document.children.iter().enumerate() {
+            // A paragraph a removed mark withheld merges into the next
+            // paragraph, and a bookmark or comment marker between the two does
+            // not interrupt that. Anything else ends the merge (issue #1710).
+            if matches!(
+                child,
+                docx_rs::DocumentChild::Table(_)
+                    | docx_rs::DocumentChild::TableOfContents(_)
+                    | docx_rs::DocumentChild::Section(_)
+            ) && let Some(block) = withheld_paragraph_block(&ctx)
+            {
+                elements.push(TaggedElement::Plain(vec![block]));
+            }
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match child {
                 docx_rs::DocumentChild::Paragraph(para) => {
-                    let mut tagged = vec![convert_paragraph_element(
+                    let mut tagged: Vec<TaggedElement> = convert_paragraph_element(
                         para,
                         &images,
                         &hyperlinks,
                         &style_map,
                         &ctx,
                         &docx.styles,
-                    )];
+                    )
+                    .into_iter()
+                    .collect();
                     // Inject math equations for this body child
                     let eqs = math.take(idx);
                     for eq in eqs {
@@ -493,6 +510,11 @@ impl Parser for DocxParser {
             if let docx_rs::DocumentChild::Paragraph(para) = child
                 && let Some(section_prop) = para.property.section_property.as_ref()
             {
+                // The section closes here, so a paragraph still withheld has no
+                // later paragraph in this flow to merge into (issue #1710).
+                if let Some(block) = withheld_paragraph_block(&ctx) {
+                    elements.push(TaggedElement::Plain(vec![block]));
+                }
                 let column_layout = match column_layouts.get(section_layout_index) {
                     Some(layout) => layout.clone(),
                     None => extract_column_layout_from_section_property(section_prop),
@@ -511,6 +533,11 @@ impl Parser for DocxParser {
                 )));
                 section_layout_index += 1;
             }
+        }
+
+        // The body ends, so nothing is left to merge a withheld paragraph into.
+        if let Some(block) = withheld_paragraph_block(&ctx) {
+            elements.push(TaggedElement::Plain(vec![block]));
         }
 
         let final_column_layout = match column_layouts.get(section_layout_index) {
@@ -621,7 +648,7 @@ fn convert_sdt_children(
     for child in &sdt.children {
         match child {
             docx_rs::StructuredDataTagChild::Paragraph(para) => {
-                result.push(convert_paragraph_element(
+                result.extend(convert_paragraph_element(
                     para, images, hyperlinks, style_map, ctx, styles,
                 ));
             }
@@ -650,14 +677,23 @@ fn convert_paragraph_element(
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
     styles: &docx_rs::Styles,
-) -> TaggedElement {
+) -> Option<TaggedElement> {
     let num_info = extract_num_info(para, styles);
 
     // Build the paragraph IR
     let mut blocks = Vec::new();
     convert_paragraph_blocks(para, &mut blocks, images, hyperlinks, style_map, ctx);
 
-    match num_info {
+    // A paragraph whose mark a tracked deletion or move removed is held back
+    // for the paragraph it merges into, so it contributes no element of its own
+    // here. An empty one would do: `group_into_lists` ends the list it is
+    // grouping at any element, so the items after the origin would start a
+    // second list (issue #1710).
+    if ctx.paragraph_marks.is_withholding() {
+        return (!blocks.is_empty()).then_some(TaggedElement::Plain(blocks));
+    }
+
+    Some(match num_info {
         Some(info) => {
             // Extract the actual Paragraph from the blocks.
             // List paragraphs may also produce page breaks and images before the paragraph.
@@ -699,7 +735,7 @@ fn convert_paragraph_element(
             }
         }
         None => TaggedElement::Plain(blocks),
-    }
+    })
 }
 
 /// Build a text `Run` from extracted text, merging explicit run styling with the
@@ -883,6 +919,8 @@ fn convert_wpg_drawing_blocks(
                 _ => {}
             }
         }
+        // The shape's flow ends with its own content (issue #1710).
+        content.extend(withheld_paragraph_block(ctx));
         if let Some(text_color) = child.text_color {
             apply_default_text_color(&mut content, text_color);
         }
@@ -1183,6 +1221,10 @@ fn convert_paragraph_blocks(
         },
         paragraph_property_defaults_are_declared: ctx.paragraph_property_defaults_are_declared,
     };
+    // A paragraph mark a tracked deletion or move removed is not in the final
+    // document, so this paragraph has no break of its own: it merges into the
+    // paragraph after it (issue #1710).
+    let mark_is_removed: bool = ctx.paragraph_marks.next_mark_is_removed(style_id);
 
     // Emit page break before the paragraph if requested
     if para.property.page_break_before == Some(true) {
@@ -1213,8 +1255,10 @@ fn convert_paragraph_blocks(
         .and_then(|id| style_map.get(id))
         .or_else(|| style_map.get(DOC_DEFAULT_STYLE_ID));
 
-    // Collect text runs and detect inline images
-    let mut runs: Vec<Run> = Vec::new();
+    // Collect text runs and detect inline images. A paragraph whose
+    // predecessor's mark was removed opens with that paragraph's surviving
+    // runs, because the two are one paragraph in the final view (issue #1710).
+    let mut runs: Vec<Run> = ctx.paragraph_marks.take_merged_runs();
     let mut inline_images: Vec<Block> = Vec::new();
     let mut emitted_paragraph: bool = false;
     let mut emitted_media_blocks: bool = false;
@@ -1398,8 +1442,7 @@ fn convert_paragraph_blocks(
         // Keep paragraph marks for floating drawing anchors. The drawing itself
         // is positioned by offsets, but the source paragraph still contributes
         // to flow spacing between the drawing cluster and following content.
-        push_paragraph_from_runs(
-            out,
+        let block: Block = build_paragraph_block(
             para,
             resolved_style,
             style_map,
@@ -1407,7 +1450,29 @@ fn convert_paragraph_blocks(
             &mut runs,
             caption_identifier.as_deref(),
         );
+        match block {
+            // The following paragraph's mark is the one that survives, so it
+            // supplies the merged paragraph's style, its numbering and its
+            // line — this one contributes only its runs (issue #1710).
+            Block::Paragraph(paragraph) if mark_is_removed => {
+                ctx.paragraph_marks.withhold(paragraph)
+            }
+            block => out.push(block),
+        }
     }
+}
+
+/// Emit whatever a removed paragraph mark held back, because what comes next is
+/// not the paragraph it would have merged into — a table, the end of a cell, or
+/// the end of the flow. Word never removes a container's last paragraph mark, so
+/// this keeps malformed input from losing text rather than serving a real shape.
+/// An empty withheld paragraph is dropped: that is the case issue #1710 is
+/// about, and it has no text to rescue.
+fn withheld_paragraph_block(ctx: &DocxConversionContext) -> Option<Block> {
+    ctx.paragraph_marks
+        .take_withheld()
+        .filter(|paragraph| !paragraph.runs.is_empty())
+        .map(Block::Paragraph)
 }
 
 fn push_inline_images(
@@ -1486,6 +1551,28 @@ fn push_paragraph_from_runs(
     runs: &mut Vec<Run>,
     caption_identifier: Option<&str>,
 ) {
+    out.push(build_paragraph_block(
+        para,
+        resolved_style,
+        style_map,
+        flow,
+        runs,
+        caption_identifier,
+    ));
+}
+
+/// The block a paragraph's collected runs become: a caption when the paragraph
+/// carries a `SEQ` field a `TOC \a` list collects, an ordinary paragraph
+/// otherwise. Built rather than pushed so a paragraph whose mark was removed can
+/// be held back for the next one instead (issue #1710).
+fn build_paragraph_block(
+    para: &docx_rs::Paragraph,
+    resolved_style: Option<&ResolvedStyle>,
+    style_map: &StyleMap,
+    flow: ParagraphFlow<'_>,
+    runs: &mut Vec<Run>,
+    caption_identifier: Option<&str>,
+) -> Block {
     let mut explicit_para_style = extract_paragraph_style(&para.property);
     explicit_para_style.background = flow.background;
     explicit_para_style.word_wrap = flow.word_wrap;
@@ -1564,12 +1651,12 @@ fn push_paragraph_from_runs(
         runs: std::mem::take(runs),
     };
     match (caption_identifier, entry_text) {
-        (Some(identifier), Some(entry_text)) => out.push(Block::Caption(Caption {
+        (Some(identifier), Some(entry_text)) => Block::Caption(Caption {
             identifier: identifier.to_string(),
             entry_text,
             paragraph,
-        })),
-        _ => out.push(Block::Paragraph(paragraph)),
+        }),
+        _ => Block::Paragraph(paragraph),
     }
 }
 
