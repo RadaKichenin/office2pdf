@@ -1866,7 +1866,7 @@ fn latin_text_resolves_through_the_latin_family_before_any_east_asian_face() {
 
     let latin_substitute = list
         .find("\"Times New Roman\"")
-        .expect("Liberation Serif's metric twin is offered: {list}");
+        .unwrap_or_else(|| panic!("Liberation Serif's metric twin is offered: {list}"));
     for east_asian in [
         "\"Noto Serif CJK SC\"",
         "\"Noto Serif SC\"",
@@ -1892,10 +1892,10 @@ fn latin_text_ranks_a_latin_substitute_ahead_of_a_korean_one() {
 
     let latin_substitute = list
         .find("\"Caladea\"")
-        .expect("Cambria's metric twin is offered: {list}");
+        .unwrap_or_else(|| panic!("Cambria's metric twin is offered: {list}"));
     let east_asian = list
         .find("\"Batang\"")
-        .expect("the declared East Asian family is offered: {list}");
+        .unwrap_or_else(|| panic!("the declared East Asian family is offered: {list}"));
     assert!(
         latin_substitute < east_asian,
         "a Latin run resolves the Latin family first: {list}"
@@ -1911,7 +1911,7 @@ fn east_asian_text_still_resolves_through_the_east_asian_family_first() {
 
     let east_asian = list
         .find("\"Noto Serif CJK SC\"")
-        .expect("the declared East Asian family is offered: {list}");
+        .unwrap_or_else(|| panic!("the declared East Asian family is offered: {list}"));
     for latin in ["\"Times New Roman\"", "\"Tinos\"", "\"DejaVu Serif\""] {
         let Some(index) = list.find(latin) else {
             continue;
