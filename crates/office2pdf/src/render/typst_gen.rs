@@ -1882,8 +1882,29 @@ fn generate_fixed_text_box(
 
     let inner_width_pt: f64 =
         (outer_width_pt - text_box.padding.left - text_box.padding.right).max(0.0);
-    let inner_height_pt: f64 =
-        (outer_height_pt - text_box.padding.top - text_box.padding.bottom).max(0.0);
+    // The frame's own content region, which PowerPoint allows to be negative:
+    // nothing stops `<a:bodyPr>` from declaring insets deeper than the shape's
+    // `<a:ext cy>`. Keep the signed value — the seat below is measured from it.
+    let content_region_height_pt: f64 =
+        outer_height_pt - text_box.padding.top - text_box.padding.bottom;
+    let inner_height_pt: f64 = content_region_height_pt.max(0.0);
+    // Typst cannot lay a block out in a region that short: it truncates the
+    // content or breaks it into regions stacked a whole inset sum apart, and
+    // slide 1 of `tests/fixtures/pptx/poi/with_japanese.pptx` ended up with
+    // every paragraph thousands of points above the slide (issue #1706).
+    // PowerPoint instead lays the text out at its natural height and seats it
+    // on that negative region, overflowing the frame and the slide edge. So
+    // the frame stops containing the text: it paints its own fill, stroke and
+    // shape, and the block is placed beside it at the seat computed below.
+    let insets_exceed_frame: bool = content_region_height_pt <= 0.0;
+    // With the text out of the frame, the frame's inset has nothing left to
+    // offset — and a padded `#place` would put the shape background back where
+    // the inset used to compensate for it.
+    let frame_padding: Insets = if insets_exceed_frame {
+        Insets::default()
+    } else {
+        text_box.padding
+    };
     let text_box_id: usize = ctx.next_text_box_id();
 
     let has_custom_shape: bool = text_box.shape_kind.is_some();
@@ -1893,7 +1914,7 @@ fn generate_fixed_text_box(
         "#block(width: {}pt, height: {}pt, inset: {}",
         format_f64(outer_width_pt),
         format_f64(outer_height_pt),
-        format_insets(&text_box.padding),
+        format_insets(&frame_padding),
     );
     if text_box.no_wrap {
         out.push_str(", clip: false");
@@ -1916,11 +1937,17 @@ fn generate_fixed_text_box(
             shape_kind,
             outer_width_pt,
             outer_height_pt,
-            &text_box.padding,
+            &frame_padding,
             text_box.fill.as_ref(),
             text_box.opacity,
             &text_box.stroke,
         );
+    }
+    if insets_exceed_frame {
+        // Close the paint-only frame. What follows is a sibling of it, so the
+        // seat below is measured from the frame's own top-left corner and the
+        // frame's height no longer caps the block's layout region.
+        out.push_str("]\n");
     }
     if let Some(paragraph) = single_line_fit_paragraph(text_box, inner_height_pt) {
         let mut raw_paragraph: Paragraph = paragraph.clone();
@@ -1972,7 +1999,7 @@ fn generate_fixed_text_box(
         }
         out.push_str("    ]\n");
         out.push_str("  }\n");
-    } else if let Some(paragraph) = wrapped_fit_paragraph(text_box) {
+    } else if let Some(paragraph) = wrapped_fit_paragraph(text_box, content_region_height_pt) {
         let _ = writeln!(
             out,
             "  #let text_box_raw_{text_box_id} = block(width: {}pt)[",
@@ -2033,6 +2060,17 @@ fn generate_fixed_text_box(
         out.push_str("  ]\n");
     }
 
+    if insets_exceed_frame {
+        write_overflowing_inset_seat(
+            out,
+            text_box_id,
+            text_box.vertical_align,
+            content_region_height_pt,
+            &text_box.padding,
+        );
+        return Ok(());
+    }
+
     match text_box.vertical_align {
         TextBoxVerticalAlign::Top => {
             let _ = writeln!(out, "  #text_box_content_{text_box_id}");
@@ -2060,6 +2098,81 @@ fn generate_fixed_text_box(
 
     out.push_str("]\n");
     Ok(())
+}
+
+/// Place a block whose frame is shallower than its own vertical insets.
+///
+/// PowerPoint collapses a content region of zero or negative height to the
+/// single line at its own middle, `tIns + (height - tIns - bIns) / 2` below the
+/// frame's top, and seats the block's natural height on that line as the
+/// anchor asks: `t` puts the block's top there, `ctr` its middle, `b` its
+/// bottom. The block then overflows the frame — and the slide — in both
+/// directions.
+///
+/// Measured, not inferred. Eight native PowerPoint for Mac exports of
+/// `tests/fixtures/pptx/poi/with_japanese.pptx`, whose frame is 0pt tall with
+/// 71.98pt insets: two with the frame grown to 540pt fix the block's own
+/// height at 440.44pt, and the six below keep the degenerate frame and place
+/// its top against that line. Each one's predicted position is within 0.21pt
+/// of the export, inside PowerPoint's 0.24pt quantisation. The `b` row's frame
+/// is also translated 360pt down the slide, which is a pure offset, because
+/// its block is otherwise drawn entirely above the slide's top edge.
+///
+/// | anchor | tIns | bIns | predicted | exported |
+/// | --- | ---: | ---: | ---: | ---: |
+/// | `ctr` | 71.98 | 71.98 | -220.22 | -220.10 |
+/// | `ctr` | 71.98 | 0 | -184.23 | -184.10 |
+/// | `t` | 71.98 | 71.98 | 0.00 | -0.02 |
+/// | `t` | 0 | 71.98 | -35.99 | -35.78 |
+/// | `t` | 71.98 | 0 | +35.99 | +35.98 |
+/// | `b` | 71.98 | 71.98 | -440.44 | -440.42 |
+///
+/// The block's top against the frame's top, in points. Neither seating the
+/// block on the top inset nor centring it on the frame reproduces the `t`
+/// rows: both are independent of `bIns`, which moves the exported block half
+/// its own change (issue #1706).
+fn write_overflowing_inset_seat(
+    out: &mut String,
+    text_box_id: usize,
+    vertical_align: TextBoxVerticalAlign,
+    content_region_height_pt: f64,
+    padding: &Insets,
+) {
+    // The collapsed region: what is left of it once its own negative height is
+    // spent equally against both insets.
+    let seat_line_pt: f64 = padding.top + content_region_height_pt / 2.0;
+    match vertical_align {
+        // The block's top is the line itself, so this seat needs no
+        // measurement.
+        TextBoxVerticalAlign::Top => {
+            let _ = writeln!(
+                out,
+                "  #place(top + left, dx: {}pt, dy: {}pt, text_box_content_{text_box_id})",
+                format_f64(padding.left),
+                format_f64(seat_line_pt),
+            );
+        }
+        TextBoxVerticalAlign::Center | TextBoxVerticalAlign::Bottom => {
+            let measured_height: String = format!("measure(text_box_content_{text_box_id}).height");
+            let seat_expr: String = match vertical_align {
+                TextBoxVerticalAlign::Center => {
+                    format!("{}pt - {measured_height} / 2", format_f64(seat_line_pt))
+                }
+                TextBoxVerticalAlign::Bottom => {
+                    format!("{}pt - {measured_height}", format_f64(seat_line_pt))
+                }
+                TextBoxVerticalAlign::Top => unreachable!(),
+            };
+            out.push_str("  #context {\n");
+            let _ = writeln!(out, "    let text_box_seat_{text_box_id} = {seat_expr}");
+            let _ = writeln!(
+                out,
+                "    place(top + left, dx: {}pt, dy: text_box_seat_{text_box_id}, text_box_content_{text_box_id})",
+                format_f64(padding.left),
+            );
+            out.push_str("  }\n");
+        }
+    }
 }
 
 fn write_page_setup(out: &mut String, size: &PageSize, margins: &Margins) {
@@ -4548,8 +4661,19 @@ fn single_line_fit_paragraph(text_box: &TextBoxData, inner_height_pt: f64) -> Op
     text_box.auto_fit.then_some(paragraph)
 }
 
-fn wrapped_fit_paragraph(text_box: &TextBoxData) -> Option<&Paragraph> {
+fn wrapped_fit_paragraph(
+    text_box: &TextBoxData,
+    content_region_height_pt: f64,
+) -> Option<&Paragraph> {
     if text_box.no_wrap || matches!(text_box.vertical_align, TextBoxVerticalAlign::Top) {
+        return None;
+    }
+    // The scale this path emits is the content region over the block's own
+    // height. A region that is zero or negative leaves nothing to fit and
+    // scales the text to a point, so every word lands on one origin and none
+    // of it is drawn. PowerPoint does not shrink a block it cannot fit either
+    // way — it lets it overflow at its natural size (issue #1706).
+    if content_region_height_pt <= 0.0 {
         return None;
     }
 

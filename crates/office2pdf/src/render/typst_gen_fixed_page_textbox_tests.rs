@@ -5428,3 +5428,323 @@ fn a_zero_baseline_shift_keeps_wrapped_lines_on_the_story_grid() {
         }
     }
 }
+
+// A text frame whose vertical insets are deeper than its own height has a
+// content region of zero or negative height. PowerPoint collapses that region
+// to the single line at its own middle, `tIns + (height - tIns - bIns) / 2`
+// below the frame's top, and seats the block's natural height on it as the
+// anchor asks — so the block overflows the frame, and the slide, in both
+// directions.
+//
+// Typst drops or truncates content laid out inside a container that short, so
+// the frame has to stop constraining it (issue #1706). Every anchor is
+// affected: the frame's height caps the layout region whether the block is
+// seated at its top, its middle or its bottom. The tests below pin that rule.
+
+/// Enough paragraphs that the block is several times deeper than the frame,
+/// which is what the degenerate region truncates.
+const OVERFLOWING_FRAME_LINES: [&str; 12] = [
+    "Footnote appears here",
+    "Bold italic underline",
+    "Here is a list:",
+    "Bullet 1",
+    "Bullet 2",
+    "Bullet 3",
+    "Subject is here",
+    "Here is a citation",
+    "(Kramer)",
+    "Row 1 column 1",
+    "Row 2 column 1",
+    "Row 2 column 2",
+];
+
+const OVERFLOWING_FRAME_ANCHORS: [crate::ir::TextBoxVerticalAlign; 3] = [
+    crate::ir::TextBoxVerticalAlign::Top,
+    crate::ir::TextBoxVerticalAlign::Center,
+    crate::ir::TextBoxVerticalAlign::Bottom,
+];
+
+fn overflowing_inset_frame_runs(
+    frame_height_pt: f64,
+    top_inset_pt: f64,
+    bottom_inset_pt: f64,
+    vertical_align: crate::ir::TextBoxVerticalAlign,
+) -> Vec<crate::render::pdf::PlacedTextRun> {
+    let content: Vec<Block> = OVERFLOWING_FRAME_LINES
+        .into_iter()
+        .map(make_paragraph)
+        .collect();
+    let document: Document = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_fixed_text_box(
+            0.0,
+            200.0,
+            400.0,
+            frame_height_pt,
+            Insets {
+                top: top_inset_pt,
+                right: 20.0,
+                bottom: bottom_inset_pt,
+                left: 20.0,
+            },
+            vertical_align,
+            content,
+        )],
+    )]);
+    let source = generate_typst(&document).unwrap();
+    crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap()
+}
+
+/// The vertical distance every run moved between two frames, which must be one
+/// number: the whole block travels together.
+fn overflowing_frame_block_shift(
+    before: &[crate::render::pdf::PlacedTextRun],
+    after: &[crate::render::pdf::PlacedTextRun],
+    context: &str,
+) -> f64 {
+    assert_eq!(before.len(), after.len(), "{context}");
+    assert!(!before.is_empty(), "{context}");
+    let shift: f64 = after[0].baseline_pt - before[0].baseline_pt;
+    for (before_run, after_run) in before.iter().zip(after) {
+        assert_eq!(before_run.text, after_run.text, "{context}");
+        assert!(
+            (after_run.baseline_pt - before_run.baseline_pt - shift).abs() < 0.01,
+            "{context}: {:?} moved {}pt where the block moved {shift}pt",
+            before_run.text,
+            after_run.baseline_pt - before_run.baseline_pt,
+        );
+    }
+    shift
+}
+
+#[test]
+fn a_frame_shorter_than_its_insets_keeps_every_line() {
+    for vertical_align in OVERFLOWING_FRAME_ANCHORS {
+        for (frame_height_pt, top_inset_pt, bottom_inset_pt) in
+            [(0.0, 60.0, 60.0), (24.0, 70.0, 18.0), (5.0, 2.5, 2.5)]
+        {
+            let runs = overflowing_inset_frame_runs(
+                frame_height_pt,
+                top_inset_pt,
+                bottom_inset_pt,
+                vertical_align,
+            );
+            // Typst splits a line into one run per word, so the drawn text is
+            // the concatenation rather than any single run.
+            let drawn: String = runs.iter().map(|run| run.text.as_str()).collect();
+            for expected in OVERFLOWING_FRAME_LINES {
+                let squashed: String = expected.chars().filter(|c| !c.is_whitespace()).collect();
+                assert!(
+                    drawn.replace(' ', "").contains(&squashed),
+                    "{vertical_align:?}, frame {frame_height_pt}pt, insets \
+                     {top_inset_pt}/{bottom_inset_pt}: lost {expected:?} — drew {drawn:?}"
+                );
+            }
+            // The frame's paragraphs are one block: a degenerate content
+            // region must not break them into regions stacked a whole inset
+            // sum apart. Default text is under 20pt, so no honest advance
+            // between two of these single-line paragraphs reaches 40pt.
+            let mut baselines: Vec<f64> = runs.iter().map(|run| run.baseline_pt).collect();
+            baselines.sort_by(f64::total_cmp);
+            baselines.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+            assert_eq!(baselines.len(), OVERFLOWING_FRAME_LINES.len());
+            for pair in baselines.windows(2) {
+                assert!(
+                    pair[1] - pair[0] < 40.0,
+                    "{vertical_align:?}, frame {frame_height_pt}pt, insets \
+                     {top_inset_pt}/{bottom_inset_pt}: the block broke apart: {baselines:?}"
+                );
+            }
+        }
+    }
+}
+
+/// The seat line is the collapsed region's middle, so each inset carries half
+/// of its own change into it — whatever the anchor. Measured on native
+/// PowerPoint for Mac exports of `tests/fixtures/pptx/poi/with_japanese.pptx`:
+/// dropping the frame's 71.98pt `bIns` to zero lowered the centred block
+/// 35.98pt and the top-anchored one 35.98pt, and dropping its `tIns` instead
+/// raised the top-anchored block 35.78pt. Seating the block on the top inset,
+/// or centring it on the frame, makes both `bIns` figures zero.
+#[test]
+fn each_inset_moves_an_overflowing_block_half_its_own_change() {
+    for vertical_align in OVERFLOWING_FRAME_ANCHORS {
+        let deep_bottom = overflowing_inset_frame_runs(0.0, 60.0, 60.0, vertical_align);
+        let shallow_bottom = overflowing_inset_frame_runs(0.0, 60.0, 20.0, vertical_align);
+        let bottom_shift: f64 = overflowing_frame_block_shift(
+            &deep_bottom,
+            &shallow_bottom,
+            &format!("{vertical_align:?}: bottom inset 60pt -> 20pt"),
+        );
+        assert!(
+            (bottom_shift - 20.0).abs() < 0.01,
+            "{vertical_align:?}: a 40pt shallower bottom inset must lower the block 20pt, \
+             moved {bottom_shift}pt"
+        );
+
+        let deep_top = overflowing_inset_frame_runs(0.0, 60.0, 60.0, vertical_align);
+        let shallow_top = overflowing_inset_frame_runs(0.0, 20.0, 60.0, vertical_align);
+        let top_shift: f64 = overflowing_frame_block_shift(
+            &deep_top,
+            &shallow_top,
+            &format!("{vertical_align:?}: top inset 60pt -> 20pt"),
+        );
+        assert!(
+            (top_shift + 20.0).abs() < 0.01,
+            "{vertical_align:?}: a 40pt shallower top inset must raise the block 20pt, \
+             moved {top_shift}pt"
+        );
+    }
+}
+
+/// `t`, `ctr` and `b` put the block's top, middle and bottom on the same seat
+/// line, so consecutive anchors step by exactly half the block's own height.
+/// A native PowerPoint for Mac export of the reported frame places the block's
+/// top 0.02pt below the seat line under `t` and 440.42pt above it under `b`,
+/// against a block measured at 440.44pt.
+#[test]
+fn the_three_anchors_of_an_overflowing_block_step_by_half_its_height() {
+    let top = overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Top);
+    let centre =
+        overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Center);
+    let bottom =
+        overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Bottom);
+    let to_centre: f64 = overflowing_frame_block_shift(&top, &centre, "top -> centre");
+    let to_bottom: f64 = overflowing_frame_block_shift(&centre, &bottom, "centre -> bottom");
+    assert!(
+        to_centre < -1.0,
+        "centring must lift the block off the seat line, moved {to_centre}pt"
+    );
+    assert!(
+        (to_bottom - to_centre).abs() < 0.01,
+        "the anchors must step evenly: top -> centre {to_centre}pt, centre -> bottom {to_bottom}pt"
+    );
+}
+
+/// A frame whose insets still leave a content region keeps the measured-slack
+/// path: only the degenerate frame changes shape.
+#[test]
+fn a_frame_taller_than_its_insets_keeps_the_measured_slack_path() {
+    let document: Document = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_fixed_text_box(
+            0.0,
+            200.0,
+            400.0,
+            200.0,
+            Insets {
+                top: 60.0,
+                right: 20.0,
+                bottom: 60.0,
+                left: 20.0,
+            },
+            crate::ir::TextBoxVerticalAlign::Center,
+            vec![make_paragraph("Subject is here")],
+        )],
+    )]);
+    let source = generate_typst(&document).unwrap().source;
+    assert!(
+        source.contains("text_box_slack_"),
+        "a frame with a positive content region keeps its slack spacer: {source}"
+    );
+}
+
+/// The reported package: `tests/fixtures/pptx/poi/with_japanese.pptx` slide 1
+/// holds a `p:sp` at `<a:off y="457200"/>` with `<a:ext cy="0"/>` and
+/// `914112` EMU — 71.98pt, just under an inch — of inset on all four sides,
+/// anchored `ctr`. Its content region is 143.95pt tall in the negative, and
+/// office2pdf drew the paragraphs in separate Typst
+/// regions stacked thousands of points above the slide, so none of them was
+/// visible (issue #1706).
+///
+/// Equal top and bottom insets put the inner region's centre on the frame's
+/// own origin, y = 36pt, whatever the block's natural height turns out to be.
+/// That midpoint is what the native PowerPoint for Mac export shows, and it is
+/// the one quantity this fixture pins independently of our line-height model.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_reported_zero_height_frame_centres_its_block_on_the_frame() {
+    use crate::config::ConvertOptions;
+    use crate::parser::Parser;
+    use crate::parser::pptx::PptxParser;
+
+    const FIXTURE: &[u8] = include_bytes!("../../../../tests/fixtures/pptx/poi/with_japanese.pptx");
+
+    let (document, _warnings) = PptxParser
+        .parse(FIXTURE, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap();
+
+    // `Footnote` opens the frame's first paragraph and `column` appears only in
+    // its last four; the slide's other text uses neither spelling.
+    let first: f64 = runs
+        .iter()
+        .filter(|run| run.text == "Footnote")
+        .map(|run| run.baseline_pt)
+        .fold(f64::INFINITY, f64::min);
+    let last: f64 = runs
+        .iter()
+        .filter(|run| run.text == "column")
+        .map(|run| run.baseline_pt)
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        first.is_finite() && last.is_finite(),
+        "the frame's first and last paragraphs must be drawn: {runs:?}"
+    );
+    // Baselines sit an ascender below the block's top and a descender above its
+    // bottom, so their midpoint trails the block's by a few points.
+    let midpoint: f64 = (first + last) / 2.0;
+    assert!(
+        (midpoint - 36.0).abs() < 15.0,
+        "the block must stay centred on the frame at 36pt, drawn {first}pt to {last}pt"
+    );
+}
+
+/// A `ctr` or `b` frame holding a single wrapping paragraph takes the
+/// shrink-to-fit path, whose scale is the content region over the block's own
+/// height. With no region left there is nothing to fit, and scaling by it
+/// collapses the text to a point: every word lands on the same origin and none
+/// of it is visible. PowerPoint does not shrink a block it cannot fit either
+/// way — the reported frame's block overflows the slide at its natural size
+/// (issue #1706).
+///
+/// `t` never reaches that path: `wrapped_fit_paragraph` excludes a
+/// top-anchored box for its own reasons, and a box that did not ask for
+/// `<a:normAutofit/>` is excluded from the single-line path. It is here as a
+/// regression guard on the plain branch it does take.
+#[test]
+fn a_single_paragraph_in_a_frame_shorter_than_its_insets_keeps_its_natural_width() {
+    for vertical_align in OVERFLOWING_FRAME_ANCHORS {
+        let document: Document = make_doc(vec![make_fixed_page(
+            720.0,
+            540.0,
+            vec![make_fixed_text_box(
+                0.0,
+                200.0,
+                400.0,
+                0.0,
+                Insets {
+                    top: 60.0,
+                    right: 20.0,
+                    bottom: 60.0,
+                    left: 20.0,
+                },
+                vertical_align,
+                vec![make_paragraph("Subject is here")],
+            )],
+        )]);
+        let source = generate_typst(&document).unwrap();
+        let runs = crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap();
+        let left_edges: Vec<f64> = runs.iter().map(|run| run.left_pt).collect();
+        let first: f64 = left_edges.first().copied().unwrap_or(f64::NAN);
+        let last: f64 = left_edges.last().copied().unwrap_or(f64::NAN);
+        assert!(
+            last - first > 20.0,
+            "{vertical_align:?}: the line must keep its own width, drew every run \
+             between {first}pt and {last}pt: {runs:?}"
+        );
+    }
+}
