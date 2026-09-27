@@ -4,9 +4,9 @@ This file is the canonical repository instruction source for all coding agents.
 
 - Always communicate and work in English.
 - Before starting development, check if `PRD.md` exists in the project root. If it does, read and follow the requirements defined in it throughout the development process.
-- **IMPORTANT: Always prefer Rust native implementations.** Avoid unnecessary external dependencies and leverage the Rust standard library as much as possible. Only use third-party crates when there is a clear, justified need.
-- **IMPORTANT: Follow Test-Driven Development (TDD).** See the **Testing (TDD)** section below for detailed rules.
-- **IMPORTANT: Read and follow `METHODOLOGY.md`** before starting any task.
+- Prefer Rust native implementations. Avoid unnecessary external dependencies and leverage the Rust standard library as much as possible. Only use third-party crates when there is a clear, justified need.
+- Follow Test-Driven Development (TDD); see **Testing (TDD)** below.
+- Read and follow `METHODOLOGY.md` before starting any task.
 - When editing `AGENTS.md` or `CLAUDE.md`, use the minimum words and sentences needed to convey 100% of the meaning.
 - After completing each planned task, run tests and commit before moving to the next task. **Skip tests if the change has no impact on runtime behavior** (e.g., docs, comments, CI config). Changes to runtime config files (YAML, JSON, etc. read by code) must still trigger tests.
 - **After any code change (feature addition, bug fix, refactoring, PR merge), check if `README.md` needs updating.** If project description, usage, setup, architecture, or API changed, update `README.md` with clear, concise language. Keep it minimal — only document what users need to know.
@@ -342,11 +342,11 @@ overrides that and must still sit on the internal disk: the sandbox cannot
 write to `/Volumes` at all (AppleEvent timeout -1712), which the harness
 enforces.
 
-The same container rule binds every other caller of those AppleScripts, and
-every one of them now follows it. The `GENERATE_MICROSOFT_GT=1` exports in
-`public_visual_audit.rs` and `scripts/measure_powerpoint_chart_axis.py` stage
-the fixtures and the PDFs in the driven app's container and copy the results
-out afterwards. `scripts/macos/export_business_golden_pdfs.sh` drives three
+The same container rule binds every other caller of those AppleScripts. The
+`GENERATE_MICROSOFT_GT=1` exports in `public_visual_audit.rs` and
+`scripts/measure_powerpoint_chart_axis.py` stage the fixtures and the PDFs in
+the driven app's container and copy the results out afterwards.
+`scripts/macos/export_business_golden_pdfs.sh` drives three
 apps, so it uses three stages — `Data/business-golden-export/` in each app's
 own container, removed when the run ends — and copies the PDFs back to its
 stage-root argument, which only the unsandboxed `pdfunite`/`pdfinfo` steps read
@@ -428,7 +428,7 @@ PR is the completion mark).
 
 ```sh
 scripts/issue_loop.sh --once --max-issues 1   # trial one issue
-scripts/issue_loop.sh --model claude-opus-5   # then run it unattended
+scripts/issue_loop.sh                         # then run it unattended (--model <id> to pin one)
 ```
 
 `scripts/issue_loop_prompt.md` carries the repository-specific instructions appended to
