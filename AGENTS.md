@@ -23,7 +23,7 @@ This file is the canonical repository instruction source for all coding agents.
 - **Use the reviewed dependency graph.** The workspace `Cargo.lock` is tracked. Pass `--locked` to build, test, and evidence commands; update dependencies explicitly and review the lockfile diff.
 - For I/O-bound tests (network, file), prefer async or use mocks to avoid blocking. For CPU-bound tests, use multi-thread parallelism.
 - If full test suite exceeds 30 seconds, investigate: split slow integration tests from fast unit tests, run unit tests first for quick feedback.
-- **Skip tests when no runtime impact.** In CI/CD, use path filters to trigger tests only when source code, test files, or runtime config files are modified. Non-runtime changes (docs, README, `.md`, CI pipeline config) should not trigger test runs.
+- **Skip tests when no runtime impact.** `ci.yml`'s `changes` job skips the Rust jobs on a PR that touches only `.md` files, `assets/`, or `references/`. Workflow edits still run them, so a CI change is exercised by its own PR.
 
 ## Test Fixture Storage
 
