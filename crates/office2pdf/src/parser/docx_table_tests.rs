@@ -947,6 +947,82 @@ fn cell_margins_overlay_the_resolved_default_table_style() {
     );
 }
 
+/// A package can define no table style at all — a minimally generated package
+/// has no `w:tblStyle`, no direct `w:tblCellMar` and no table style in
+/// `styles.xml`. Word insets such a cell by nothing vertically and 0.48pt
+/// horizontally, so falling through to Typst's symmetric 5pt put every cell
+/// line 5pt low and ended the table 5pt late (issue #1687).
+#[test]
+fn word_styleless_cell_margins_apply_when_no_table_style_is_defined() {
+    let data = build_docx_with_table_style(PARAGRAPH_STYLES_ONLY, TABLE_WITHOUT_STYLE);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = first_table(&doc);
+
+    assert_eq!(
+        table.default_cell_padding,
+        Some(Insets {
+            top: 0.0,
+            right: 0.48,
+            bottom: 0.0,
+            left: 0.48,
+        })
+    );
+    let source = crate::render::typst_gen::generate_typst(&doc)
+        .expect("the table renders")
+        .source;
+    assert!(
+        source.contains("inset: (top: 0pt, right: 0.48pt, bottom: 0pt, left: 0.48pt)"),
+        "Word's style-less cell margins must be emitted instead of Typst's 5pt default: {source}"
+    );
+}
+
+/// The same rule holds for a package with no `styles.xml` at all, which is what
+/// issue #1684's generated package looks like.
+#[test]
+fn word_styleless_cell_margins_apply_when_the_package_has_no_styles_part() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>{TABLE_WITHOUT_STYLE}<w:sectPr/></w:body>
+    </w:document>"#
+    );
+    let data = build_docx_with_math(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_table(&doc).default_cell_padding,
+        Some(Insets {
+            top: 0.0,
+            right: 0.48,
+            bottom: 0.0,
+            left: 0.48,
+        })
+    );
+}
+
+/// A per-cell `w:tcMar` in a package with no table style overlays only the side
+/// it states; the other three stay Word's style-less values.
+#[test]
+fn cell_margins_overlay_word_styleless_cell_margins() {
+    let table_xml = TABLE_WITHOUT_STYLE.replace(
+        "<w:tc>",
+        r#"<w:tc><w:tcPr>
+            <w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar>
+        </w:tcPr>"#,
+    );
+    let data = build_docx_with_table_style(PARAGRAPH_STYLES_ONLY, &table_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_table(&doc).rows[0].cells[0].padding,
+        Some(Insets {
+            top: 0.0,
+            right: 0.48,
+            bottom: 0.0,
+            left: 12.0,
+        })
+    );
+}
+
 #[test]
 fn test_table_row_uses_largest_effective_vertical_cell_margins() {
     let mut first_cell = docx_rs::TableCell::new()
@@ -1684,6 +1760,17 @@ const TABLE_WITHOUT_STYLE: &str = r#"<w:tbl>
     <w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>
     <w:tr><w:tc><w:p><w:r><w:t>Poster</w:t></w:r></w:p></w:tc></w:tr>
 </w:tbl>"#;
+
+/// A style sheet that defines paragraph styles but no table style, so no
+/// `w:tblCellMar` is reachable through the style chain (issue #1687).
+const PARAGRAPH_STYLES_ONLY: &str = r#"
+    <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+        <w:name w:val="Normal"/>
+    </w:style>
+    <w:style w:type="paragraph" w:styleId="Heading1">
+        <w:name w:val="heading 1"/>
+        <w:basedOn w:val="Normal"/>
+    </w:style>"#;
 
 const DEFAULT_TABLE_STYLE_WITH_MARGINS: &str = r#"
     <w:style w:type="table" w:default="1" w:styleId="TableNormal">
