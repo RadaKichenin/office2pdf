@@ -2896,13 +2896,32 @@ fn emitted_rects(source: &str) -> Vec<PlacedRect> {
         .filter_map(|line| {
             let (placement, extent) = line.split_once("rect(width: ")?;
             Some(PlacedRect {
-                dx: leading_pt(placement.split_once("dx: ")?.1)?,
-                dy: leading_pt(placement.split_once("dy: ")?.1)?,
+                dx: chained_placement(placement, "dx")?,
+                dy: chained_placement(placement, "dy")?,
                 width: leading_pt(extent)?,
                 height: leading_pt(extent.split_once("height: ")?.1)?,
             })
         })
         .collect()
+}
+
+/// What `placement` displaces the primitive that follows it along `axis`,
+/// summed over every `#place` in the chain.
+///
+/// A worksheet chart's plotted data is placed three times on one line — the
+/// clip box on the chart's own coordinates, an inner placement returning the
+/// origin to the chart's, then the primitive's own — so only the total is the
+/// coordinate it lands on (#1745). An unclipped primitive has one placement and
+/// reads back unchanged.
+fn chained_placement(placement: &str, axis: &str) -> Option<f64> {
+    let needle: String = format!("{axis}: ");
+    let mut rest: &str = placement;
+    let mut total: Option<f64> = None;
+    while let Some((_, after)) = rest.split_once(needle.as_str()) {
+        total = Some(total.unwrap_or(0.0) + leading_pt(after)?);
+        rest = after;
+    }
+    total
 }
 
 /// Each bar as `(start, thickness)` along the category axis — the horizontal
@@ -6193,6 +6212,181 @@ fn an_anchored_excel_worksheet_chart_rounds_column_edges_to_whole_sheet_points()
                  relative to the second category's {reference}pt; got:\n{source}"
             );
         }
+    }
+}
+
+/// The clip each line matching `needle` was wrapped in, one entry per line —
+/// `None` where that line places its markup unclipped.
+///
+/// A worksheet chart's plotted data is the only chart markup written inside a
+/// clip, and each primitive carries its own, so reading the clip off the
+/// needle's own line keeps the sheet table's clipped cells out of the answer.
+fn clips_wrapping(source: &str, needle: &str) -> Vec<Option<PlacedBox>> {
+    let lines: Vec<&str> = source
+        .lines()
+        .filter(|line| line.contains(needle))
+        .collect();
+    assert!(!lines.is_empty(), "no {needle} markup in:\n{source}");
+    lines
+        .into_iter()
+        .map(|line| {
+            let (placement, clipped) = line.split_once(", clip: true)[")?;
+            if !clipped.contains(needle) {
+                return None;
+            }
+            let (opening, extent) = placement.rsplit_once("box(width: ")?;
+            Some(PlacedBox {
+                dx: leading_pt(opening.rsplit_once("dx: ")?.1)?,
+                dy: leading_pt(opening.rsplit_once("dy: ")?.1)?,
+                width: leading_pt(extent)?,
+                height: leading_pt(extent.split_once("height: ")?.1)?,
+            })
+        })
+        .collect()
+}
+
+/// The one clip every line matching `needle` shares.
+fn shared_clip(source: &str, needle: &str) -> PlacedBox {
+    let clips: Vec<Option<PlacedBox>> = clips_wrapping(source, needle);
+    let first: PlacedBox =
+        clips[0].unwrap_or_else(|| panic!("{needle} is placed unclipped; source:\n{source}"));
+    for clip in &clips {
+        let clip: PlacedBox =
+            clip.unwrap_or_else(|| panic!("{needle} is placed unclipped; source:\n{source}"));
+        assert!(
+            same_length(clip.dx, first.dx)
+                && same_length(clip.dy, first.dy)
+                && same_length(clip.width, first.width)
+                && same_length(clip.height, first.height),
+            "{needle} uses two different clips, {first:?} and {clip:?}; source:\n{source}"
+        );
+    }
+    first
+}
+
+/// The `(left, top, right, bottom)` sheet-point edges of the clip every line
+/// matching `needle` shares, on a chart frame whose top edge sits at
+/// `frame_top` sheet points. Horizontal edges stay chart-local: the harness
+/// pins no frame x seat.
+fn plot_clip_sheet_edges(source: &str, needle: &str, frame_top: f64) -> (f64, f64, f64, f64) {
+    let clip: PlacedBox = shared_clip(source, needle);
+    (
+        clip.dx,
+        frame_top + clip.dy,
+        clip.dx + clip.width,
+        frame_top + clip.dy + clip.height,
+    )
+}
+
+#[test]
+fn an_anchored_excel_worksheet_chart_clips_its_plotted_series_to_whole_sheet_points() {
+    // Native Excel 16.112 wraps the columns and the overlaid line of the #982
+    // workbook's chart in a clip at the plot rectangle's whole sheet points and
+    // paints the axis rules and the markers outside it. The unscaled control
+    // clips at x 380..1350, y 143..391 sheet points around a continuous plot of
+    // 380.109..1349.965 x 143.013..391.193; the 0.82 fitted export clips at
+    // x 388..1358, y 154..402 sheet points (page 318.16..1113.56 x
+    // 126.28..329.64). A zero-value run of the 2.239pt line then leaves the
+    // 0.737pt category axis visible under it instead of burying it (#1745).
+    let chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    let (plot_left, plot_top, plot_right, plot_bottom) =
+        axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false);
+    let source: String = anchored_excel_gift_chart_source(chart, EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
+
+    let (clip_left, clip_top, clip_right, clip_bottom) =
+        plot_clip_sheet_edges(&source, "curve(stroke: ", EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
+    // The frame's own sheet seat pins the vertical edges outright: this plot
+    // runs 154.013..402.193 sheet points, so Excel's clip is 154..402.
+    assert!(
+        same_length(clip_top, 154.0) && same_length(clip_bottom, 402.0),
+        "the series clip spans {clip_top}..{clip_bottom} sheet pt, native Excel clips \
+         154..402 sheet pt; source:\n{source}"
+    );
+    // Horizontally the harness pins no frame seat, so the column edges #1543
+    // already rounds are the whole-point grid the clip has to share. The second
+    // category's column is interior at this gap width.
+    let reference: f64 = emitted_rects(&source)
+        .into_iter()
+        .filter(|rect| rect.dy < 270.0)
+        .nth(2)
+        .expect("twelve categories of two column series are placed")
+        .dx;
+    let whole = |value: f64| (value - value.round()).abs() <= 1e-6;
+    assert!(
+        whole(clip_left - reference) && whole(clip_right - reference),
+        "the series clip spans {clip_left}..{clip_right}pt, which is not on the whole sheet \
+         points the columns at {reference}pt use; source:\n{source}"
+    );
+    // The clip is the plot's own rectangle rounded, not a band of its own.
+    assert!(
+        (clip_left - plot_left).abs() <= 0.5
+            && (clip_right - plot_right).abs() <= 0.5
+            && (clip_top - (EXCEL_GIFT_CHART_SPACE_FRAME_TOP + plot_top)).abs() <= 0.5
+            && (clip_bottom - (EXCEL_GIFT_CHART_SPACE_FRAME_TOP + plot_bottom)).abs() <= 0.5,
+        "the series clip {clip_left}..{clip_right} x {clip_top}..{clip_bottom} is more than half \
+         a point from the plot's own {plot_left}..{plot_right}pt x {plot_top}..{plot_bottom}pt; \
+         source:\n{source}"
+    );
+
+    // The columns are plotted data and share that clip; the axis rules, the
+    // gridlines and the markers are chrome Excel paints outside it.
+    let column_clip: PlacedBox = shared_clip(&source, "rect(width: ");
+    assert!(
+        same_length(column_clip.dx, clip_left)
+            && same_length(column_clip.width, clip_right - clip_left)
+            && same_length(column_clip.dy + EXCEL_GIFT_CHART_SPACE_FRAME_TOP, clip_top)
+            && same_length(column_clip.height, clip_bottom - clip_top),
+        "the columns use {column_clip:?} rather than the series' own clip; source:\n{source}"
+    );
+    for (needle, what) in [
+        ("line(end: (", "the axis rules and gridlines"),
+        ("polygon(", "the series markers"),
+    ] {
+        assert!(
+            clips_wrapping(&source, needle).iter().all(Option::is_none),
+            "{what} must stay outside the plot clip; source:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn an_anchored_excel_worksheet_plot_clip_rounds_rather_than_truncates() {
+    // Excel rounds each plot edge to the nearest whole sheet point: the fitted
+    // export's 1357.966pt right edge clips at 1358, not 1357. Moving the frame's
+    // sheet phase carries the plot's own fractions across the half-point
+    // boundary, so a truncating or a ceiling clip parts from the rounding one.
+    for (phase, expected_top, expected_bottom) in [
+        (0.0, 154.0, 402.0),
+        (0.4, 154.0, 403.0),
+        (0.6, 155.0, 403.0),
+    ] {
+        let frame_top: f64 = EXCEL_GIFT_CHART_SPACE_FRAME_TOP + phase;
+        let source: String =
+            anchored_excel_gift_chart_source(excel_gift_vertical_chart(9.0, 9.0, 9.0), frame_top);
+        let (_, clip_top, _, clip_bottom) =
+            plot_clip_sheet_edges(&source, "curve(stroke: ", frame_top);
+        assert!(
+            same_length(clip_top, expected_top) && same_length(clip_bottom, expected_bottom),
+            "at a {phase}pt sheet phase the clip spans {clip_top}..{clip_bottom} sheet pt, \
+             rounding the plot's 154.013..402.193 gives {expected_top}..{expected_bottom}; \
+             source:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_chart_outside_a_worksheet_keeps_its_unclipped_series() {
+    // The whole-point clip is Excel's worksheet geometry, measured on the #982
+    // workbook's two print scales. A PowerPoint or Word chart has no sheet
+    // origin to snap to, so nothing wraps its series (#1745).
+    let chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    let source: String =
+        framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+    for needle in ["curve(stroke: ", "rect(width: "] {
+        assert!(
+            clips_wrapping(&source, needle).iter().all(Option::is_none),
+            "a frame without a sheet origin must place {needle} unclipped; source:\n{source}"
+        );
     }
 }
 
@@ -9888,23 +10082,10 @@ fn cash_flow_bar_chart() -> Chart {
 
 /// The `dx`/`dy` a `#place` line puts its content at.
 fn place_origin(line: &str) -> Option<(f64, f64)> {
-    let dx: f64 = line
-        .split("dx: ")
-        .nth(1)?
-        .split("pt")
-        .next()?
-        .trim()
-        .parse()
-        .ok()?;
-    let dy: f64 = line
-        .split("dy: ")
-        .nth(1)?
-        .split("pt")
-        .next()?
-        .trim()
-        .parse()
-        .ok()?;
-    Some((dx, dy))
+    Some((
+        chained_placement(line, "dx")?,
+        chained_placement(line, "dy")?,
+    ))
 }
 
 /// Origin and length of the one vertical axis line in the generated source.

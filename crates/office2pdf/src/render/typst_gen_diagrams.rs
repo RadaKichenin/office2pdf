@@ -528,6 +528,91 @@ impl WorksheetMarkerPlacement {
     }
 }
 
+/// Excel's clip around a worksheet chart's plotted data.
+///
+/// An anchored Excel chart lays its plot out in unscaled sheet points and wraps
+/// the data it plots there — the columns and the series polylines — in a clip
+/// whose every edge is the plot rectangle's own edge rounded to the nearest
+/// whole sheet point, before the sheet's print scale applies. Native Excel
+/// 16.112 exports of the public #982 workbook read it as x 380..1350,
+/// y 143..391 sheet points on the unscaled control, whose continuous plot is
+/// 380.109..1349.965 x 143.013..391.193, and as x 388..1358, y 154..402 on the
+/// 0.82 fitted export, whose plot is 388.109..1357.966 x 154.013..402.193 (page
+/// 318.16..1113.56 x 126.28..329.64). Rounding rather than truncation: the
+/// fitted right edge clips at 1358, not 1357.
+///
+/// The chrome stays outside it. Both axis rules, the gridlines and the marker
+/// sprites are traced under the chart *area*'s clip instead, so a series
+/// running along the category axis is cut at the plot's bottom edge and the
+/// axis beneath it stays visible: a 2.239pt line over a 0.737pt axis leaves
+/// 0.93pt of series above 0.56pt of axis rather than burying it (#1745).
+///
+/// The chart-area clip native Excel also pushes follows a different, truncating
+/// rule — a 344.987..1360.965 x 132.013..439.986 area clips at 344..1360 x
+/// 132..439 — and is not modelled here.
+#[derive(Clone, Copy)]
+struct WorksheetPlotClip {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+impl WorksheetPlotClip {
+    /// The clip for a plotting rectangle in the chart's own points, or `None`
+    /// where the chart has no sheet origin to round on.
+    ///
+    /// A horizontal bar plot passes `None`: its bars are placed in the plot
+    /// box's own frame rather than from the rectangle the axis rules draw, and
+    /// no native bar export has been measured — the same reason
+    /// [`worksheet_column_span`] leaves a bar's band continuous.
+    fn snapped(
+        placement: Option<WorksheetMarkerPlacement>,
+        plot_x: f64,
+        plot_y: f64,
+        plot_w: f64,
+        plot_h: f64,
+    ) -> Option<Self> {
+        let (origin_x, origin_y) = placement?.frame_origin;
+        let snap = |local: f64, origin: f64| (origin + local).round() - origin;
+        let left: f64 = snap(plot_x, origin_x);
+        let top: f64 = snap(plot_y, origin_y);
+        let right: f64 = snap(plot_x + plot_w, origin_x);
+        let bottom: f64 = snap(plot_y + plot_h, origin_y);
+        Some(Self {
+            x: left,
+            y: top,
+            width: (right - left).max(0.0),
+            height: (bottom - top).max(0.0),
+        })
+    }
+}
+
+/// Write one `#place(…)` statement of plotted data, inside the plot clip where
+/// the chart has one.
+///
+/// `markup` keeps the chart's own coordinates, so the clip box carries an inner
+/// placement that puts its origin back on the chart's.
+fn write_plotted(out: &mut String, clip: Option<WorksheetPlotClip>, markup: &str) {
+    match clip {
+        Some(clip) => {
+            let _ = writeln!(
+                out,
+                "#place(top + left, dx: {}pt, dy: {}pt, box(width: {}pt, height: {}pt, clip: true)[#place(top + left, dx: {}pt, dy: {}pt)[{markup}]])",
+                format_f64(clip.x),
+                format_f64(clip.y),
+                format_f64(clip.width),
+                format_f64(clip.height),
+                format_f64(-clip.x),
+                format_f64(-clip.y),
+            );
+        }
+        None => {
+            let _ = writeln!(out, "{markup}");
+        }
+    }
+}
+
 /// Marker shape for the `index`-th series, when the file asks for a default
 /// marker rather than naming a `c:symbol`.
 ///
@@ -5201,6 +5286,11 @@ fn generate_chart_axis(
     let plot: AxisPlot = axis_plot_layout(chart, chart_area, title_h);
     let (plot_x, plot_y): (f64, f64) = (plot.x, plot.y);
     let (plot_w, plot_h): (f64, f64) = (plot.width, plot.height);
+    // Excel clips the columns and the overlaid line to the plot rectangle's
+    // whole sheet points; a horizontal bar plot is unmeasured (#1745).
+    let plot_clip: Option<WorksheetPlotClip> = (!horizontal)
+        .then(|| WorksheetPlotClip::snapped(worksheet_markers, plot_x, plot_y, plot_w, plot_h))
+        .flatten();
     let auto_axis: (f64, f64) = if matches!(chart.grouping, ChartGrouping::PercentStacked) {
         // Every stack fills the plot, so the axis is the percentage scale
         // itself and needs no rounding.
@@ -5443,14 +5533,17 @@ fn generate_chart_axis(
                     plot_w,
                     worksheet_markers,
                 );
-                let _ = writeln!(
+                write_plotted(
                     out,
-                    "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
-                    format_f64(column_x),
-                    format_f64(plot_y + (1.0 - far_frac) * plot_h),
-                    format_f64(column_w),
-                    format_f64(bar_h.max(0.0)),
-                    color
+                    plot_clip,
+                    &format!(
+                        "#place(top + left, dx: {}pt, dy: {}pt, rect(width: {}pt, height: {}pt, fill: {}, stroke: none))",
+                        format_f64(column_x),
+                        format_f64(plot_y + (1.0 - far_frac) * plot_h),
+                        format_f64(column_w),
+                        format_f64(bar_h.max(0.0)),
+                        color
+                    ),
                 );
             }
             if let Some(label) = data_label_text(chart, s, cat_index, category_total) {
@@ -5756,10 +5849,13 @@ fn generate_chart_axis(
             .collect();
         if points.len() >= 2 {
             let segments: String = polyline_curve_segments(&points);
-            let _ = writeln!(
+            write_plotted(
                 out,
-                "#place(top + left, curve(stroke: {}, {segments}))",
-                series_stroke(s, &color)
+                plot_clip,
+                &format!(
+                    "#place(top + left, curve(stroke: {}, {segments}))",
+                    series_stroke(s, &color)
+                ),
             );
         }
         for (x, y) in &points {
@@ -6583,7 +6679,12 @@ fn generate_chart_line_plot(
         );
     }
 
-    // Series polylines + markers.
+    // Series polylines + markers. A worksheet chart cuts its polylines at the
+    // plot rectangle's whole sheet points, as the combo plot of #1745 was
+    // measured to; this renderer's own worksheet case is unprobed and follows
+    // from that rule rather than from an export of its own.
+    let plot_clip: Option<WorksheetPlotClip> =
+        WorksheetPlotClip::snapped(worksheet_markers, plot_x, plot_y, plot_w, plot_h);
     for (s_index, s) in series.iter().enumerate() {
         let color: String = series_color(s, s_index, 0, &chart.theme_accent_colors);
         let points: Vec<(f64, f64)> = s
@@ -6594,10 +6695,13 @@ fn generate_chart_line_plot(
             .collect();
         if points.len() >= 2 {
             let segments: String = polyline_curve_segments(&points);
-            let _ = writeln!(
+            write_plotted(
                 out,
-                "#place(top + left, curve(stroke: {}, {segments}))",
-                series_stroke(s, &color)
+                plot_clip,
+                &format!(
+                    "#place(top + left, curve(stroke: {}, {segments}))",
+                    series_stroke(s, &color)
+                ),
             );
         }
         // Point markers: the symbol the series names, else the shape cycle.
