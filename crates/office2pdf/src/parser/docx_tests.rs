@@ -1054,6 +1054,8 @@ mod contextual_spacing_tests;
 mod layout_rtl_tests;
 #[path = "docx_math_chart_metadata_tests.rs"]
 mod math_chart_metadata_tests;
+#[path = "docx_paragraph_cursor_tests.rs"]
+mod paragraph_cursor_tests;
 
 #[test]
 fn issue_189_footer_preserves_inline_image_and_rtl_text() {
