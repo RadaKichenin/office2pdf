@@ -711,6 +711,45 @@ fn build_xlsx_with_footer(footer_str: &str) -> Vec<u8> {
 }
 
 #[test]
+fn cdata_header_footer_text_preserves_text_and_bold_in_both_parser_paths() {
+    for is_header in [true, false] {
+        let original = if is_header {
+            build_xlsx_with_header("CDATA_PLACEHOLDER")
+        } else {
+            build_xlsx_with_footer("CDATA_PLACEHOLDER")
+        };
+        let data = rewrite_zip_parts(
+            &original,
+            |name| name == "xl/worksheets/sheet1.xml",
+            |xml| {
+                xml.replace(
+                    "CDATA_PLACEHOLDER",
+                    r#"<![CDATA[&C&"-,Bold"Research && Development]]>"#,
+                )
+            },
+        );
+        let (document, _) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+        let (chunks, _) = XlsxParser
+            .parse_streaming(&data, &ConvertOptions::default(), 100)
+            .unwrap();
+        for parsed in std::iter::once(&document).chain(chunks.iter()) {
+            let sheet = get_sheet_page(parsed, 0);
+            let section = if is_header {
+                &sheet.header
+            } else {
+                &sheet.footer
+            };
+            let section = section.as_ref().expect("header/footer parsed");
+            assert_eq!(hf_section_texts(section), vec!["Research & Development"]);
+            let HFInline::Run(run) = &section.paragraphs[0].elements[0] else {
+                panic!("expected text run");
+            };
+            assert_eq!(run.style.bold, Some(true));
+        }
+    }
+}
+
+#[test]
 fn normal_font_color_precedence_is_independent_of_xml_attribute_order() {
     let cases: &[(&str, Color)] = &[
         (r#"theme="1" rgb="FFFFFF""#, Color::black()),
@@ -1354,4 +1393,39 @@ fn xlsx_excel_grid_boundary_remains_valid_with_bounded_print_area() {
         cell_text(&get_sheet_page(&chunks[0], 0).table.rows[0].cells[0]),
         "Report"
     );
+}
+
+#[test]
+fn header_footer_bold_toggle_preserves_surrounding_text_and_font_styles() {
+    let cases = [
+        (
+            r#"&C&"Arial,Regular"&BBold heading&B Regular label"#,
+            vec![("Bold heading", true), (" Regular label", false)],
+        ),
+        (
+            r#"&C&"Arial,Bold"&BRegular&B Bold again"#,
+            vec![("Regular", false), (" Bold again", true)],
+        ),
+        (
+            r#"&C&"Arial,Regular"&B&BRegular &&B literal"#,
+            vec![("Regular &B literal", false)],
+        ),
+        (
+            r#"&L&BLeft&CPlain&L continued"#,
+            vec![("Left continued", true), ("Plain", false)],
+        ),
+    ];
+    for (format, expected) in cases {
+        let header = parse_hf(format).expect("header parsed");
+        let actual: Vec<(&str, bool)> = header
+            .paragraphs
+            .iter()
+            .flat_map(|paragraph| paragraph.elements.iter())
+            .filter_map(|element| match element {
+                HFInline::Run(run) => Some((run.text.as_str(), run.style.bold.unwrap_or(false))),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(actual, expected, "{format}");
+    }
 }

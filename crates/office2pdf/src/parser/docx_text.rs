@@ -2,7 +2,7 @@ use super::{
     Alignment, Color, HyperlinkMap, LineSpacing, PairKerning, ParagraphStyle, TabAlignment,
     TabLeader, TabStop, TabStopOverride, TextStyle, VerticalTextAlign, apply_tab_stop_overrides,
 };
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, LineJoin, Run};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Insets, LineCap, LineJoin, Run};
 use crate::parser::units::{half_points_to_pt, twips_to_pt};
 use crate::parser::xml_util;
 use crate::parser::xml_util::OOXML_XML_VERSION;
@@ -82,6 +82,10 @@ pub(super) fn extract_paragraph_style(prop: &docx_rs::ParagraphProperty) -> Para
         // Word does not share a fixed line box across a
         // paragraph's fonts, so its paragraph mark carries no line-box role.
         paragraph_mark_font_family: None,
+        // Resolved once the paragraph's runs are known: only a run-less
+        // `<w:p>` is sized from its mark, and only
+        // `push_paragraph_from_runs` can see that (issue #1700).
+        paragraph_mark_text_style: None,
         // Worksheet-cell-only (issue #1631); Word paragraphs never carry one.
         sheet_number_format_reserved_glyphs: None,
     }
@@ -121,13 +125,31 @@ fn extract_paragraph_borders(
 
     let side = |name: &str| -> Option<BorderSide> {
         let side_json = json.get(name)?;
-        let val = side_json.get("val")?.as_str()?;
+        let val = side_json
+            .get("val")
+            .or_else(|| side_json.get("borderType"))?
+            .as_str()?;
+        // The thinThick/thickThin families are Word's multi-line borders, so
+        // they carry the double rule rather than the single one a bare
+        // `_` arm would give them. Header and footer paragraphs used to read
+        // their borders through a second extractor that had this list while
+        // this one did not; both now come through here (issue #1822).
         let style = match val {
             "nil" | "none" => return None,
-            "double" | "triple" => BorderLineStyle::Double,
+            "double"
+            | "triple"
+            | "thinThickSmallGap"
+            | "thickThinSmallGap"
+            | "thinThickMediumGap"
+            | "thickThinMediumGap"
+            | "thinThickLargeGap"
+            | "thickThinLargeGap"
+            | "thinThickThinSmallGap"
+            | "thinThickThinMediumGap"
+            | "thinThickThinLargeGap" => BorderLineStyle::Double,
             "dotted" => BorderLineStyle::Dotted,
             "dashed" | "dashSmallGap" => BorderLineStyle::Dashed,
-            "dotDash" => BorderLineStyle::DashDot,
+            "dotDash" | "dashDotStroked" => BorderLineStyle::DashDot,
             "dotDotDash" => BorderLineStyle::DashDotDot,
             _ => BorderLineStyle::Solid,
         };
@@ -138,6 +160,7 @@ fn extract_paragraph_borders(
         let color = side_json
             .get("color")
             .and_then(|v| v.as_str())
+            .filter(|value| *value != "auto")
             .and_then(xml_util::parse_hex_color)
             .unwrap_or_else(Color::black);
         Some(BorderSide {
@@ -145,6 +168,7 @@ fn extract_paragraph_borders(
             color,
             style,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     };
 

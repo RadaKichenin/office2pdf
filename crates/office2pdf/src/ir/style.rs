@@ -118,12 +118,32 @@ pub struct ParagraphStyle {
     ///
     /// It carries no glyph, but its font shares the final physical line's
     /// 1.2em box. For an unwrapped paragraph this is its only line; earlier
-    /// wrapped lines use their text fonts alone (#1177). A mark without a
-    /// typeface falls to the theme's minor Latin font and changes that final
-    /// line's proportions (#1176). `None` for a format whose
-    /// line box does not work that way, or a paragraph whose mark resolves to
-    /// no family at all.
+    /// wrapped lines use their text fonts alone (#1177).
+    ///
+    /// Which face that is turns on whether the element is written at all. A
+    /// mark that is **present** but names no typeface inherits the run
+    /// properties the paragraph resolved, ending at the theme's minor Latin
+    /// font, and changes that final line's proportions (#1176). A mark that is
+    /// **absent** inherits nothing: it is typed in the face of the run it
+    /// follows, so it puts no family on the line the runs have not (#1645).
+    /// See `pptx_paragraph_mark_font_family` for the native probes that
+    /// separate the two. `None` for a format whose line box does not work that
+    /// way, or a paragraph whose mark resolves to no family at all.
     pub paragraph_mark_font_family: Option<Box<str>>,
+    /// The run formatting Word resolves for a `<w:p>` that has no runs at
+    /// all — its `w:pPr/w:rPr` over the style chain over `w:rPrDefault`.
+    ///
+    /// Word gives such a paragraph's mark a full line of its own, sized from
+    /// this formatting, so a table row of nothing but empty paragraphs is as
+    /// tall as a row of text (issue #1700). The runs a codegen would measure
+    /// that line from do not exist, and neither does a sibling paragraph to
+    /// borrow from, so the resolution has to travel from the parser.
+    ///
+    /// Boxed for the same reason `border` is: `TextStyle` inline would push
+    /// the paragraph-carrying enum variants past clippy's size threshold.
+    /// `None` for a paragraph that has runs, and for every format whose blank
+    /// paragraphs are sized another way.
+    pub paragraph_mark_text_style: Option<Box<TextStyle>>,
     /// The glyphs a worksheet cell's selected number-format section reserves
     /// space for without painting them — e.g. the `)` a `_)`-padded positive
     /// section holds room for beside a parenthesised negative section.

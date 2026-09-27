@@ -1,0 +1,27 @@
+{
+  "name": "issue-1682-shape-line-cap",
+  "base": "../../tests/fixtures/pptx/1-slide.pptx",
+  "part": "ppt/slides/slide1.xml",
+  "factor": "a:ln cap on the 3.5pt straight connector",
+  "page": 1,
+  "variants": [
+    {
+      "value": "flat",
+      "find": "<a:ln w=\"44450\"><a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill></a:ln>",
+      "replace": "<a:ln w=\"44450\" cap=\"flat\"><a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "rnd",
+      "find": "<a:ln w=\"44450\"><a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill></a:ln>",
+      "replace": "<a:ln w=\"44450\" cap=\"rnd\"><a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill></a:ln>",
+      "count": 1
+    },
+    {
+      "value": "sq",
+      "find": "<a:ln w=\"44450\"><a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill></a:ln>",
+      "replace": "<a:ln w=\"44450\" cap=\"sq\"><a:solidFill><a:schemeClr val=\"tx1\"/></a:solidFill></a:ln>",
+      "count": 1
+    }
+  ]
+}

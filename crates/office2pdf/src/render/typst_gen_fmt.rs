@@ -4,7 +4,7 @@
 //! built with these helpers so the output stays uniform and golden tests
 //! don't drift on formatting details.
 
-use crate::ir::{BorderLineStyle, BorderSide, Color, LineJoin};
+use crate::ir::{BorderLineStyle, BorderSide, Color, LineCap, LineJoin};
 
 /// Format a Typst `rgb(r, g, b)` color literal.
 pub(super) fn rgb(color: &Color) -> String {
@@ -108,14 +108,36 @@ fn drawingml_join_name(join: LineJoin) -> &'static str {
     }
 }
 
+/// The Typst `cap` keyword for a DrawingML end geometry, or `None` for the one
+/// value Typst already defaults to.
+///
+/// Flat is both DrawingML's `cap` default and Typst's stroke default, so leaving
+/// the key off spells it exactly. Writing it anyway would restate every
+/// existing DrawingML stroke for no rendered difference (issue #1682).
+fn drawingml_cap_name(cap: LineCap) -> Option<&'static str> {
+    match cap {
+        LineCap::Flat => None,
+        LineCap::Round => Some("round"),
+        LineCap::Square => Some("square"),
+    }
+}
+
 /// A DrawingML stroke value, using width-proportional dashes where the style
-/// has a dash rhythm (issue #678) and always naming the corner join (#1090).
+/// has a dash rhythm (issue #678), always naming the corner join (#1090), and
+/// naming the end geometry whenever it is not flat (#1682).
 ///
 /// The join has to be written out even when it is DrawingML's own default,
 /// because Typst's stroke default is the opposite one: an `a:ln` with no
 /// `a:round`, `a:bevel` or `a:miter` child joins round, and leaving the key off
 /// mitered every outlined shape's corners. That forces the dictionary form on
 /// solid strokes too, which used to take the `Wpt + rgb(...)` shorthand.
+///
+/// The cap is the mirror image: DrawingML and Typst agree on flat ends, so only
+/// `cap="rnd"` and `cap="sq"` need a key. A native macOS PowerPoint export of a
+/// 3.5pt straight connector traces PDF `linecap="0,0,0"` with no `cap` and with
+/// `cap="flat"`, `1,1,1` with `cap="rnd"` and `2,2,2` with `cap="sq"`, so the
+/// extension past each endpoint is the renderer's own half-width — PowerPoint
+/// emits the PDF cap operator rather than baking the geometry into a path.
 pub(super) fn drawingml_stroke_value_with_paint(side: &BorderSide, paint: &str) -> String {
     let mut parts: Vec<String> = vec![
         format!("paint: {paint}"),
@@ -137,6 +159,9 @@ pub(super) fn drawingml_stroke_value_with_paint(side: &BorderSide, paint: &str) 
         ));
     }
     parts.push(format!("join: \"{}\"", drawingml_join_name(side.join)));
+    if let Some(cap) = drawingml_cap_name(side.cap) {
+        parts.push(format!("cap: \"{cap}\""));
+    }
     format!("({})", parts.join(", "))
 }
 

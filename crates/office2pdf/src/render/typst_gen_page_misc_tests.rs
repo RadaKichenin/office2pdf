@@ -22,6 +22,7 @@ fn test_generate_flow_page_with_text_header() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -63,6 +64,7 @@ fn test_generate_flow_page_with_page_number_footer() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(TextStyle::default()),
                 ],
@@ -113,6 +115,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PositionedTab(PositionedTab {
                         alignment: PositionedTabAlignment::Right,
@@ -124,6 +127,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(TextStyle::default()),
                 ],
@@ -133,6 +137,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                         color: Color::new(0x62, 0x24, 0x23),
                         style: BorderLineStyle::Double,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     bottom: None,
                     left: None,
@@ -179,6 +184,7 @@ fn a_page_anchored_footer_frame_paints_below_body_content() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -304,6 +310,7 @@ fn test_generate_flow_page_with_header_and_footer() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -426,6 +433,7 @@ fn test_fixed_page_table_element() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()
@@ -438,6 +446,7 @@ fn test_fixed_page_table_element() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()
@@ -488,6 +497,7 @@ fn test_hyperlink_generates_typst_link() {
             style: TextStyle::default(),
             href: Some("https://example.com".to_string()),
             footnote: None,
+            inline_box: None,
         }],
     })])]);
 
@@ -511,6 +521,7 @@ fn test_hyperlink_with_styled_text() {
             },
             href: Some("https://example.com".to_string()),
             footnote: None,
+            inline_box: None,
         }],
     })])]);
 
@@ -529,18 +540,21 @@ fn test_hyperlink_mixed_with_plain_text() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "Rust".to_string(),
                 style: TextStyle::default(),
                 href: Some("https://rust-lang.org".to_string()),
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: " for more.".to_string(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -564,6 +578,7 @@ fn test_hyperlink_url_with_special_chars_escaped() {
             style: TextStyle::default(),
             href: Some("https://example.com/path?q=1&r=2".to_string()),
             footnote: None,
+            inline_box: None,
         }],
     })])]);
 
@@ -582,6 +597,7 @@ fn note_run(text: &str) -> Run {
         style: TextStyle::default(),
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -595,12 +611,14 @@ fn test_footnote_generates_typst_footnote() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: String::new(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: Some(vec![note_run("This is a footnote.")]),
+                inline_box: None,
             },
         ],
     })])]);
@@ -618,6 +636,7 @@ fn test_footnote_with_special_chars() {
             style: TextStyle::default(),
             href: None,
             footnote: Some(vec![note_run("Note with #special *chars*")]),
+            inline_box: None,
         }],
     })])]);
 
@@ -650,6 +669,7 @@ fn test_table_page_with_header() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -692,6 +712,7 @@ fn test_table_page_with_page_number_footer() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(TextStyle::default()),
                     HFInline::Run(Run {
@@ -699,6 +720,7 @@ fn test_table_page_with_page_number_footer() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::TotalPages(TextStyle::default()),
                 ],
@@ -759,6 +781,7 @@ fn hf_run(text: &str, family: Option<&str>, size_pt: f64) -> Run {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -809,6 +832,598 @@ fn sheet_page_with_footer_sections(
         text_boxes: Vec::new(),
         shapes: Vec::new(),
     })
+}
+
+/// Each worksheet section can use the page width, even with all three present.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn sheet_header_footer_sections_preserve_page_width_and_explicit_breaks() {
+    for is_header in [false, true] {
+        for has_break in [false, true] {
+            let text = if has_break {
+                "Generated by Example Reporting System\nSecond line"
+            } else {
+                "Generated by Example Reporting System"
+            };
+            for alignment in [Alignment::Left, Alignment::Center, Alignment::Right] {
+                let sections = [Alignment::Left, Alignment::Center, Alignment::Right]
+                    .into_iter()
+                    .map(|slot| {
+                        let text = if slot == alignment { text } else { "Label" };
+                        (slot, false, vec![hf_run(text, Some("Arial"), 11.0)])
+                    })
+                    .collect();
+                let mut page = sheet_page_with_footer_sections(
+                    PageSize {
+                        width: 612.0,
+                        height: 792.0,
+                    },
+                    54.0,
+                    Some(21.6),
+                    None,
+                    sections,
+                );
+                if is_header {
+                    let Page::Sheet(sheet) = &mut page else {
+                        unreachable!()
+                    };
+                    sheet.header = sheet.footer.take();
+                }
+                let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+                let mut single_page = sheet_page_with_footer_sections(
+                    PageSize {
+                        width: 612.0,
+                        height: 792.0,
+                    },
+                    54.0,
+                    Some(21.6),
+                    None,
+                    vec![(alignment, false, vec![hf_run(text, Some("Arial"), 11.0)])],
+                );
+                if is_header {
+                    let Page::Sheet(sheet) = &mut single_page else {
+                        unreachable!()
+                    };
+                    sheet.header = sheet.footer.take();
+                }
+                let single_source = generate_typst(&make_doc(vec![single_page])).unwrap().source;
+                let single_runs =
+                    crate::render::pdf::compiled_text_runs(&single_source, 0).unwrap();
+                let all_runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+                let single = single_runs
+                    .iter()
+                    .find(|run| run.text.contains("Generated"))
+                    .unwrap();
+                let shared = all_runs
+                    .iter()
+                    .find(|run| run.text.contains("Generated"))
+                    .unwrap();
+                assert!(
+                    (single.left_pt - shared.left_pt).abs() < 0.01,
+                    "{alignment:?} section horizontal anchor changed: {single:?} vs {shared:?}"
+                );
+                assert!(
+                    (single.baseline_pt - shared.baseline_pt).abs() < 0.01,
+                    "{alignment:?} section baseline changed: {single:?} vs {shared:?}"
+                );
+                if has_break {
+                    let second = compiled_baseline_of(&source, "Second");
+                    let single_second = compiled_baseline_of(&single_source, "Second");
+                    assert!((second - single_second).abs() < 0.01);
+                    assert!(
+                        second > shared.baseline_pt + 5.0,
+                        "explicit break must remain"
+                    );
+                }
+                let first = compiled_baseline_of(&source, "Generated");
+                let last = compiled_baseline_of(&source, "System");
+                assert!(
+                    (first - last).abs() < 0.01,
+                    "{alignment:?} section must stay on one line: {first} vs {last}"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_header_uses_native_line_advance() {
+    for (family, size, advance) in [
+        ("Arial", 8.0, 11.0),
+        ("Arial", 11.0, 14.0),
+        ("Arial", 12.0, 15.0),
+        ("Arial", 14.0, 17.0),
+        ("Arial", 24.0, 29.0),
+        ("Calibri", 11.0, 14.0),
+        ("Aptos", 11.0, 14.0),
+        ("Times New Roman", 11.0, 14.0),
+        ("Malgun Gothic", 11.0, 17.0),
+    ] {
+        for line_count in [2, 3] {
+            let mut page = sheet_page_with_footer_sections(
+                PageSize {
+                    width: 612.0,
+                    height: 792.0,
+                },
+                72.0,
+                Some(21.6),
+                None,
+                ["First header", "Second header", "Third header"]
+                    .into_iter()
+                    .take(line_count)
+                    .map(|label| {
+                        (
+                            Alignment::Center,
+                            true,
+                            vec![hf_run(label, Some(family), size)],
+                        )
+                    })
+                    .collect(),
+            );
+            let Page::Sheet(sheet) = &mut page else {
+                unreachable!()
+            };
+            sheet.header = sheet.footer.take();
+            let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+            let baselines: Vec<f64> = ["First", "Second", "Third"]
+                .into_iter()
+                .take(line_count)
+                .map(|label| compiled_baseline_of(&source, label))
+                .collect();
+            for pair in baselines.windows(2) {
+                assert!(
+                    (pair[1] - pair[0] - advance).abs() < 0.01,
+                    "{line_count}-line {family} {size}pt header: native advance {advance}pt, got {}",
+                    pair[1] - pair[0],
+                );
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_header_sections_keep_independent_first_lines() {
+    for unequal_counts in [false, true] {
+        let specifications = if unequal_counts {
+            [
+                (Alignment::Left, "Left", 11.0, 1),
+                (Alignment::Center, "Center", 11.0, 3),
+                (Alignment::Right, "Right", 11.0, 2),
+            ]
+        } else {
+            [
+                (Alignment::Left, "Left", 8.0, 2),
+                (Alignment::Center, "Center", 24.0, 2),
+                (Alignment::Right, "Right", 11.0, 2),
+            ]
+        };
+        let mut page = sheet_page_with_footer_sections(
+            PageSize {
+                width: 612.0,
+                height: 792.0,
+            },
+            72.0,
+            Some(21.6),
+            None,
+            specifications
+                .into_iter()
+                .flat_map(|(alignment, label, size, count)| {
+                    (0..count).map(move |index| {
+                        (
+                            alignment,
+                            true,
+                            vec![hf_run(
+                                &format!("{label} line {index}"),
+                                Some("Arial"),
+                                size,
+                            )],
+                        )
+                    })
+                })
+                .collect(),
+        );
+        let Page::Sheet(sheet) = &mut page else {
+            unreachable!()
+        };
+        sheet.header = sheet.footer.take();
+        let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+        let left = compiled_baseline_of(&source, "Left line 0");
+        let center = compiled_baseline_of(&source, "Center line 0");
+        let right = compiled_baseline_of(&source, "Right line 0");
+        let (center_delta, right_delta) = if unequal_counts {
+            (-1.0, -1.0)
+        } else {
+            (15.0, 3.0)
+        };
+        assert!(
+            (center - left - center_delta).abs() < 0.01,
+            "first center/left baselines {center}/{left}, expected delta {center_delta}"
+        );
+        assert!(
+            (right - left - right_delta).abs() < 0.01,
+            "first right/left baselines {right}/{left}, expected delta {right_delta}"
+        );
+    }
+}
+
+/// Native Excel footer probes match its wrapped-cell line advances (#1729).
+/// Specs and measurements: tests/visual_audits/issue-1729/probes/.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_footer_uses_native_line_advance_and_keeps_last_seat() {
+    for (family, size, advance) in [
+        ("Arial", 8.0, 11.0),
+        ("Arial", 11.0, 14.0),
+        ("Arial", 12.0, 15.0),
+        ("Arial", 14.0, 17.0),
+        ("Arial", 24.0, 29.0),
+        ("Aptos", 11.0, 14.0),
+        ("Calibri", 11.0, 14.0),
+        ("Malgun Gothic", 11.0, 17.0),
+        ("Times New Roman", 11.0, 14.0),
+    ] {
+        let page = |labels: &[&str]| {
+            sheet_page_with_footer_sections(
+                PageSize {
+                    width: 612.0,
+                    height: 792.0,
+                },
+                72.0,
+                Some(21.6),
+                None,
+                labels
+                    .iter()
+                    .map(|label| {
+                        (
+                            Alignment::Left,
+                            true,
+                            vec![hf_run(label, Some(family), size)],
+                        )
+                    })
+                    .collect(),
+            )
+        };
+        let single = generate_typst(&make_doc(vec![page(&["Last line"])]))
+            .unwrap()
+            .source;
+        let multiple = generate_typst(&make_doc(vec![page(&["First line", "Last line"])]))
+            .unwrap()
+            .source;
+        let first = compiled_baseline_of(&multiple, "First");
+        let last = compiled_baseline_of(&multiple, "Last");
+        assert!(
+            (last - first - advance).abs() < 0.01,
+            "{family} {size}pt: native advance {advance}, got {}",
+            last - first
+        );
+        assert!(
+            (last - compiled_baseline_of(&single, "Last")).abs() < 0.01,
+            "{family} {size}pt: adding a line changed the last baseline"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_header_preserves_mixed_sizes_sections_and_fit_scale() {
+    for (first_size, last_size, native_advance) in [
+        (8.0, 11.0, 14.0),
+        (24.0, 11.0, 17.0),
+        (11.0, 8.0, 11.0),
+        (11.0, 24.0, 26.0),
+    ] {
+        for scale in [1.0, 0.6, 0.8, 1.2] {
+            let sections = [
+                (Alignment::Left, "Left first", "Left last"),
+                (Alignment::Center, "Center first", "Center last"),
+                (Alignment::Right, "Right first", "Right last"),
+            ];
+            let paragraphs = sections
+                .iter()
+                .flat_map(|&(alignment, first, last)| {
+                    [(first, first_size), (last, last_size)].map(|(label, size)| {
+                        (
+                            alignment,
+                            true,
+                            vec![hf_run(label, Some("Arial"), size * scale)],
+                        )
+                    })
+                })
+                .collect();
+            let mut page = sheet_page_with_footer_sections(
+                PageSize {
+                    width: 612.0,
+                    height: 792.0,
+                },
+                72.0,
+                Some(21.6),
+                Some(scale),
+                paragraphs,
+            );
+            let Page::Sheet(sheet) = &mut page else {
+                unreachable!()
+            };
+            sheet.header = sheet.footer.take();
+            let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+            let runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+            for (_, first, last) in sections {
+                let first_run = runs.iter().find(|run| run.text.contains(first)).unwrap();
+                let last_run = runs.iter().find(|run| run.text.contains(last)).unwrap();
+                let actual = last_run.baseline_pt - first_run.baseline_pt;
+                assert!(
+                    (actual - native_advance * scale).abs() < 0.02,
+                    "{first_size}/{last_size} at {scale}: expected {}, got {actual}",
+                    native_advance * scale
+                );
+            }
+            let left = runs
+                .iter()
+                .find(|run| run.text.contains("Left last"))
+                .unwrap();
+            let center = runs
+                .iter()
+                .find(|run| run.text.contains("Center last"))
+                .unwrap();
+            let right = runs
+                .iter()
+                .find(|run| run.text.contains("Right last"))
+                .unwrap();
+            assert!(left.left_pt < center.left_pt && center.left_pt < right.left_pt);
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_footer_preserves_mixed_sizes_sections_and_fit_scale() {
+    for (first_size, last_size, native_advance) in [
+        (8.0, 11.0, 14.0),
+        (24.0, 11.0, 17.0),
+        (11.0, 8.0, 11.0),
+        (11.0, 24.0, 26.0),
+    ] {
+        for scale in [1.0, 0.78] {
+            let sections = [
+                (Alignment::Left, "Left first", "Left last"),
+                (Alignment::Center, "Center first", "Center last"),
+                (Alignment::Right, "Right first", "Right last"),
+            ];
+            let paragraphs = sections
+                .iter()
+                .flat_map(|&(alignment, first, last)| {
+                    [(first, first_size), (last, last_size)].map(|(label, size)| {
+                        (
+                            alignment,
+                            true,
+                            vec![hf_run(label, Some("Arial"), size * scale)],
+                        )
+                    })
+                })
+                .collect();
+            let page = sheet_page_with_footer_sections(
+                PageSize {
+                    width: 612.0,
+                    height: 792.0,
+                },
+                72.0,
+                Some(21.6),
+                Some(scale),
+                paragraphs,
+            );
+            let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+            let runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+            for (_, first, last) in sections {
+                let first_run = runs.iter().find(|run| run.text.contains(first)).unwrap();
+                let last_run = runs.iter().find(|run| run.text.contains(last)).unwrap();
+                let actual = last_run.baseline_pt - first_run.baseline_pt;
+                assert!(
+                    (actual - native_advance * scale).abs() < 0.02,
+                    "{first_size}/{last_size} at {scale}: expected {}, got {actual}",
+                    native_advance * scale
+                );
+            }
+            let left = runs
+                .iter()
+                .find(|run| run.text.contains("Left last"))
+                .unwrap();
+            let center = runs
+                .iter()
+                .find(|run| run.text.contains("Center last"))
+                .unwrap();
+            let right = runs
+                .iter()
+                .find(|run| run.text.contains("Right last"))
+                .unwrap();
+            assert!(left.left_pt < center.left_pt && center.left_pt < right.left_pt);
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_footer_keeps_text_clear_of_inline_picture() {
+    use crate::ir::{ImageData, ImageFormat};
+    use crate::render::pdf::{PaintedKind, compiled_paint_sequence};
+    let mut bitmap = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut bitmap, image::ImageFormat::Png)
+        .unwrap();
+    let mut page = sheet_page_with_footer_sections(
+        PageSize {
+            width: 612.0,
+            height: 792.0,
+        },
+        100.0,
+        Some(21.6),
+        None,
+        vec![
+            (
+                Alignment::Left,
+                true,
+                vec![hf_run("Prepared by Finance", Some("Arial"), 11.0)],
+            ),
+            (
+                Alignment::Left,
+                true,
+                vec![hf_run("Approved", Some("Arial"), 11.0)],
+            ),
+        ],
+    );
+    let Page::Sheet(sheet) = &mut page else {
+        unreachable!()
+    };
+    sheet.footer.as_mut().unwrap().paragraphs[1]
+        .elements
+        .push(HFInline::Image(ImageData {
+            data: bitmap.into_inner(),
+            format: ImageFormat::Png,
+            width: Some(90.0),
+            height: Some(40.0),
+            rotation_deg: None,
+            flip_h: false,
+            flip_v: false,
+            crop: None,
+            stroke: None,
+            alignment: None,
+            clip_shape: None,
+            shadow: None,
+            paragraph_spacing: None,
+        }));
+    let output = generate_typst(&make_doc(vec![page])).unwrap();
+    let painted = compiled_paint_sequence(&output.source, &output.images, 0).unwrap();
+    let picture = painted
+        .iter()
+        .find(|item| item.kind == PaintedKind::Image)
+        .unwrap();
+    for text in painted.iter().filter(|item| item.kind == PaintedKind::Text) {
+        let overlaps = text.bounds.0 < picture.bounds.2
+            && text.bounds.2 > picture.bounds.0
+            && text.bounds.1 < picture.bounds.3
+            && text.bounds.3 > picture.bounds.1;
+        assert!(
+            !overlaps,
+            "footer text overlaps its picture: {text:?} / {picture:?}"
+        );
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_header_counts_wrapped_lines_without_moving_first_line() {
+    let long_line =
+        "Prepared for the quarterly finance review and approved for internal distribution. "
+            .repeat(2);
+    for wraps_first in [true, false] {
+        let labels = if wraps_first {
+            [long_line.as_str(), "Footer second"]
+        } else {
+            ["Footer first", long_line.as_str()]
+        };
+        let mut page = sheet_page_with_footer_sections(
+            PageSize {
+                width: 612.0,
+                height: 792.0,
+            },
+            72.0,
+            Some(21.6),
+            None,
+            labels
+                .iter()
+                .map(|label| {
+                    (
+                        Alignment::Left,
+                        true,
+                        vec![hf_run(label, Some("Arial"), 11.0)],
+                    )
+                })
+                .collect(),
+        );
+        let Page::Sheet(sheet) = &mut page else {
+            unreachable!()
+        };
+        sheet.header = sheet.footer.take();
+        let mut unwrapped = page.clone();
+        let Page::Sheet(sheet) = &mut unwrapped else {
+            unreachable!()
+        };
+        for paragraph in &mut sheet.header.as_mut().unwrap().paragraphs {
+            paragraph.elements = vec![HFInline::Run(hf_run("Short header", Some("Arial"), 11.0))];
+        }
+        let unwrapped_source = generate_typst(&make_doc(vec![unwrapped])).unwrap().source;
+        let expected_first = compiled_baseline_of(&unwrapped_source, "Short");
+        let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+        let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&source, 0)
+            .unwrap()
+            .iter()
+            .filter(|run| run.text != "A")
+            .map(|run| run.baseline_pt)
+            .collect();
+        baselines.sort_by(f64::total_cmp);
+        baselines.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+        assert_eq!(baselines.len(), 3, "wrapped header lines: {baselines:?}");
+        for (actual, expected) in
+            baselines
+                .iter()
+                .zip([expected_first, expected_first + 14.0, expected_first + 28.0])
+        {
+            assert!(
+                (actual - expected).abs() < 0.01,
+                "native wrapped header baseline {expected}, got {baselines:?}; wraps_first={wraps_first}"
+            );
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn multiline_sheet_footer_counts_wrapped_lines_in_native_advance() {
+    let long_line =
+        "Prepared for the quarterly finance review and approved for internal distribution. "
+            .repeat(2);
+    for wraps_first in [true, false] {
+        let labels = if wraps_first {
+            [long_line.as_str(), "Footer second"]
+        } else {
+            ["Footer first", long_line.as_str()]
+        };
+        let page = sheet_page_with_footer_sections(
+            PageSize {
+                width: 612.0,
+                height: 792.0,
+            },
+            72.0,
+            Some(21.6),
+            None,
+            labels
+                .iter()
+                .map(|label| {
+                    (
+                        Alignment::Left,
+                        true,
+                        vec![hf_run(label, Some("Arial"), 11.0)],
+                    )
+                })
+                .collect(),
+        );
+        let source = generate_typst(&make_doc(vec![page])).unwrap().source;
+        let mut baselines: Vec<f64> = crate::render::pdf::compiled_text_runs(&source, 0)
+            .unwrap()
+            .iter()
+            .filter(|run| run.baseline_pt > 700.0)
+            .map(|run| run.baseline_pt)
+            .collect();
+        baselines.sort_by(f64::total_cmp);
+        baselines.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+        assert_eq!(baselines.len(), 3, "wrapped footer lines: {baselines:?}");
+        for (actual, expected) in baselines.iter().zip([740.0, 754.0, 768.0]) {
+            assert!(
+                (actual - expected).abs() < 0.01,
+                "native wrapped footer baseline {expected}, got {baselines:?}; wraps_first={wraps_first}"
+            );
+        }
+    }
 }
 
 /// The bare `hhea` descent of `family` at `size_pt`, in points.
@@ -1723,6 +2338,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -1731,6 +2347,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
                         color: Color::new(0xCC, 0xCC, 0xCC),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -1812,6 +2429,7 @@ fn a_right_aligned_header_does_not_drag_its_rule_left() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -1820,6 +2438,7 @@ fn a_right_aligned_header_does_not_drag_its_rule_left() {
                         color: Color::new(0xCC, 0xCC, 0xCC),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -1854,6 +2473,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
             color: Color::new(0x33, 0x66, 0x99),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     };
 
@@ -1874,6 +2494,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: rule(1.0),
@@ -1931,6 +2552,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -1994,6 +2616,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2041,6 +2664,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2162,6 +2786,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -2170,6 +2795,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
                         color: Color::new(0xCC, 0xCC, 0xCC),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -2203,9 +2829,9 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
     );
 }
 
-/// Without `w:space` the rule keeps the previous hairline clearance.
+/// Without `w:space` the rule sits directly under the line's bottom edge.
 #[test]
-fn test_generate_header_border_without_space_keeps_hairline_gap() {
+fn a_header_border_without_space_leaves_no_gap() {
     use crate::ir::{BorderSide, CellBorder, HFInline, HeaderFooter, HeaderFooterParagraph};
 
     let doc = make_doc(vec![Page::Flow(FlowPage {
@@ -2225,6 +2851,7 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -2233,6 +2860,7 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
                         color: Color::black(),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -2250,7 +2878,16 @@ fn test_generate_header_border_without_space_keeps_hairline_gap() {
     })]);
 
     let output = generate_typst(&doc).unwrap();
-    assert!(output.source.contains("block(height: 0.5pt)[]"));
+    // An absent `w:space` is the schema's zero. Native Word 16.113.1 seats the
+    // line after a ruled header paragraph identically for `w:space="0"` and
+    // for a `w:bottom` stating none — 65.28pt in both exports — where the
+    // 0.5pt clearance this used to keep put it 0.44pt low (issue #1824). The
+    // fallback predates `w:space` being parsed at all (issue #446).
+    assert!(
+        output.source.contains("block(height: 0pt)[]"),
+        "no declared gap means no gap: {}",
+        output.source
+    );
 }
 
 /// Word measures `w:pgMar/@w:header` from the top page edge to the top of the
@@ -2282,6 +2919,7 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2336,6 +2974,7 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2369,6 +3008,28 @@ const ARIAL_METRIC_FACES: [&str; 3] = ["Arial", "Liberation Sans", "Arimo"];
 /// Malgun Gothic has no metric-compatible substitute, so only the face itself
 /// can be held to the Korean corpus baselines.
 const MALGUN_METRIC_FACES: [&str; 1] = ["Malgun Gothic"];
+
+/// The faces that carry Times New Roman's metrics: Liberation Serif and Tinos
+/// are metric-compatible clones, and their `hhea` ascender and line gap agree
+/// with it to within a thousandth of an em.
+const TIMES_METRIC_FACES: [&str; 3] = ["Times New Roman", "Liberation Serif", "Tinos"];
+
+/// Georgia is the zero-line-gap control of
+/// [`test_header_first_baseline_includes_the_face_line_gap`], and no clone of
+/// it ships anywhere, so only the face itself can carry its baseline.
+const GEORGIA_METRIC_FACES: [&str; 1] = ["Georgia"];
+
+/// The ascent Word gives a Latin header line set in Arial, in em: the face's
+/// `hhea` ascender plus its `hhea` line gap (issue #1640). The cases below
+/// share it so a change to the seat cannot be half-applied.
+#[cfg(not(target_arch = "wasm32"))]
+fn arial_header_line_ascent_em() -> f64 {
+    let ascender_em: f64 =
+        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let line_gap_em: f64 =
+        crate::render::pdf::font_line_gap_em("Arial").expect("Arial metrics should resolve");
+    ascender_em + line_gap_em
+}
 
 /// Build a one-section document whose header holds the given paragraphs.
 fn doc_with_header(
@@ -2414,6 +3075,7 @@ fn header_text_paragraph(text: &str, style: TextStyle) -> crate::ir::HeaderFoote
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         })],
         border: None,
         border_space: None,
@@ -2501,22 +3163,35 @@ fn baselines_of(doc: &Document, needle: &str) -> Vec<f64> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-/// Word seats the header's first baseline one font ascent below
+/// Word seats the header's first baseline one line ascent below
 /// `w:pgMar/@w:header`, not at a proportion of the top margin.
 ///
 /// `05_technical_manual_en` declares `w:top="1247" w:header="708"` — 62.35pt and
 /// 35.40pt — over an 8pt Arial run, and its native export puts that baseline at
-/// 42.72pt on the 0.24pt grid Word quantises to, against `35.40 + 0.9053 x 8 =
-/// 42.64` predicted (issue #629).
+/// 42.72pt on the 0.24pt grid Word quantises to (issue #629).
+///
+/// This case cannot decide *which* ascent that is, which is why
+/// [`test_header_first_baseline_includes_the_face_line_gap`] exists. Arial's
+/// line gap is 0.26pt at 8pt, so the bare-ascender seat predicts 42.64pt and
+/// the gap-inclusive one 42.90pt — barely more than one 0.24pt device pixel
+/// apart — and this origin sits on a half pixel itself (35.40 / 0.24 = 147.5),
+/// so which pixel the export rounds into is not evidence either way. Only the
+/// 0.59-0.93pt separations measured at 12 and 24pt settle it (issue #1640).
+/// What this case still pins is the part it always could: the origin is
+/// `w:header`, and the term scales with the font.
 #[test]
-fn test_header_first_baseline_sits_one_font_ascent_below_the_header_distance() {
+fn test_header_first_baseline_sits_one_line_ascent_below_the_header_distance() {
+    /// One device pixel of the native export's coordinate grid.
+    const EXPORT_GRID_PT: f64 = 0.24;
     let ascender_em: f64 =
         crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let line_gap_em: f64 =
+        crate::render::pdf::font_line_gap_em("Arial").expect("Arial metrics should resolve");
     let doc = doc_with_header_run(Some(35.4), 62.35, "office2pdf CLI Manual v0.6", arial(8.0));
 
     let baselines: Vec<f64> = baselines_of(&doc, "office2pdf CLI Manual");
     assert_eq!(baselines.len(), 1, "the header is one line");
-    let expected_pt: f64 = 35.4 + ascender_em * 8.0;
+    let expected_pt: f64 = 35.4 + (ascender_em + line_gap_em) * 8.0;
     assert!(
         (baselines[0] - expected_pt).abs() < 0.01,
         "header baseline {}pt should be {expected_pt}pt",
@@ -2524,19 +3199,155 @@ fn test_header_first_baseline_sits_one_font_ascent_below_the_header_distance() {
     );
     assert!(
         !shaped_by(&doc, "office2pdf CLI Manual", &ARIAL_METRIC_FACES)
-            || (baselines[0] - 42.72).abs() < 0.12,
+            || (baselines[0] - 42.72).abs() < EXPORT_GRID_PT,
         "Word's own export measures 42.72pt, not {}pt",
         baselines[0]
     );
+}
 
-    // Word keeps the hhea line gap above the header origin, so the header
-    // ascent is not the body line's gap-inclusive one.
-    let (body_ascent_em, _, _) = crate::render::pdf::font_line_metrics_em("Arial")
-        .expect("Arial line metrics should resolve");
+#[cfg(not(target_arch = "wasm32"))]
+/// Word seats a header's first baseline at the face's `hhea` ascender **plus**
+/// its `hhea` line gap — the same top edge [`font_line_metrics_em`] gives every
+/// body line — not at the bare ascender.
+///
+/// Four one-factor native Word 16.112 exports of
+/// `tests/fixtures/docx/unit_test_headers.docx`, `w:header="720"` = 36pt, with
+/// the header run given an explicit `w:rFonts` and `w:sz` and nothing else
+/// changed. The baselines are read from `mutool draw -F trace`:
+///
+/// | header | native | 36 + asc | 36 + asc + gap |
+/// | --- | ---: | ---: | ---: |
+/// | Arial 24pt (1854 / 67 on 2048) | 58.56 | 57.73 | **58.51** |
+/// | Times New Roman 24pt (1825 / 87) | 58.32 | 57.39 | **58.41** |
+/// | Times New Roman 12pt (the fixture) | 47.28 | 46.69 | **47.20** |
+/// | Georgia 24pt (1878 / 0) | 58.08 | 58.01 | 58.01 |
+///
+/// Every gap-carrying face lands on the gap-inclusive seat inside the 0.24pt
+/// grid those exports quantise coordinates to, and misses the bare-ascender
+/// seat by up to 0.83pt. Georgia, which declares no gap at all, is the control
+/// that keeps the correction from being read as a constant: there the two
+/// models coincide and the export agrees with both (issue #1640).
+///
+/// The 8pt Arial case #629 calibrated the bare-ascender reading on cannot
+/// separate the two — see
+/// [`test_header_first_baseline_sits_one_line_ascent_below_the_header_distance`].
+#[test]
+fn test_header_first_baseline_includes_the_face_line_gap() {
+    /// The distance native Word for Mac quantises an exported coordinate to.
+    const EXPORT_GRID_PT: f64 = 0.24;
+    /// Half of it: the noise floor a Word ground truth is compared under.
+    const GRID_NOISE_FLOOR_PT: f64 = 0.12;
+    const HEADER_DISTANCE_PT: f64 = 36.0;
+    const TOP_MARGIN_PT: f64 = 72.0;
+    const HEADER_TEXT: &str = "Unit Test Document Header";
+
+    struct HeaderSeatCase {
+        family: &'static str,
+        metric_faces: &'static [&'static str],
+        size_pt: f64,
+        native_baseline_pt: f64,
+    }
+
+    let cases: [HeaderSeatCase; 4] = [
+        HeaderSeatCase {
+            family: "Arial",
+            metric_faces: &ARIAL_METRIC_FACES,
+            size_pt: 24.0,
+            native_baseline_pt: 58.56,
+        },
+        HeaderSeatCase {
+            family: "Times New Roman",
+            metric_faces: &TIMES_METRIC_FACES,
+            size_pt: 24.0,
+            native_baseline_pt: 58.32,
+        },
+        HeaderSeatCase {
+            family: "Times New Roman",
+            metric_faces: &TIMES_METRIC_FACES,
+            size_pt: 12.0,
+            native_baseline_pt: 47.28,
+        },
+        HeaderSeatCase {
+            family: "Georgia",
+            metric_faces: &GEORGIA_METRIC_FACES,
+            size_pt: 24.0,
+            native_baseline_pt: 58.08,
+        },
+    ];
+
+    let mut measured_faces: usize = 0;
+    for case in cases {
+        let (Some(ascender_em), Some(line_gap_em)) = (
+            crate::render::pdf::font_hhea_ascender_em(case.family),
+            crate::render::pdf::font_line_gap_em(case.family),
+        ) else {
+            continue;
+        };
+        measured_faces += 1;
+        let doc = doc_with_header_run(
+            Some(HEADER_DISTANCE_PT),
+            TOP_MARGIN_PT,
+            HEADER_TEXT,
+            TextStyle {
+                font_family: Some(case.family.to_string()),
+                font_size: Some(case.size_pt),
+                ..TextStyle::default()
+            },
+        );
+
+        let baselines: Vec<f64> = baselines_of(&doc, HEADER_TEXT);
+        assert_eq!(
+            baselines.len(),
+            1,
+            "{} {}pt: the header is one line, not {baselines:?}",
+            case.family,
+            case.size_pt
+        );
+        let bare_ascent_pt: f64 = HEADER_DISTANCE_PT + ascender_em * case.size_pt;
+        let expected_pt: f64 = bare_ascent_pt + line_gap_em * case.size_pt;
+        assert!(
+            (baselines[0] - expected_pt).abs() < 0.01,
+            "{} {}pt: header baseline {}pt should be {expected_pt}pt",
+            case.family,
+            case.size_pt,
+            baselines[0]
+        );
+        // The correction is this face's own line gap at this size, so it can be
+        // neither a constant nor a share of the ascent.
+        assert!(
+            ((baselines[0] - bare_ascent_pt) - line_gap_em * case.size_pt).abs() < 0.01,
+            "{} {}pt: the seat moved by {}pt, not the face's {}pt line gap",
+            case.family,
+            case.size_pt,
+            baselines[0] - bare_ascent_pt,
+            line_gap_em * case.size_pt
+        );
+
+        if !shaped_by(&doc, HEADER_TEXT, case.metric_faces) {
+            continue;
+        }
+        assert!(
+            (baselines[0] - case.native_baseline_pt).abs() < GRID_NOISE_FLOOR_PT,
+            "{} {}pt: Word's own export measures {}pt, not {}pt",
+            case.family,
+            case.size_pt,
+            case.native_baseline_pt,
+            baselines[0]
+        );
+        if line_gap_em > 0.0 {
+            assert!(
+                (bare_ascent_pt - case.native_baseline_pt).abs() > EXPORT_GRID_PT,
+                "{} {}pt: the bare-ascender seat at {bare_ascent_pt}pt has to miss \
+                 Word's {}pt by more than one grid step for this case to discriminate",
+                case.family,
+                case.size_pt,
+                case.native_baseline_pt
+            );
+        }
+    }
     assert!(
-        (baselines[0] - (35.4 + body_ascent_em * 8.0)).abs() > 0.2,
-        "the body line's ascent would put the header baseline at {}pt",
-        35.4 + body_ascent_em * 8.0
+        measured_faces > 0,
+        "no calibrated face resolved, so nothing was measured"
     );
 }
 
@@ -2546,12 +3357,11 @@ fn test_header_first_baseline_sits_one_font_ascent_below_the_header_distance() {
 /// be a constant.
 #[test]
 fn test_header_first_baseline_scales_with_font_size_and_header_distance() {
-    let ascender_em: f64 =
-        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let ascent_em: f64 = arial_header_line_ascent_em();
     let doc = doc_with_header_run(Some(56.7), 85.05, "Datasheet", arial(12.0));
 
     let baselines: Vec<f64> = baselines_of(&doc, "Datasheet");
-    let expected_pt: f64 = 56.7 + ascender_em * 12.0;
+    let expected_pt: f64 = 56.7 + ascent_em * 12.0;
     assert_eq!(baselines.len(), 1, "the header is one line");
     assert!(
         (baselines[0] - expected_pt).abs() < 0.01,
@@ -2663,8 +3473,7 @@ fn test_latin_only_header_in_east_asian_face_keeps_the_word_line_bonus() {
 /// (issue #629).
 #[test]
 fn test_shifting_the_header_band_leaves_the_wrapped_line_advance_alone() {
-    let ascender_em: f64 =
-        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let ascent_em: f64 = arial_header_line_ascent_em();
     // Every line has to carry the marker so both wrapped lines are found.
     let wrapping: String = "office2pdf ".repeat(20);
 
@@ -2690,7 +3499,7 @@ fn test_shifting_the_header_band_leaves_the_wrapped_line_advance_alone() {
         "the band shift changed the wrapped advance: {pinned_advance} vs {unpinned_advance}"
     );
     assert!(
-        (pinned[0] - (35.4 + ascender_em * 8.0)).abs() < 0.01,
+        (pinned[0] - (35.4 + ascent_em * 8.0)).abs() < 0.01,
         "the first line still has to land on Word's baseline, not {}pt",
         pinned[0]
     );
@@ -2712,8 +3521,7 @@ fn test_shifting_the_header_band_leaves_the_wrapped_line_advance_alone() {
 fn test_header_whose_first_paragraph_is_a_page_field_seats_that_line() {
     use crate::ir::{HFInline, HeaderFooterParagraph};
 
-    let ascender_em: f64 =
-        crate::render::pdf::font_hhea_ascender_em("Arial").expect("Arial metrics should resolve");
+    let ascent_em: f64 = arial_header_line_ascent_em();
     let page_field = HeaderFooterParagraph {
         style: ParagraphStyle::default(),
         elements: vec![HFInline::PageNumber(arial(8.0))],
@@ -2728,7 +3536,7 @@ fn test_header_whose_first_paragraph_is_a_page_field_seats_that_line() {
     let unpinned = doc_with_header(None, 62.35, vec![page_field, second]);
 
     let pinned_number: Vec<f64> = baselines_of(&pinned, "1");
-    let expected_pt: f64 = 35.4 + ascender_em * 8.0;
+    let expected_pt: f64 = 35.4 + ascent_em * 8.0;
     assert!(
         pinned_number
             .first()
@@ -2914,6 +3722,7 @@ fn test_page_number_field_uses_its_run_style() {
                         style: field_style.clone(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(field_style.clone()),
                 ],
@@ -3051,6 +3860,7 @@ fn test_contents_block_emits_an_outline_at_its_declared_depth() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
@@ -3090,6 +3900,7 @@ fn test_caption_list_queries_the_captions_it_collects() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             },
         }),
@@ -3167,6 +3978,7 @@ fn test_contents_entries_number_in_the_target_sections_format() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }),
         ],
@@ -3195,6 +4007,7 @@ fn test_contents_entries_number_in_the_target_sections_format() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         header: None,
@@ -3259,6 +4072,7 @@ fn test_caption_list_numbers_in_the_target_sections_format() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 },
             }),
@@ -3484,6 +4298,7 @@ fn a_header_rule_is_spaced_from_the_line_box_bottom() {
         style: TextStyle::default(),
         href: None,
         footnote: None,
+        inline_box: None,
     };
     let paragraph = HeaderFooterParagraph {
         style: ParagraphStyle::default(),
@@ -3495,6 +4310,7 @@ fn a_header_rule_is_spaced_from_the_line_box_bottom() {
                 color: Color::new(0xCC, 0xCC, 0xCC),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             left: None,
             right: None,
@@ -3662,6 +4478,7 @@ fn a_header_line_advances_by_words_pitch() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }];
     let Some(expected) = crate::render::typst_gen::text::word_hf_line_leading_pt(&runs, 0.0) else {
         return; // the face is unavailable on this runner
@@ -3842,6 +4659,7 @@ fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     })],
                     border: None,
                     border_space: None,
@@ -3900,6 +4718,7 @@ fn a_bottom_seated_anchored_frame_keeps_one_em_above_its_bottom_inset() {
                         style: declared_size.map_or_else(TextStyle::default, arial),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     })],
                     border: None,
                     border_space: None,
@@ -3966,6 +4785,7 @@ fn a_page_left_aligned_wps_footer_uses_the_writer_text_origin_seat() {
                     style: arial(8.0),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -4193,6 +5013,7 @@ fn test_centered_sheet_moves_its_drawings_with_the_grid() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         fill: None,
@@ -4249,6 +5070,7 @@ fn test_sheet_line_shape_paints_as_a_stroked_line_in_the_drawing_layer() {
                 color: Color::new(217, 217, 217),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,

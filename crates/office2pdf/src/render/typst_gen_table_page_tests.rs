@@ -79,6 +79,7 @@ fn test_table_page_merged_cells() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     col_span: 2,
@@ -97,6 +98,7 @@ fn test_table_page_merged_cells() {
                                 style: TextStyle::default(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         })],
                         ..TableCell::default()
@@ -109,6 +111,7 @@ fn test_table_page_merged_cells() {
                                 style: TextStyle::default(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         })],
                         ..TableCell::default()
@@ -148,6 +151,7 @@ fn test_table_page_with_column_widths() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()
@@ -160,6 +164,7 @@ fn test_table_page_with_column_widths() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()
@@ -227,6 +232,7 @@ fn test_table_page_rowspan_merge() {
                                 style: TextStyle::default(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         })],
                         row_span: 2,
@@ -240,6 +246,7 @@ fn test_table_page_rowspan_merge() {
                                 style: TextStyle::default(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         })],
                         ..TableCell::default()
@@ -257,6 +264,7 @@ fn test_table_page_rowspan_merge() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()

@@ -947,6 +947,82 @@ fn cell_margins_overlay_the_resolved_default_table_style() {
     );
 }
 
+/// A package can define no table style at all — a minimally generated package
+/// has no `w:tblStyle`, no direct `w:tblCellMar` and no table style in
+/// `styles.xml`. Word insets such a cell by nothing vertically and 0.48pt
+/// horizontally, so falling through to Typst's symmetric 5pt put every cell
+/// line 5pt low and ended the table 5pt late (issue #1687).
+#[test]
+fn word_styleless_cell_margins_apply_when_no_table_style_is_defined() {
+    let data = build_docx_with_table_style(PARAGRAPH_STYLES_ONLY, TABLE_WITHOUT_STYLE);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let table = first_table(&doc);
+
+    assert_eq!(
+        table.default_cell_padding,
+        Some(Insets {
+            top: 0.0,
+            right: 0.48,
+            bottom: 0.0,
+            left: 0.48,
+        })
+    );
+    let source = crate::render::typst_gen::generate_typst(&doc)
+        .expect("the table renders")
+        .source;
+    assert!(
+        source.contains("inset: (top: 0pt, right: 0.48pt, bottom: 0pt, left: 0.48pt)"),
+        "Word's style-less cell margins must be emitted instead of Typst's 5pt default: {source}"
+    );
+}
+
+/// The same rule holds for a package with no `styles.xml` at all, which is what
+/// issue #1684's generated package looks like.
+#[test]
+fn word_styleless_cell_margins_apply_when_the_package_has_no_styles_part() {
+    let document_xml = format!(
+        r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>{TABLE_WITHOUT_STYLE}<w:sectPr/></w:body>
+    </w:document>"#
+    );
+    let data = build_docx_with_math(&document_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_table(&doc).default_cell_padding,
+        Some(Insets {
+            top: 0.0,
+            right: 0.48,
+            bottom: 0.0,
+            left: 0.48,
+        })
+    );
+}
+
+/// A per-cell `w:tcMar` in a package with no table style overlays only the side
+/// it states; the other three stay Word's style-less values.
+#[test]
+fn cell_margins_overlay_word_styleless_cell_margins() {
+    let table_xml = TABLE_WITHOUT_STYLE.replace(
+        "<w:tc>",
+        r#"<w:tc><w:tcPr>
+            <w:tcMar><w:left w:w="240" w:type="dxa"/></w:tcMar>
+        </w:tcPr>"#,
+    );
+    let data = build_docx_with_table_style(PARAGRAPH_STYLES_ONLY, &table_xml);
+    let (doc, _warnings) = DocxParser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    assert_eq!(
+        first_table(&doc).rows[0].cells[0].padding,
+        Some(Insets {
+            top: 0.0,
+            right: 0.48,
+            bottom: 0.0,
+            left: 12.0,
+        })
+    );
+}
+
 #[test]
 fn test_table_row_uses_largest_effective_vertical_cell_margins() {
     let mut first_cell = docx_rs::TableCell::new()
@@ -1685,6 +1761,17 @@ const TABLE_WITHOUT_STYLE: &str = r#"<w:tbl>
     <w:tr><w:tc><w:p><w:r><w:t>Poster</w:t></w:r></w:p></w:tc></w:tr>
 </w:tbl>"#;
 
+/// A style sheet that defines paragraph styles but no table style, so no
+/// `w:tblCellMar` is reachable through the style chain (issue #1687).
+const PARAGRAPH_STYLES_ONLY: &str = r#"
+    <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+        <w:name w:val="Normal"/>
+    </w:style>
+    <w:style w:type="paragraph" w:styleId="Heading1">
+        <w:name w:val="heading 1"/>
+        <w:basedOn w:val="Normal"/>
+    </w:style>"#;
+
 const DEFAULT_TABLE_STYLE_WITH_MARGINS: &str = r#"
     <w:style w:type="table" w:default="1" w:styleId="TableNormal">
         <w:tblPr><w:tblCellMar>
@@ -1947,4 +2034,148 @@ fn an_auto_row_height_states_no_constraint() {
 
     assert_eq!(parsed.rows[0].height, None);
     assert_eq!(parsed.rows[0].minimum_height, None);
+}
+
+/// The probe of issue #1700: a three-row table of bordered 3000-twip cells
+/// whose middle row holds nothing but `<w:p/>` in every cell. Arial 11pt and a
+/// gapless single line rule are stated in `w:docDefaults` and in a defined
+/// `Normal`, so the row height is the only thing left free.
+///
+/// `blank_mark` replaces the middle row's paragraph, which is the one factor
+/// the variants below change.
+fn build_blank_row_table_docx(blank_mark: &str) -> Vec<u8> {
+    const ARIAL: &str =
+        r#"<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/>"#;
+    let styles_xml: String = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault><w:rPr>{ARIAL}<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault>
+    <w:pPrDefault><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:rPr>{ARIAL}<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Tiny">
+    <w:name w:val="Tiny"/>
+    <w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="16"/></w:rPr>
+  </w:style>
+</w:styles>"#
+    );
+    let sides: String = ["top", "left", "bottom", "right"]
+        .iter()
+        .map(|side| format!(r#"<w:{side} w:val="single" w:sz="4" w:space="0" w:color="000000"/>"#))
+        .collect();
+    let cell = |paragraph: &str| -> String {
+        format!(
+            r#"<w:tc><w:tcPr><w:tcW w:w="3000" w:type="dxa"/><w:tcBorders>{sides}</w:tcBorders></w:tcPr>{paragraph}</w:tc>"#
+        )
+    };
+    let row = |paragraph: &str| -> String { format!("<w:tr>{}</w:tr>", cell(paragraph).repeat(3)) };
+    let text_row: String = row(r#"<w:p><w:r><w:t>a</w:t></w:r></w:p>"#);
+    let body_xml: String = format!(
+        r#"<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>
+<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>
+{text_row}{}{text_row}</w:tbl><w:p/>"#,
+        row(blank_mark)
+    );
+    super::page_feature_tests::build_docx_with_raw_styles(&styles_xml, &body_xml)
+}
+
+/// The middle row's first cell paragraph, as the IR carries it.
+fn blank_row_paragraph(data: &[u8]) -> crate::ir::Paragraph {
+    let (doc, _warnings) = DocxParser
+        .parse(data, &ConvertOptions::default())
+        .expect("the probe package parses");
+    let table = first_table(&doc);
+    match &table.rows[1].cells[0].content[0] {
+        Block::Paragraph(paragraph) => paragraph.clone(),
+        other => panic!("expected the blank row's paragraph, got {other:?}"),
+    }
+}
+
+/// Word sizes a run-less `<w:p>` from its paragraph mark, and that mark
+/// resolves through the ordinary run cascade. With nothing stated on the mark
+/// itself the paragraph's default style answers — the `w:default="1"` `Normal`
+/// this fixture defines, which `build_style_map` folds over `w:rPrDefault`.
+/// Both state Arial 11pt here, so the blank row takes the same line as the text
+/// rows, which is what native Word for Mac prints for both (issue #1700).
+#[test]
+fn a_run_less_cell_paragraph_carries_its_resolved_mark_formatting() {
+    let paragraph = blank_row_paragraph(&build_blank_row_table_docx("<w:p/>"));
+
+    assert!(
+        paragraph.runs.is_empty(),
+        "the middle row's cells hold nothing but the paragraph mark"
+    );
+    let mark = paragraph
+        .style
+        .paragraph_mark_text_style
+        .as_deref()
+        .expect("a run-less cell paragraph carries its mark's formatting");
+    assert_eq!(mark.font_family.as_deref(), Some("Arial"));
+    assert_eq!(mark.font_size, Some(11.0));
+}
+
+/// One factor changed: the mark states `<w:sz w:val="48"/>` of its own. Native
+/// Word for Mac 16.113.2 prints that blank row 28.080pt tall against 13.200pt
+/// for the inheriting package — 24pt of Arial's line plus the 0.48pt rule — so
+/// the mark's own size must outrank the inherited one while the family it says
+/// nothing about still comes from `w:rPrDefault`.
+#[test]
+fn a_mark_that_states_a_size_outranks_the_document_default() {
+    let paragraph = blank_row_paragraph(&build_blank_row_table_docx(
+        r#"<w:p><w:pPr><w:rPr><w:sz w:val="48"/></w:rPr></w:pPr></w:p>"#,
+    ));
+
+    let mark = paragraph
+        .style
+        .paragraph_mark_text_style
+        .as_deref()
+        .expect("a run-less cell paragraph carries its mark's formatting");
+    assert_eq!(mark.font_size, Some(24.0));
+    assert_eq!(mark.font_family.as_deref(), Some("Arial"));
+}
+
+/// The mark resolves through the paragraph's `w:pStyle` as well, so a blank
+/// paragraph in a styled cell takes that style's face and size rather than the
+/// document default's.
+#[test]
+fn a_mark_resolves_through_the_paragraph_style() {
+    let paragraph = blank_row_paragraph(&build_blank_row_table_docx(
+        r#"<w:p><w:pPr><w:pStyle w:val="Tiny"/></w:pPr></w:p>"#,
+    ));
+
+    let mark = paragraph
+        .style
+        .paragraph_mark_text_style
+        .as_deref()
+        .expect("a run-less cell paragraph carries its mark's formatting");
+    assert_eq!(mark.font_family.as_deref(), Some("Courier New"));
+    assert_eq!(mark.font_size, Some(8.0));
+}
+
+/// A paragraph that has runs is sized from those runs, so it carries no mark
+/// formatting: the field exists only for the paragraphs whose line nothing
+/// else can measure.
+#[test]
+fn a_paragraph_with_runs_carries_no_mark_formatting() {
+    let (doc, _warnings) = DocxParser
+        .parse(
+            &build_blank_row_table_docx("<w:p/>"),
+            &ConvertOptions::default(),
+        )
+        .expect("the probe package parses");
+    let table = first_table(&doc);
+    for row_index in [0_usize, 2] {
+        let Block::Paragraph(paragraph) = &table.rows[row_index].cells[0].content[0] else {
+            panic!("expected a text row paragraph");
+        };
+        assert!(!paragraph.runs.is_empty(), "row {row_index} holds text");
+        assert!(
+            paragraph.style.paragraph_mark_text_style.is_none(),
+            "row {row_index} is sized from its runs, not from its mark"
+        );
+    }
 }

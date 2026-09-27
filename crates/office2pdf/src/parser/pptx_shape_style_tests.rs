@@ -1173,3 +1173,156 @@ fn a_stated_join_overrides_the_theme_line_style() {
         LineJoin::Round
     );
 }
+
+// ── `a:ln/@cap` end geometry (issue #1682) ───────────────────────────
+
+/// Build a one-shape deck whose outline declares `attributes` on its `<a:ln>`
+/// and return the parsed stroke.
+fn shape_stroke_for_line_attributes(attributes: &str) -> BorderSide {
+    let shape = format!(
+        r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ln {attributes}><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/></a:ln></p:spPr></p:sp>"#
+    );
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx(SLIDE_CX, SLIDE_CY, &[slide]);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let FixedElementKind::Shape(ref s) = page.elements[0].kind else {
+        panic!("expected a Shape");
+    };
+    s.stroke.as_ref().expect("expected a stroke").clone()
+}
+
+/// An `a:ln` naming no `cap` ends its stroke flat, and so does `cap="flat"`.
+///
+/// Measured on a native macOS PowerPoint export of `1-slide.pptx`'s 3.5pt
+/// straight connector: both the unpatched deck and a `cap="flat"` variant trace
+/// as PDF `linecap="0,0,0"`, butt ends (issue #1682).
+#[test]
+fn an_omitted_or_flat_cap_ends_the_stroke_flat() {
+    assert_eq!(
+        shape_stroke_for_line_attributes(r#"w="38100""#).cap,
+        LineCap::Flat
+    );
+    assert_eq!(
+        shape_stroke_for_line_attributes(r#"w="38100" cap="flat""#).cap,
+        LineCap::Flat
+    );
+}
+
+/// Triangulation: `rnd` and `sq` are their own end geometries at any width, so
+/// the flat default above cannot be a constant. The same export traces
+/// `linecap="1,1,1"` for `cap="rnd"` and `linecap="2,2,2"` for `cap="sq"`.
+#[test]
+fn each_stated_cap_reaches_the_stroke() {
+    for width_emu in ["12700", "38100", "54863"] {
+        assert_eq!(
+            shape_stroke_for_line_attributes(&format!(r#"w="{width_emu}" cap="rnd""#)).cap,
+            LineCap::Round,
+            "cap=rnd at w={width_emu}"
+        );
+        assert_eq!(
+            shape_stroke_for_line_attributes(&format!(r#"w="{width_emu}" cap="sq""#)).cap,
+            LineCap::Square,
+            "cap=sq at w={width_emu}"
+        );
+    }
+}
+
+/// A `cap` DrawingML does not define states nothing, so the flat default holds
+/// rather than the attribute being read positionally.
+#[test]
+fn an_unknown_cap_value_keeps_the_flat_default() {
+    assert_eq!(
+        shape_stroke_for_line_attributes(r#"w="38100" cap="rounded""#).cap,
+        LineCap::Flat
+    );
+}
+
+/// A theme `<a:lnStyleLst>` entry carries its `cap` to any shape that takes its
+/// outline from `<a:lnRef idx>`.
+///
+/// Measured: patching only `1-slide.pptx`'s theme `lnStyleLst` entry 1 from
+/// `cap="flat"` to `cap="rnd"` turns every stroke whose `<a:lnRef idx="1">`
+/// reaches it — the slide's two connectors and the layout's two — from
+/// `linecap="0,0,0"` to `linecap="1,1,1"` in the native export, even though no
+/// shape states a cap of its own (issue #1682).
+#[test]
+fn a_theme_line_style_carries_its_cap_through_lnref() {
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:clrScheme name="X">
+      <a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+    </a:clrScheme>
+    <a:fontScheme name="X"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="X"><a:lnStyleLst>
+      <a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+      <a:ln w="12700" cap="rnd"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+      <a:ln w="19050" cap="sq"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+    </a:lnStyleLst></a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let styled_shape = |idx: u32| {
+        format!(
+            r#"<p:sp><p:nvSpPr><p:cNvPr id="{idx}" name="S{idx}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="{}"/><a:ext cx="914400" cy="500000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></p:spPr><p:style><a:lnRef idx="{idx}"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></p:style></p:sp>"#,
+            idx as i64 * 600_000
+        )
+    };
+    // idx 1 → theme entry with no cap, idx 2 → `rnd`, idx 3 → `sq`.
+    let slide = make_slide_xml(&[styled_shape(1), styled_shape(2), styled_shape(3)]);
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let caps: Vec<LineCap> = page
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Shape(s) => s.stroke.as_ref().map(|stroke| stroke.cap),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        caps,
+        vec![LineCap::Flat, LineCap::Round, LineCap::Square],
+        "each theme line's cap must reach the shape that references it"
+    );
+}
+
+/// A shape's own `a:ln/@cap` overrides the cap it would otherwise inherit from
+/// the theme line its `<a:lnRef>` names.
+#[test]
+fn a_stated_cap_overrides_the_theme_line_style() {
+    let theme_xml = r#"<?xml version="1.0"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <a:themeElements>
+    <a:clrScheme name="X">
+      <a:dk1><a:srgbClr val="000000"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+    </a:clrScheme>
+    <a:fontScheme name="X"><a:majorFont><a:latin typeface="Calibri"/></a:majorFont><a:minorFont><a:latin typeface="Calibri"/></a:minorFont></a:fontScheme>
+    <a:fmtScheme name="X"><a:lnStyleLst>
+      <a:ln w="6350" cap="rnd"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+      <a:ln w="12700" cap="rnd"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+    </a:lnStyleLst></a:fmtScheme>
+  </a:themeElements>
+</a:theme>"#;
+    let shape = r#"<p:sp><p:nvSpPr><p:cNvPr id="2" name="S"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill><a:ln w="25400" cap="sq"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></p:spPr><p:style><a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef></p:style></p:sp>"#.to_string();
+    let slide = make_slide_xml(&[shape]);
+    let data = build_test_pptx_with_theme(SLIDE_CX, SLIDE_CY, &[slide], theme_xml);
+
+    let parser = PptxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = first_fixed_page(&doc);
+    let FixedElementKind::Shape(ref s) = page.elements[0].kind else {
+        panic!("expected a Shape");
+    };
+    assert_eq!(
+        s.stroke.as_ref().expect("expected a stroke").cap,
+        LineCap::Square
+    );
+}

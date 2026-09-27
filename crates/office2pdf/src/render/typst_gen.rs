@@ -11,12 +11,12 @@ use crate::ir::{
     ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage, FloatingImage,
     FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline, HeaderFooter,
     HeaderFooterFrame, IconShading, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing,
-    Insets, LegendPosition, LineBox, LineJoin, LineSpacing, List, ListKind, Margins, MathEquation,
-    Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph, ParagraphStyle,
-    PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow,
-    Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader, TabStop, Table,
-    TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData, TextBoxVerticalAlign,
-    TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    InlineTextBox, Insets, LegendPosition, LineBox, LineCap, LineJoin, LineSpacing, List, ListKind,
+    Margins, MathEquation, Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph,
+    ParagraphStyle, PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo,
+    Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader,
+    TabStop, Table, TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData,
+    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{
@@ -689,6 +689,18 @@ fn generate_flow_page(
     // left and right margins.
     ctx.available_measure_pt =
         Some(size.width - page.margins.left - page.margins.right).filter(|measure| *measure > 0.0);
+    // Absent w:defaultTabStop: East Asian Word editions (signalled by the
+    // section's w:docGrid) default to 800 twips = 40pt where Western
+    // editions use the ECMA 720 twips = 36pt (issue #393). Set before the
+    // page setup, whose header and footer tabs use the same default stops
+    // (issue #1821).
+    ctx.default_tab_width_pt =
+        ctx.document_default_tab_stop_pt
+            .unwrap_or(if page.line_grid_pitch.is_some() {
+                EAST_ASIAN_DEFAULT_TAB_WIDTH_PT
+            } else {
+                DEFAULT_TAB_WIDTH_PT
+            });
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
     // The marker sits at the section's first page, so a first-page header can
@@ -723,16 +735,6 @@ fn generate_flow_page(
     // presence of the element still marks an East Asian edition for the tab
     // default below, which is a different question.
     ctx.line_grid_pitch = page.line_grid_pitch.filter(|_| page.line_grid_snaps_lines);
-    // Absent w:defaultTabStop: East Asian Word editions (signalled by the
-    // section's w:docGrid) default to 800 twips = 40pt where Western
-    // editions use the ECMA 720 twips = 36pt (issue #393).
-    ctx.default_tab_width_pt =
-        ctx.document_default_tab_stop_pt
-            .unwrap_or(if page.line_grid_pitch.is_some() {
-                EAST_ASIAN_DEFAULT_TAB_WIDTH_PT
-            } else {
-                DEFAULT_TAB_WIDTH_PT
-            });
 
     // Word keeps `w:spacing w:before` on the document's first body paragraph,
     // but Typst collapses leading block spacing at a page boundary, pulling the
@@ -771,12 +773,41 @@ fn generate_flow_page(
     Ok(())
 }
 
-/// Generate Typst markup for multi-column content.
+/// Generate Typst markup for multi-column content, one page at a time.
+///
+/// Typst refuses `#pagebreak()` anywhere below the top level, so a section
+/// whose content carries one cannot be emitted as a single column wrapper: the
+/// engine rejects the whole document with "pagebreaks are not allowed inside of
+/// containers" and no PDF is produced at all (issue #1695). Word ends the page
+/// at such a break and restarts the section's columns in column 1 on the next
+/// page, which is one wrapper per page's slice of the content with a top-level
+/// break between the slices. A break at either end of the section leaves an
+/// empty slice, and an empty wrapper would paint nothing while still claiming
+/// vertical space, so only the break itself is emitted for those.
+fn generate_flow_page_columns(
+    out: &mut String,
+    content: &[Block],
+    cols: &ColumnLayout,
+    ctx: &mut GenCtx,
+) -> Result<(), ConvertError> {
+    for (index, segment) in split_at_page_breaks(content).into_iter().enumerate() {
+        if index > 0 {
+            out.push_str("#pagebreak()\n");
+        }
+        if segment.is_empty() {
+            continue;
+        }
+        generate_column_section_page(out, segment, cols, ctx)?;
+    }
+    Ok(())
+}
+
+/// Generate one page's worth of a multi-column section.
 ///
 /// Equal columns use `#columns(n, gutter: Xpt)[content]`.
 /// Unequal columns use `#grid(columns: (W1pt, W2pt, ...), gutter: Xpt)` with
 /// content split by `ColumnBreak` blocks into separate grid cells.
-fn generate_flow_page_columns(
+fn generate_column_section_page(
     out: &mut String,
     content: &[Block],
     cols: &ColumnLayout,
@@ -820,6 +851,23 @@ fn generate_flow_page_columns(
         out.push_str("\n]\n");
     }
     Ok(())
+}
+
+/// Split content blocks at `PageBreak` boundaries into contiguous slices.
+///
+/// One slice per page the section spans. A leading, trailing or repeated break
+/// yields an empty slice, which the caller emits as the bare break.
+fn split_at_page_breaks(content: &[Block]) -> Vec<&[Block]> {
+    let mut segments: Vec<&[Block]> = Vec::new();
+    let mut start: usize = 0;
+    for (index, block) in content.iter().enumerate() {
+        if matches!(block, Block::PageBreak) {
+            segments.push(&content[start..index]);
+            start = index + 1;
+        }
+    }
+    segments.push(&content[start..]);
+    segments
 }
 
 /// Split content blocks at ColumnBreak boundaries into segments.
@@ -1834,8 +1882,29 @@ fn generate_fixed_text_box(
 
     let inner_width_pt: f64 =
         (outer_width_pt - text_box.padding.left - text_box.padding.right).max(0.0);
-    let inner_height_pt: f64 =
-        (outer_height_pt - text_box.padding.top - text_box.padding.bottom).max(0.0);
+    // The frame's own content region, which PowerPoint allows to be negative:
+    // nothing stops `<a:bodyPr>` from declaring insets deeper than the shape's
+    // `<a:ext cy>`. Keep the signed value — the seat below is measured from it.
+    let content_region_height_pt: f64 =
+        outer_height_pt - text_box.padding.top - text_box.padding.bottom;
+    let inner_height_pt: f64 = content_region_height_pt.max(0.0);
+    // Typst cannot lay a block out in a region that short: it truncates the
+    // content or breaks it into regions stacked a whole inset sum apart, and
+    // slide 1 of `tests/fixtures/pptx/poi/with_japanese.pptx` ended up with
+    // every paragraph thousands of points above the slide (issue #1706).
+    // PowerPoint instead lays the text out at its natural height and seats it
+    // on that negative region, overflowing the frame and the slide edge. So
+    // the frame stops containing the text: it paints its own fill, stroke and
+    // shape, and the block is placed beside it at the seat computed below.
+    let insets_exceed_frame: bool = content_region_height_pt <= 0.0;
+    // With the text out of the frame, the frame's inset has nothing left to
+    // offset — and a padded `#place` would put the shape background back where
+    // the inset used to compensate for it.
+    let frame_padding: Insets = if insets_exceed_frame {
+        Insets::default()
+    } else {
+        text_box.padding
+    };
     let text_box_id: usize = ctx.next_text_box_id();
 
     let has_custom_shape: bool = text_box.shape_kind.is_some();
@@ -1845,7 +1914,7 @@ fn generate_fixed_text_box(
         "#block(width: {}pt, height: {}pt, inset: {}",
         format_f64(outer_width_pt),
         format_f64(outer_height_pt),
-        format_insets(&text_box.padding),
+        format_insets(&frame_padding),
     );
     if text_box.no_wrap {
         out.push_str(", clip: false");
@@ -1868,11 +1937,17 @@ fn generate_fixed_text_box(
             shape_kind,
             outer_width_pt,
             outer_height_pt,
-            &text_box.padding,
+            &frame_padding,
             text_box.fill.as_ref(),
             text_box.opacity,
             &text_box.stroke,
         );
+    }
+    if insets_exceed_frame {
+        // Close the paint-only frame. What follows is a sibling of it, so the
+        // seat below is measured from the frame's own top-left corner and the
+        // frame's height no longer caps the block's layout region.
+        out.push_str("]\n");
     }
     if let Some(paragraph) = single_line_fit_paragraph(text_box, inner_height_pt) {
         let mut raw_paragraph: Paragraph = paragraph.clone();
@@ -1924,7 +1999,7 @@ fn generate_fixed_text_box(
         }
         out.push_str("    ]\n");
         out.push_str("  }\n");
-    } else if let Some(paragraph) = wrapped_fit_paragraph(text_box) {
+    } else if let Some(paragraph) = wrapped_fit_paragraph(text_box, content_region_height_pt) {
         let _ = writeln!(
             out,
             "  #let text_box_raw_{text_box_id} = block(width: {}pt)[",
@@ -1985,6 +2060,17 @@ fn generate_fixed_text_box(
         out.push_str("  ]\n");
     }
 
+    if insets_exceed_frame {
+        write_overflowing_inset_seat(
+            out,
+            text_box_id,
+            text_box.vertical_align,
+            content_region_height_pt,
+            &text_box.padding,
+        );
+        return Ok(());
+    }
+
     match text_box.vertical_align {
         TextBoxVerticalAlign::Top => {
             let _ = writeln!(out, "  #text_box_content_{text_box_id}");
@@ -2012,6 +2098,81 @@ fn generate_fixed_text_box(
 
     out.push_str("]\n");
     Ok(())
+}
+
+/// Place a block whose frame is shallower than its own vertical insets.
+///
+/// PowerPoint collapses a content region of zero or negative height to the
+/// single line at its own middle, `tIns + (height - tIns - bIns) / 2` below the
+/// frame's top, and seats the block's natural height on that line as the
+/// anchor asks: `t` puts the block's top there, `ctr` its middle, `b` its
+/// bottom. The block then overflows the frame — and the slide — in both
+/// directions.
+///
+/// Measured, not inferred. Eight native PowerPoint for Mac exports of
+/// `tests/fixtures/pptx/poi/with_japanese.pptx`, whose frame is 0pt tall with
+/// 71.98pt insets: two with the frame grown to 540pt fix the block's own
+/// height at 440.44pt, and the six below keep the degenerate frame and place
+/// its top against that line. Each one's predicted position is within 0.21pt
+/// of the export, inside PowerPoint's 0.24pt quantisation. The `b` row's frame
+/// is also translated 360pt down the slide, which is a pure offset, because
+/// its block is otherwise drawn entirely above the slide's top edge.
+///
+/// | anchor | tIns | bIns | predicted | exported |
+/// | --- | ---: | ---: | ---: | ---: |
+/// | `ctr` | 71.98 | 71.98 | -220.22 | -220.10 |
+/// | `ctr` | 71.98 | 0 | -184.23 | -184.10 |
+/// | `t` | 71.98 | 71.98 | 0.00 | -0.02 |
+/// | `t` | 0 | 71.98 | -35.99 | -35.78 |
+/// | `t` | 71.98 | 0 | +35.99 | +35.98 |
+/// | `b` | 71.98 | 71.98 | -440.44 | -440.42 |
+///
+/// The block's top against the frame's top, in points. Neither seating the
+/// block on the top inset nor centring it on the frame reproduces the `t`
+/// rows: both are independent of `bIns`, which moves the exported block half
+/// its own change (issue #1706).
+fn write_overflowing_inset_seat(
+    out: &mut String,
+    text_box_id: usize,
+    vertical_align: TextBoxVerticalAlign,
+    content_region_height_pt: f64,
+    padding: &Insets,
+) {
+    // The collapsed region: what is left of it once its own negative height is
+    // spent equally against both insets.
+    let seat_line_pt: f64 = padding.top + content_region_height_pt / 2.0;
+    match vertical_align {
+        // The block's top is the line itself, so this seat needs no
+        // measurement.
+        TextBoxVerticalAlign::Top => {
+            let _ = writeln!(
+                out,
+                "  #place(top + left, dx: {}pt, dy: {}pt, text_box_content_{text_box_id})",
+                format_f64(padding.left),
+                format_f64(seat_line_pt),
+            );
+        }
+        TextBoxVerticalAlign::Center | TextBoxVerticalAlign::Bottom => {
+            let measured_height: String = format!("measure(text_box_content_{text_box_id}).height");
+            let seat_expr: String = match vertical_align {
+                TextBoxVerticalAlign::Center => {
+                    format!("{}pt - {measured_height} / 2", format_f64(seat_line_pt))
+                }
+                TextBoxVerticalAlign::Bottom => {
+                    format!("{}pt - {measured_height}", format_f64(seat_line_pt))
+                }
+                TextBoxVerticalAlign::Top => unreachable!(),
+            };
+            out.push_str("  #context {\n");
+            let _ = writeln!(out, "    let text_box_seat_{text_box_id} = {seat_expr}");
+            let _ = writeln!(
+                out,
+                "    place(top + left, dx: {}pt, dy: text_box_seat_{text_box_id}, text_box_content_{text_box_id})",
+                format_f64(padding.left),
+            );
+            out.push_str("  }\n");
+        }
+    }
 }
 
 fn write_page_setup(out: &mut String, size: &PageSize, margins: &Margins) {
@@ -2269,19 +2430,32 @@ fn flow_page_top_margin_pt(page: &FlowPage) -> f64 {
 fn hf_content_height_pt(hf: &HeaderFooter) -> Option<f64> {
     let mut total: f64 = 0.0;
     for paragraph in &hf.paragraphs {
-        let runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
-        total += text::word_line_advance_pt(&runs)?;
-        if let Some(border) = paragraph.border.as_ref() {
-            for (side, space) in [
-                (border.top.as_ref(), paragraph.border_space.map(|i| i.top)),
-                (
-                    border.bottom.as_ref(),
-                    paragraph.border_space.map(|i| i.bottom),
-                ),
-            ] {
-                if let Some(side) = side {
-                    total += side.width + space.filter(|gap| *gap > 0.0).unwrap_or(0.5);
-                }
+        total += hf_paragraph_height_pt(paragraph)?;
+    }
+    Some(total)
+}
+
+/// The height one header or footer paragraph takes: Word's line for its face,
+/// plus whatever its `w:pBdr` rules and their `w:space` gaps reserve.
+///
+/// Shared with [`generate_stacked_hf_paragraphs`], which states it on the
+/// paragraph's block, so the height a ruled story reserves in the band is the
+/// height it actually lays out (issue #1824).
+fn hf_paragraph_height_pt(paragraph: &crate::ir::HeaderFooterParagraph) -> Option<f64> {
+    let runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
+    let mut total: f64 = text::word_line_advance_pt(&runs)?;
+    if let Some(border) = paragraph.border.as_ref() {
+        for (side, space) in [
+            (border.top.as_ref(), paragraph.border_space.map(|i| i.top)),
+            (
+                border.bottom.as_ref(),
+                paragraph.border_space.map(|i| i.bottom),
+            ),
+        ] {
+            if let Some(side) = side {
+                // An absent `w:space` is the schema's zero, which is what the
+                // rules themselves are drawn with (issue #1824).
+                total += side.width + space.unwrap_or(0.0);
             }
         }
     }
@@ -2589,6 +2763,17 @@ fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCt
     // Set once for the story rather than per paragraph: wrapping each paragraph
     // in its own content block makes it a block, and Typst then puts
     // `par(spacing:)` between them — a different and much larger gap.
+    // A ruled paragraph is block-level, which splits the joined story into
+    // separate Typst paragraphs with the default paragraph gap between them —
+    // the second line of a ruled header landed 20pt low, over the first body
+    // line, and the taller measured story clamped the band shift away and
+    // lifted the first line 2.49pt (issue #1824). Such a story is laid out as
+    // the stack of blocks it already is, each carrying Word's own line box, so
+    // the flow advances by Word's line and needs no shift to seat it.
+    if hf_story_rules_a_paragraph(hf) {
+        generate_stacked_hf_paragraphs(out, hf, ctx);
+        return;
+    }
     if let Some(leading) = hf
         .paragraphs
         .iter()
@@ -2610,6 +2795,43 @@ fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCt
         }
         generate_hf_styled_paragraph(out, paragraph, ctx);
         is_first = false;
+    }
+}
+
+/// Whether any paragraph this story emits rules itself off with a `w:pBdr`.
+fn hf_story_rules_a_paragraph(hf: &HeaderFooter) -> bool {
+    hf.paragraphs
+        .iter()
+        .filter(|paragraph| hf_paragraph_is_emitted(paragraph))
+        .any(|paragraph| paragraph.border.is_some())
+}
+
+/// Emit the story as one block per paragraph, each as tall as Word's line.
+///
+/// Word seats a ruled paragraph's own line exactly where an unruled one sits,
+/// hangs the rule `w:pBdr w:space` below the line's bottom edge, and starts
+/// the next paragraph under the rule, so the story advances by the line plus
+/// whatever the rules and their gaps reserve. Measured on native Word 16.113.1
+/// at `w:space` 0, 1 and 8, and with a `w:bottom` stating none (issue #1824).
+///
+/// The height is stated rather than left to the content because the text cell
+/// carries Typst's cap-height top edge, which is shorter than Word's line by
+/// the seat the band shift already corrects for the story's first baseline.
+/// Stating it keeps every baseline exactly where the joined story form puts
+/// it — [`hf_content_height_pt`] measures the band against these same terms —
+/// and only moves what the rule adds.
+fn generate_stacked_hf_paragraphs(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
+    for paragraph in &hf.paragraphs {
+        if !hf_paragraph_is_emitted(paragraph) {
+            continue;
+        }
+        out.push_str("#block(width: 100%, above: 0pt, below: 0pt");
+        if let Some(height) = hf_paragraph_height_pt(paragraph) {
+            let _ = write!(out, ", height: {}pt", format_f64(height));
+        }
+        out.push_str(")[");
+        generate_hf_styled_paragraph(out, paragraph, ctx);
+        out.push_str("]\n");
     }
 }
 
@@ -2684,6 +2906,7 @@ fn hf_paragraph_metric_runs(paragraph: &crate::ir::HeaderFooterParagraph) -> Vec
                 style: style.clone(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }),
             HFInline::Image(_) | HFInline::PositionedTab(_) => None,
         })
@@ -2875,7 +3098,7 @@ fn write_table_page_setup(
         } else {
             out.push_str(", header: [");
         }
-        generate_sheet_hf_content(out, header, size, &page.margins, ctx, None);
+        generate_sheet_hf_content(out, header, size, &page.margins, ctx, true, None);
         out.push(']');
     }
 
@@ -2891,19 +3114,19 @@ fn write_table_page_setup(
                 format_f64(seat.band_pt),
                 seat.story_bottom_edge(),
             );
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, Some(&seat));
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, false, Some(&seat));
             out.push_str("])]");
         } else if hf_needs_stack_offset(footer) {
             out.push_str(", footer: context { let footer_content = block(width: 100%)[");
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, None);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, false, None);
             out.push_str("]; move(dy: -measure(footer_content).height / 2)[#footer_content] }");
         } else if hf_needs_context(footer) {
             out.push_str(", footer: context [");
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, None);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, false, None);
             out.push(']');
         } else {
             out.push_str(", footer: [");
-            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, None);
+            generate_sheet_hf_content(out, footer, size, &page.margins, ctx, false, None);
             out.push(']');
         }
     }
@@ -2934,6 +3157,7 @@ fn generate_sheet_hf_content(
     size: &PageSize,
     margins: &Margins,
     ctx: &mut GenCtx,
+    is_header: bool,
     seat: Option<&SheetFooterSeat>,
 ) {
     let scaled_box: Option<(f64, f64)> = hf
@@ -2957,7 +3181,9 @@ fn generate_sheet_hf_content(
             format_f64(width_pt),
         );
     }
-    generate_hf_content(out, hf, ctx, seat);
+    if !is_header || !generate_multiline_sheet_text(out, hf, ctx, None) {
+        generate_hf_content(out, hf, ctx, seat);
+    }
     if scaled_box.is_some() {
         out.push_str("]]");
     }
@@ -3113,6 +3339,178 @@ fn hf_needs_stack_offset(hf: &HeaderFooter) -> bool {
             .any(|element| matches!(element, HFInline::Image(_)))
 }
 
+/// Text-only sheet stories use native line boxes. Footers grow upward from
+/// their last-line seats; headers grow downward from their first-line anchors.
+/// Each line retains its own descent, including the footer rich-section adjustment.
+fn generate_multiline_sheet_text(
+    out: &mut String,
+    hf: &HeaderFooter,
+    ctx: &mut GenCtx,
+    seat: Option<&SheetFooterSeat>,
+) -> bool {
+    // A picture can determine the line height; preserve the existing flow layout
+    // rather than stacking an image-bearing line with text-only font metrics.
+    if hf.paragraphs.iter().any(|paragraph| {
+        paragraph
+            .elements
+            .iter()
+            .any(|element| matches!(element, HFInline::Image(_)))
+    }) {
+        return false;
+    }
+    let slots = [Alignment::Left, Alignment::Center, Alignment::Right];
+    if hf.paragraphs.iter().any(|paragraph| {
+        !slots
+            .iter()
+            .any(|slot| paragraph.style.alignment == Some(*slot))
+    }) {
+        return false;
+    }
+    let groups: Vec<Vec<usize>> = slots
+        .iter()
+        .map(|slot| {
+            hf.paragraphs
+                .iter()
+                .enumerate()
+                .filter_map(|(index, paragraph)| {
+                    (paragraph.style.alignment == Some(*slot)).then_some(index)
+                })
+                .collect()
+        })
+        .collect();
+    if !groups.iter().any(|group| group.len() > 1) {
+        return false;
+    }
+    let scale: f64 = hf
+        .sheet_print_scale
+        .filter(|scale| *scale > 0.0)
+        .unwrap_or(1.0);
+    let advances: Option<Vec<f64>> = hf
+        .paragraphs
+        .iter()
+        .map(|paragraph| {
+            hf_paragraph_metric_runs(paragraph)
+                .iter()
+                .map(|run| {
+                    let family = run.style.font_family.as_deref()?;
+                    let size: f64 = run.style.font_size.unwrap_or(11.0) / scale;
+                    text::sheet_wrapped_line_advance_pt(family, size)
+                        .or_else(|| text::sheet_row_line_advance_pt(family, size, false))
+                        .map(|advance| advance * scale)
+                })
+                .collect::<Option<Vec<f64>>>()?
+                .into_iter()
+                .reduce(f64::max)
+        })
+        .collect();
+    let Some(advances) = advances else {
+        return false;
+    };
+    let section_lifts: Vec<Option<f64>> = match seat {
+        Some(seat) => seat.section_lift_pt.clone(),
+        // Native mixed-size header probes round descents in sheet points
+        // before applying the print scale.
+        None => hf
+            .paragraphs
+            .iter()
+            .map(|paragraph| {
+                text::sheet_line_deepest_descent_pt(&hf_paragraph_metric_runs(paragraph), scale)
+                    .map(|descent| descent.round() * scale)
+            })
+            .collect(),
+    };
+    let multiple_sections: bool = groups.iter().filter(|group| !group.is_empty()).count() > 1;
+    if multiple_sections {
+        let edge = if seat.is_some() { "bottom" } else { "top" };
+        let _ = write!(
+            out,
+            "#grid(columns: (1fr, 1fr, 1fr), align: (left + {edge}, center + {edge}, right + {edge}), "
+        );
+    }
+    for group in &groups {
+        if multiple_sections {
+            out.push_str("[#box(width: 300%)[");
+        }
+        if !group.is_empty() {
+            out.push_str("#layout(size => { ");
+            for &index in group {
+                let _ = write!(out, "let line_{index} = block(width: size.width)[");
+                if let Some(lift_pt) = section_lifts[index] {
+                    // Native single-line header sections sit one sheet point
+                    // below multiline sections with the same font metrics.
+                    let lift_pt = if seat.is_none() && group.len() == 1 {
+                        lift_pt - scale
+                    } else {
+                        lift_pt
+                    };
+                    let edge = SheetFooterSeat::bottom_edge_value(lift_pt);
+                    // The signed bottom edge contributes lift below the baseline.
+                    let _ = write!(
+                        out,
+                        "#set text(top-edge: {}pt, bottom-edge: {edge}); #set par(leading: 0pt); ",
+                        format_f64(advances[index] - lift_pt)
+                    );
+                }
+                generate_hf_styled_paragraph(out, &hf.paragraphs[index], ctx);
+                out.push_str("]; ");
+            }
+            if seat.is_none() {
+                let first_index = group[0];
+                let _ = write!(out, "let offset_{first_index} = 0pt; ");
+                for pair in group.windows(2) {
+                    let previous = pair[0];
+                    let index = pair[1];
+                    let _ = write!(
+                        out,
+                        "let offset_{index} = offset_{previous} + calc.max({}pt, measure(line_{previous}).height); ",
+                        format_f64(advances[previous])
+                    );
+                }
+                // Reserve the first line's box so adding lines does not move
+                // the first header upward through the page's top boundary.
+                let _ = write!(
+                    out,
+                    "block(width: size.width, height: {}pt)[",
+                    format_f64(advances[first_index])
+                );
+                for &index in group {
+                    let _ = write!(out, "#place(top, dy: offset_{index}, line_{index})");
+                }
+            } else {
+                let last_index = group[group.len() - 1];
+                let _ = write!(out, "let offset_{last_index} = 0pt; ");
+                for position in (0..group.len() - 1).rev() {
+                    let index = group[position];
+                    let next = group[position + 1];
+                    // A wrapped paragraph contributes every visual line; even an
+                    // empty explicit paragraph still reserves one native advance.
+                    let _ = write!(
+                        out,
+                        "let offset_{index} = offset_{next} + calc.max({}pt, measure(line_{next}).height); ",
+                        format_f64(advances[next])
+                    );
+                }
+                out.push_str("block(width: size.width, height: calc.max(");
+                for &index in group {
+                    let _ = write!(out, "measure(line_{index}).height + offset_{index}, ");
+                }
+                out.push_str("))[");
+                for &index in group {
+                    let _ = write!(out, "#place(bottom, dy: -offset_{index}, line_{index})");
+                }
+            }
+            out.push_str("] })");
+        }
+        if multiple_sections {
+            out.push_str("]], ");
+        }
+    }
+    if multiple_sections {
+        out.push(')');
+    }
+    true
+}
+
 /// Generate inline content for a header or footer.
 ///
 /// `seat` is a seated sheet footer's per-section `bottom-edge`: Excel decides
@@ -3124,6 +3522,11 @@ fn generate_hf_content(
     ctx: &mut GenCtx,
     seat: Option<&SheetFooterSeat>,
 ) {
+    if let Some(seat) = seat
+        && generate_multiline_sheet_text(out, hf, ctx, Some(seat))
+    {
+        return;
+    }
     let section_bottom_edge =
         |index: usize| -> Option<String> { seat.and_then(|seat| seat.section_bottom_edge(index)) };
     // Excel's left/center/right header sections share one line; stacking
@@ -3146,10 +3549,13 @@ fn generate_hf_content(
     if is_single_line_sections {
         out.push_str("#grid(columns: (1fr, 1fr, 1fr), ");
         if seat.is_some() {
-            out.push_str("align: bottom, ");
+            out.push_str("align: (left + bottom, center + bottom, right + bottom), ");
+        } else {
+            out.push_str("align: (left, center, right), ");
         }
         for slot in [Alignment::Left, Alignment::Center, Alignment::Right] {
-            let _ = write!(out, "[");
+            // Excel sections share the page width; the grid only anchors them.
+            out.push_str("[#box(width: 300%)[");
             if let Some((index, para)) = hf
                 .paragraphs
                 .iter()
@@ -3161,7 +3567,7 @@ fn generate_hf_content(
                 }
                 generate_hf_styled_paragraph(out, para, ctx);
             }
-            out.push_str("], ");
+            out.push_str("]], ");
         }
         out.push(')');
         return;
@@ -3203,52 +3609,6 @@ fn generate_hf_styled_paragraph(
     }
 }
 
-/// Where a header or footer paragraph's `<w:tab/>` runs place their segments.
-///
-/// Word's running-head idiom declares a right-aligned tab stop at the text
-/// edge, or a centre stop and a right stop, and separates the segments with
-/// tabs. Those two shapes are what `w:tabs` is used for in a header; anything
-/// else keeps the plain advance below.
-enum HeaderFooterTabLayout {
-    /// `left`, tab, `right`.
-    LeftRight(usize),
-    /// `left`, tab, `centre`, tab, `right`.
-    LeftCenterRight(usize, usize),
-}
-
-/// Resolve a header or footer paragraph's tabs against its own tab stops.
-///
-/// `generate_hf_elements` passed every `<w:tab/>` straight to `generate_run`,
-/// which writes the tab into the Typst source as a literal tab character.
-/// Typst's markup lexer treats that exactly as it treats a space, so the two
-/// segments ended up one space apart and the one a right stop should have
-/// pushed to the right margin sat beside the left one — on every page of a
-/// document that uses the idiom (issue #579).
-///
-/// The `#h(1em)` advance below is a different element: `w:ptab`, which states
-/// its own alignment rather than referring to a stop.
-fn header_footer_tab_layout(
-    paragraph: &crate::ir::HeaderFooterParagraph,
-) -> Option<HeaderFooterTabLayout> {
-    let tabs: Vec<usize> = paragraph
-        .elements
-        .iter()
-        .enumerate()
-        .filter(|(_, element)| matches!(element, HFInline::Run(run) if run.text == "\t"))
-        .map(|(index, _)| index)
-        .collect();
-    let stops = paragraph.style.tab_stops.as_deref()?;
-    let alignments: Vec<TabAlignment> = stops.iter().map(|stop| stop.alignment).collect();
-
-    match (tabs.as_slice(), alignments.as_slice()) {
-        ([tab], [.., TabAlignment::Right]) => Some(HeaderFooterTabLayout::LeftRight(*tab)),
-        ([first, second], [TabAlignment::Center, .., TabAlignment::Right]) => {
-            Some(HeaderFooterTabLayout::LeftCenterRight(*first, *second))
-        }
-        _ => None,
-    }
-}
-
 fn generate_hf_paragraph(
     out: &mut String,
     paragraph: &crate::ir::HeaderFooterParagraph,
@@ -3273,11 +3633,13 @@ fn generate_hf_paragraph(
         .as_ref()
         .and_then(|border| border.bottom.as_ref());
     let stacks_rules: bool = top_border.is_some() || bottom_border.is_some();
-    // `w:pBdr` sides declare their own `w:space` gap in points. Without one,
-    // Word still leaves a hairline of clearance, which the 0.5 pt fallback
-    // reproduces. Word measures the gap from the text's descender line, so the
-    // stack pins the text bottom edge there.
-    let space = |declared: Option<f64>| -> f64 { declared.filter(|gap| *gap > 0.0).unwrap_or(0.5) };
+    // `w:pBdr` sides declare their own `w:space` gap in points, measured from
+    // the text's bottom edge, which is why the stack pins it there. An absent
+    // `w:space` is the schema's zero, not a hairline: native Word 16.113.1
+    // seats the following header line at 65.28pt both for `w:space="0"` and
+    // for a `w:bottom` stating no `w:space` at all, where the 0.5pt fallback
+    // this used to apply put it 0.44pt low (issue #1824).
+    let space = |declared: Option<f64>| -> f64 { declared.unwrap_or(0.0) };
     let top_space: f64 = space(paragraph.border_space.map(|insets| insets.top));
     let bottom_space: f64 = space(paragraph.border_space.map(|insets| insets.bottom));
 
@@ -3312,26 +3674,36 @@ fn generate_hf_paragraph(
         out.push_str("], [");
         generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
         out.push_str("])");
+    } else if paragraph.elements.iter().any(is_hf_tab) {
+        // `generate_run` would write a `<w:tab/>` into the source as a literal
+        // tab, which Typst's markup lexer treats as a space, so the segment a
+        // stop should place sat beside the one before it (issue #579). The
+        // `#h(1em)` of `generate_hf_elements` is a different element: `w:ptab`,
+        // which states its own alignment rather than referring to a stop.
+        let segments: Vec<&[HFInline]> = paragraph.elements.split(is_hf_tab).collect();
+        let segment_runs: Vec<Vec<Run>> = segments
+            .iter()
+            .map(|segment| {
+                segment
+                    .iter()
+                    .filter_map(|element| match element {
+                        HFInline::Run(run) => Some(run.clone()),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .collect();
+        let default_tab_width_pt: f64 =
+            paragraph_default_tab_width_pt(&paragraph.style, ctx.default_tab_width_pt);
+        write_measured_tab_segments(
+            out,
+            &segment_runs,
+            paragraph.style.tab_stops.as_deref(),
+            default_tab_width_pt,
+            |out, index| generate_hf_elements(out, segments[index], ctx),
+        );
     } else {
-        match header_footer_tab_layout(paragraph) {
-            Some(HeaderFooterTabLayout::LeftRight(index)) => {
-                out.push_str("#grid(columns: (1fr, auto), [");
-                generate_hf_elements(out, &paragraph.elements[..index], ctx);
-                out.push_str("], [");
-                generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
-                out.push_str("])");
-            }
-            Some(HeaderFooterTabLayout::LeftCenterRight(first, second)) => {
-                out.push_str("#grid(columns: (1fr, auto, 1fr), align: (left, center, right), [");
-                generate_hf_elements(out, &paragraph.elements[..first], ctx);
-                out.push_str("], [");
-                generate_hf_elements(out, &paragraph.elements[first + 1..second], ctx);
-                out.push_str("], [");
-                generate_hf_elements(out, &paragraph.elements[second + 1..], ctx);
-                out.push_str("])");
-            }
-            None => generate_hf_elements(out, &paragraph.elements, ctx),
-        }
+        generate_hf_elements(out, &paragraph.elements, ctx);
     }
 
     if stacks_rules {
@@ -3410,6 +3782,11 @@ fn write_hf_field(out: &mut String, style: &TextStyle, field: &str) {
     } else {
         out.push_str(field);
     }
+}
+
+/// A `<w:tab/>`: the parser gives each one a run of its own.
+fn is_hf_tab(element: &HFInline) -> bool {
+    matches!(element, HFInline::Run(run) if run.text == "\t")
 }
 
 fn generate_hf_elements(out: &mut String, elements: &[HFInline], ctx: &mut GenCtx) {
@@ -3708,7 +4085,34 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             out.push_str("#pagebreak()\n");
             Ok(())
         }
-        Block::Table(table) => generate_table(out, table, ctx),
+        Block::Table(table) => {
+            // Word gives a table no vertical spacing of its own: the gap above
+            // it is the preceding paragraph's `w:after` and the gap below it is
+            // the following paragraph's `w:before`. Typst resolves the gap
+            // between two blocks by weakness rather than by plain maximum.
+            // `typst-layout`'s flow collector tags an `auto` gap with the
+            // `par.spacing` fallback — 1.2em — at weakness 4 and a stated one
+            // at weakness 3, and `keep_weak_rel_spacing` replaces the standing
+            // gap only when the arriving one is strictly stronger or equally
+            // weak and larger. A stated gap therefore always wins, and the
+            // fallback survives only when neither neighbour states anything. A
+            // bare `#table` beside a paragraph that states no `w:before` hit
+            // exactly that case and opened 1.2em of engine whitespace: 13.2pt
+            // at 11pt, under every table in a document written from Word's
+            // default template (issue #1688). Stating both gaps leaves the
+            // neighbour's own `w:spacing` as the only thing between them, the
+            // way `write_image_block_open` already states both of a flow
+            // picture's gaps instead of letting the fallback apply (issues
+            // #463, #491, #499); a table differs only in having no `w:spacing`
+            // of its own to state, so both are zero. The wrapper spans the text
+            // column so a `w:tblPr/w:jc` table still centres in it, and the
+            // table's own `auto` gaps vanish against the wrapper's edges, where
+            // the same routine drops weak spacing that no frame precedes.
+            out.push_str("#block(width: 100%, above: 0pt, below: 0pt)[\n");
+            let result = generate_table(out, table, ctx);
+            out.push_str("]\n");
+            result
+        }
         Block::Image(img) => {
             // Word advances a picture paragraph by the picture plus its own
             // `w:spacing`. Leaving the element bare let Typst's 1.2em default
@@ -4257,8 +4661,19 @@ fn single_line_fit_paragraph(text_box: &TextBoxData, inner_height_pt: f64) -> Op
     text_box.auto_fit.then_some(paragraph)
 }
 
-fn wrapped_fit_paragraph(text_box: &TextBoxData) -> Option<&Paragraph> {
+fn wrapped_fit_paragraph(
+    text_box: &TextBoxData,
+    content_region_height_pt: f64,
+) -> Option<&Paragraph> {
     if text_box.no_wrap || matches!(text_box.vertical_align, TextBoxVerticalAlign::Top) {
+        return None;
+    }
+    // The scale this path emits is the content region over the block's own
+    // height. A region that is zero or negative leaves nothing to fit and
+    // scales the text to a point, so every word lands on one origin and none
+    // of it is drawn. PowerPoint does not shrink a block it cannot fit either
+    // way — it lets it overflow at its natural size (issue #1706).
+    if content_region_height_pt <= 0.0 {
         return None;
     }
 

@@ -470,6 +470,7 @@ pub(super) fn group_into_lists(
                             style: prefix_style,
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     );
                     result.push(Block::Paragraph(*paragraph));

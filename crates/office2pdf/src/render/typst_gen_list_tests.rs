@@ -16,6 +16,7 @@ fn test_generate_bulleted_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -29,6 +30,7 @@ fn test_generate_bulleted_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -71,6 +73,7 @@ fn a_list_marker_sits_on_the_baseline_of_a_taller_first_line() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     };
     let item = |runs: Vec<Run>| ListItem {
         content: vec![Paragraph {
@@ -146,6 +149,7 @@ fn test_generate_numbered_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -159,6 +163,7 @@ fn test_generate_numbered_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -215,6 +220,7 @@ fn test_generate_numbered_list_preserves_hanging_indent_columns() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -257,6 +263,7 @@ fn test_generate_bulleted_list_preserves_nonstandard_hanging_indent_columns() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -287,6 +294,7 @@ fn test_generate_list_preserves_paragraph_spacing_between_items() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -330,6 +338,7 @@ fn test_generate_list_uses_word_line_box_and_boundary_spacing() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -376,6 +385,7 @@ fn test_generate_list_combines_exact_line_height_with_paragraph_spacing() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -414,6 +424,7 @@ fn test_generate_numbered_list_marker_inherits_common_text_font() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -456,6 +467,7 @@ fn test_generate_symbol_bullet_uses_unicode_and_inherits_common_text_font() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -495,6 +507,7 @@ fn test_generate_numbered_list_emits_mid_list_restart() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -541,6 +554,7 @@ fn test_generate_nested_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -554,6 +568,7 @@ fn test_generate_nested_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 1,
@@ -567,6 +582,7 @@ fn test_generate_nested_list() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -632,6 +648,7 @@ fn test_nested_list_single_content_block() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -645,6 +662,7 @@ fn test_nested_list_single_content_block() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 1,
@@ -686,6 +704,7 @@ fn test_generate_nested_ordered_list_uses_full_numbering() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -699,6 +718,7 @@ fn test_generate_nested_ordered_list_uses_full_numbering() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 1,
@@ -753,6 +773,7 @@ fn test_generate_bulleted_list_with_custom_marker_text_and_style() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -801,6 +822,7 @@ fn test_generate_ordered_list_with_custom_marker_style_uses_numbering_function()
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -849,6 +871,7 @@ fn test_generate_bulleted_list_with_symbol_font_marker_uses_unicode_fallback() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -896,6 +919,7 @@ fn test_generate_list_uses_first_item_level_marker_when_list_starts_nested() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 1,
@@ -962,6 +986,7 @@ fn test_generate_list_metric_spacing_is_the_raw_paragraph_gap() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -990,6 +1015,82 @@ fn test_generate_list_metric_spacing_is_the_raw_paragraph_gap() {
 }
 
 #[test]
+fn test_list_spacing_stays_the_paragraph_gap_when_items_state_proportional_line_spacing() {
+    // Word's default template writes `w:spacing w:line="259" w:lineRule="auto"`
+    // into `w:pPrDefault`, so nearly every authored list states a line
+    // multiple. That multiple is folded into the wrapper's line box, exactly
+    // as a bare single-spaced list's advance is, so the gap between two items
+    // is still the raw `w:after` — office2pdf added a whole scaled line on top
+    // of it, opening every item gap and the gap below the list by roughly one
+    // line per item (issue #1685).
+    //
+    // Two multiples pin the rule: a gap that were hardcoded to one of them
+    // would have to grow with the other.
+    use crate::ir::List;
+
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let gap_pt: f64 = 8.0;
+    let single_advance_pt: f64 =
+        (word_pitch_em * font_size).max((ascender + descender) * font_size);
+
+    for factor in [259.0 / 240.0, 1.5] {
+        let make_item = |text: &str| ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle {
+                    space_after: Some(gap_pt),
+                    line_spacing: Some(LineSpacing::Proportional(factor)),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                    inline_box: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        };
+        let list = List {
+            kind: ListKind::Unordered,
+            items: vec![make_item("First"), make_item("Second"), make_item("Third")],
+            level_styles: BTreeMap::new(),
+        };
+
+        let source = generate_typst(&make_doc(vec![make_flow_page(vec![Block::List(list)])]))
+            .unwrap()
+            .source;
+
+        // The multiple belongs to the line box, not to the item gap.
+        assert_line_advance(
+            &source,
+            "Libertinus Serif",
+            font_size,
+            single_advance_pt * factor,
+            0.0,
+        );
+        assert!(
+            source.contains(&format!("spacing: {}pt", format_f64(gap_pt))),
+            "item gap at line multiple {factor} should stay the raw {gap_pt}pt in: {source}"
+        );
+        assert!(
+            source.contains(&format!("below: {}pt", format_f64(gap_pt))),
+            "gap below the list at line multiple {factor} should stay the raw {gap_pt}pt in: {source}"
+        );
+    }
+}
+
+#[test]
 fn test_list_wrapper_block_carries_the_edge_spacing() {
     // The line-height wrapper used to leave `above`/`below` unset, so
     // Typst's own 1.2em default block spacing governed the gap between a
@@ -1013,6 +1114,7 @@ fn test_list_wrapper_block_carries_the_edge_spacing() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -1068,6 +1170,7 @@ fn slide_bullet_list_source(gaps: &[f64]) -> String {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -1119,6 +1222,7 @@ fn nested_slide_bullet_list(gaps: &[f64], levels: &[u32]) -> List {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: *level,
@@ -1272,6 +1376,7 @@ fn a_hanging_indent_bullet_separates_with_the_tab_alone() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -1340,6 +1445,7 @@ fn slide_bullets_add_their_paragraph_spacing_between_items() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -1412,6 +1518,7 @@ fn two_slide_list_items_sit_one_line_advance_apart() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,

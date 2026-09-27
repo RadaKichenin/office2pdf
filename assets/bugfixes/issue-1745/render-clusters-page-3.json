@@ -1,0 +1,71 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 34.1568,
+      "bbox_pt": {
+        "height": 5.28,
+        "width": 12.48,
+        "x": 129.6,
+        "y": 811.68
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-ee7f0b77fd94",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 27.072,
+      "bbox_pt": {
+        "height": 6.48,
+        "width": 9.12,
+        "x": 115.92,
+        "y": 811.92
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-9114be56a843",
+      "region": "bottom-left"
+    },
+    {
+      "area_pt2": 20.16,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 6.48,
+        "x": 148.56,
+        "y": 811.44
+      },
+      "disposition": {
+        "class": "glyph-edge-rasterization",
+        "kind": "accepted-rendering",
+        "note": "Table-body and footer glyph-edge fragments; content, face, weight and baselines match in the matched crops and no trace instance beyond the #1600 pair moves past the fine gate."
+      },
+      "id": "p3-81dc77e0486b",
+      "region": "bottom-left"
+    }
+  ],
+  "dpi": 300,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 3,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 3,
+    "duplicate": 0,
+    "total": 3,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

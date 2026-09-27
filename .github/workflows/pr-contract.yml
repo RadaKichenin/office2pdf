@@ -1,0 +1,65 @@
+name: PR Contract
+
+# Split from ci.yml because this is the only job that reads the PR body: a
+# description edit re-validates the contract without re-running the Rust jobs.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: pr-contract-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual-pr-contract:
+    name: Visual PR Contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+      - name: Test visual PR validator
+        run: python3 -m unittest discover -s scripts/tests -p 'test_check_visual_pr.py'
+      - name: Test layout differ
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_compare_layout.py'
+          python3 -m unittest discover -s scripts/tests -p 'test_spatial_match.py'
+      - name: Test render comparison
+        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_render.py'
+      - name: Test text-layer census
+        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_text_layer.py'
+      - name: Test GT integrity gate
+        run: python3 -m unittest discover -s scripts/tests -p 'test_check_gt_integrity.py'
+      - name: Test probe harness
+        run: python3 -m unittest discover -s scripts/tests -p 'test_probe_harness.py'
+      - name: Test PowerPoint chart-axis harness
+        run: python3 -m unittest discover -s scripts/tests -p 'test_measure_powerpoint_chart_axis.py'
+      - name: Test Excel row-height sweep
+        run: python3 -m unittest discover -s scripts/tests -p 'test_measure_excel_row_height.py'
+      - name: Test issue-loop viewer
+        run: python3 -m unittest discover -s scripts/tests -p 'test_issue_loop_watch.py'
+      - name: Test issue-loop usage-limit detector
+        run: python3 -m unittest discover -s scripts/tests -p 'test_issue_loop.py'
+      - name: Check issue-loop script syntax
+        run: bash -n scripts/issue_loop.sh
+      - name: Validate visual PR contract
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/check_visual_pr.py
+          --event "${GITHUB_EVENT_PATH}"
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"
+          --repository "${{ github.repository }}"
+

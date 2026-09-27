@@ -301,11 +301,12 @@ fn list_boundary_spacing(
     if previous_paragraph.style.line_box.is_some() && next_paragraph.style.line_box.is_some() {
         return Some(paragraph_gap);
     }
-    // The enclosing wrapper's line box already spans Word's full single-space
-    // (or grid) advance, and Word adds w:spacing before/after on top of that
-    // advance, so the item gap is exactly the paragraph gap. Adding a whole
-    // line height instead stretched every spaced list by roughly a line per
-    // item (issues #384, #452).
+    // The enclosing wrapper's line box already spans Word's full advance —
+    // single-space, grid-snapped, or scaled by a stated line multiple — and
+    // Word adds w:spacing before/after on top of that advance, so the item
+    // gap is exactly the paragraph gap. Adding a whole line height instead
+    // stretched every spaced list by roughly a line per item (issues #384,
+    // #452, #1685).
     if wrapper_spans_full_line
         && paragraph_uses_full_line_box(previous_paragraph)
         && paragraph_uses_full_line_box(next_paragraph)
@@ -321,10 +322,29 @@ fn list_boundary_spacing(
     Some(line_height + paragraph_gap)
 }
 
-/// Whether the paragraph renders under the wrapper's full-advance line box
-/// (no explicit line spacing or fixed line box of its own).
+/// Whether the paragraph renders under the wrapper's full-advance line box.
+///
+/// A stated line multiple is not an exception to that box; it is part of it.
+/// `word_line_leading_pt` scales Word's advance by the multiple, and
+/// `powerpoint_paragraph_line_box_em` does the same with `a:lnSpc`, before
+/// either hands the product to the wrapper's fixed text edges. A paragraph
+/// stating `w:spacing w:line="259" w:lineRule="auto"` therefore already renders
+/// under a box spanning its own scaled line, and treating it as boxless counted
+/// that line a second time — on every gap between items and on the gap below
+/// the list. Word's default template writes `w:line="259"` into `w:pPrDefault`,
+/// so the double count reached nearly every authored list (issue #1685).
+///
+/// A fixed `LineBox` and an exact line rule stay out. An exact rule leaves the
+/// Word path with no wrapper settings at all, so the caller's
+/// `wrapper_spans_full_line` gate already denies it this branch, and a declared
+/// `LineBox` is answered by the earlier branch of each caller.
 fn paragraph_uses_full_line_box(paragraph: &Paragraph) -> bool {
-    paragraph.style.line_spacing.is_none() && paragraph.style.line_box.is_none()
+    let line_spacing_is_in_the_box: bool = match paragraph.style.line_spacing {
+        None => true,
+        Some(LineSpacing::Proportional(factor)) => factor > 0.0,
+        Some(LineSpacing::Exact(_)) => false,
+    };
+    line_spacing_is_in_the_box && paragraph.style.line_box.is_none()
 }
 
 fn common_list_level_spacing(
@@ -360,7 +380,7 @@ fn list_edge_spacing(
         }
         // Same Word semantics as the item boundaries: before/after extends
         // the line advance, which the wrapper's line box already spans, so
-        // the whitespace is the gap alone (issues #384, #452).
+        // the whitespace is the gap alone (issues #384, #452, #1685).
         if wrapper_spans_full_line && paragraph_uses_full_line_box(paragraph) {
             return spacing
                 .map(|spacing| spacing.max(0.0))
@@ -1356,6 +1376,7 @@ fn prepend_marker_run(
         style: marker_style,
         href: None,
         footnote: None,
+        inline_box: None,
     });
     combined_runs.extend_from_slice(runs);
     combined_runs
@@ -1418,6 +1439,7 @@ fn fixed_text_list_marker_run(
         style: marker_style,
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 

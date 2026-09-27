@@ -14,7 +14,7 @@ use office2pdf::internal::Parser;
 use office2pdf::internal::PptxParser;
 use office2pdf::internal::generate_typst;
 use office2pdf::ir::{
-    Block, Color, FixedElementKind, FixedPage, LineSpacing, Page, PatternPreset, ShapeKind,
+    Block, Color, FixedElementKind, FixedPage, LineCap, LineSpacing, Page, PatternPreset, ShapeKind,
 };
 
 // ---------------------------------------------------------------------------
@@ -574,8 +574,11 @@ fn custom_geo_slide_6_title_uses_its_saved_normal_autofit_scale() {
                 };
                 paragraph
                     .runs
+                    // The `<a:br>` that closes this paragraph carries the
+                    // title run's own style, so it merges into that run and
+                    // leaves the break character on its text (issue #1666).
                     .iter()
-                    .find(|run| run.text == "ELA Standards Framework")
+                    .find(|run| run.text.starts_with("ELA Standards Framework"))
                     .map(|run| (text_box, run))
             })
         })
@@ -1168,13 +1171,15 @@ fn structure_rotated_text_box_keeps_each_declared_angle() {
 // ---------------------------------------------------------------------------
 // hard_break_line_advance.pptx — one `wrap="none"` caption column per size
 // (6, 8, 9, 10, 11, 12 and 14pt Arial), each holding four single-word lines
-// separated by `<a:br/>` (issue #1115). A `<a:br/>` reaches the IR as a run
-// with no run properties, so the paragraph states no size every run agrees on;
-// the line box then has to carry the size it was derived from itself.
+// separated by `<a:br/>` (issue #1115). A `<a:br/>` takes the style of the run
+// it follows and merges into it (issue #1666), so each column's paragraph
+// states exactly one size and the line box has to carry that size rather than
+// anything the paragraph inherits.
 //
 // A native PowerPoint 16 export of this deck advances each column at
 // 1.16-1.21em — its per-baseline dither around 1.2em — while every column under
-// 11pt used to advance a flat 13.20pt.
+// 11pt used to advance a flat 13.20pt. That control export is also what
+// `scripts/probes/issue-1666-*.json` vary one factor against.
 // ---------------------------------------------------------------------------
 
 /// Every caption column states PowerPoint's `1.2 x size` line, whatever the
@@ -1220,6 +1225,71 @@ fn hard_break_line_advance_smoke() {
 }
 
 // ---------------------------------------------------------------------------
+// hard_break_ignores_inherited_size.pptx — three `wrap="none"` caption columns
+// whose paragraphs all inherit a 28pt `<a:lstStyle>/<a:lvl1pPr>/<a:defRPr>`
+// while their runs declare 14, 10 and 12pt. One factor separates the columns:
+// what the `<a:br>` between the runs states — `sz="2800"`, nothing at all
+// (`<a:br/>`), and a bare `<a:rPr lang="en-US"/>` (issue #1666).
+//
+// Two native PowerPoint 16 one-factor probes settle the rule this pins
+// (`scripts/probes/issue-1666-break-run-size.json` and
+// `issue-1666-paragraph-default-size.json`): neither the break's own `<a:rPr>`
+// — absent, bare, 4pt or 28pt — nor the inherited default size — 4pt or 28pt —
+// moves a single baseline. A native export of this deck advances each column
+// at `1.2 x` the size its *runs* declare.
+//
+// The break used to reach the IR carrying the paragraph's default run style,
+// so an inherited size larger than the runs' own inflated the line box the
+// break sits in and every line after it.
+// ---------------------------------------------------------------------------
+
+/// A hard break carries no line metrics of its own: the line it ends spans
+/// `1.2 x` the size of the runs that hold its text, whatever the break and the
+/// paragraph default declare.
+#[test]
+fn hard_break_takes_no_size_from_the_break_or_the_paragraph_default() {
+    let data = load_fixture("hard_break_ignores_inherited_size.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let source = generate_typst(&document).unwrap().source;
+
+    let mut advances: Vec<f64> = source
+        .match_indices("text(top-edge: ")
+        .filter_map(|(offset, needle)| {
+            let rest: &str = &source[offset + needle.len()..];
+            let (top, rest) = rest.split_once("pt, bottom-edge: -")?;
+            let (bottom, _) = rest.split_once("pt)")?;
+            Some(top.parse::<f64>().ok()? + bottom.parse::<f64>().ok()?)
+        })
+        .collect();
+    advances.sort_by(f64::total_cmp);
+
+    // One line box per caption column, at the size that column's runs state.
+    let mut expected: Vec<f64> = [14.0_f64, 10.0, 12.0]
+        .into_iter()
+        .map(|size| 1.2 * size)
+        .collect();
+    expected.sort_by(f64::total_cmp);
+
+    assert_eq!(
+        advances.len(),
+        expected.len(),
+        "line boxes emitted: {advances:?}"
+    );
+    for (got, want) in advances.iter().zip(&expected) {
+        assert!(
+            (got - want).abs() < 0.001,
+            "a hard-broken line spans 1.2 x its runs' size, not the 28pt \
+             default it inherits: expected {expected:?}, got {advances:?}"
+        );
+    }
+}
+
+#[test]
+fn hard_break_ignores_inherited_size_smoke() {
+    assert_produces_valid_pdf("hard_break_ignores_inherited_size.pptx");
+}
+
+// ---------------------------------------------------------------------------
 // percentage_line_spacing_expanded.pptx — a minimal native PowerPoint probe
 // with a top-anchored 10pt Arial paragraph at 150% line spacing. Its four hard
 // broken lines isolate the above-100% baseline regime from wrapping and other
@@ -1245,8 +1315,13 @@ fn percentage_line_spacing_expanded_keeps_the_source_ratio_and_seat() {
         })
         .flat_map(|text_box| text_box.content.iter())
         .find_map(|block| match block {
+            // The hard breaks merge into the run they follow (issue #1666),
+            // so the column arrives as one run of `Hxg10a<VT>Hxg10b...`.
             Block::Paragraph(paragraph)
-                if paragraph.runs.iter().any(|run| run.text == "Hxg10a") =>
+                if paragraph
+                    .runs
+                    .iter()
+                    .any(|run| run.text.starts_with("Hxg10a")) =>
             {
                 Some(paragraph)
             }
@@ -1335,21 +1410,36 @@ fn run_fill_alpha_composites_in_the_generated_source() {
     );
 }
 
-/// A paragraph that writes no `<a:endParaRPr>` at all still puts its mark in
-/// the theme's minor Latin font.
+/// A paragraph that writes no `<a:endParaRPr>` at all puts no face of its own
+/// on PowerPoint's shared line box, and still seats where the native export
+/// of this fixture seats it.
 ///
-/// PowerPoint shares one 1.2em line box across every font on the line, the
-/// paragraph mark included, so the mark's face decides where the baseline sits
-/// inside it. The golden mocks' Korean titles carry a bare `<a:endParaRPr>`
-/// (issue #1176); these three paragraphs omit the element entirely, and the
-/// mark still has to end up where `presentation.xml`'s `<a:defaultTextStyle>`
-/// puts it — its `<a:latin typeface="+mn-lt"/>` names this deck's `Calisto MT`,
-/// whose usWin descent is deeper than the runs' Arial and so moves the shared
-/// box (issue #1179).
+/// This test asserted `Calisto MT` — the theme's minor Latin font, which
+/// `presentation.xml`'s `<a:defaultTextStyle>` names — until the native
+/// one-factor probes of issue #1645 measured that an *absent* mark inherits
+/// nothing at all, list style or theme. #1179's own resolution records that
+/// its frame cannot tell the two apart on the first baseline: at 32pt the
+/// shared Arial/Calisto MT share (0.963654em) and Arial's own (0.972378em)
+/// both round to the 31pt seat its export reads, so the 202.56pt baseline
+/// that issue measured is unchanged.
+///
+/// The deck's own second and third paragraphs do separate them. They carry
+/// `a:alpha`, so a native PowerPoint 16 export rasterises both to identical
+/// 306.48x66.72pt sprites, placed at y 200.88 and 239.04 — a 38.16pt step,
+/// and two identical sprites step by exactly their baseline gap. Rounding
+/// each absolute story position (#1259) off Arial's own share gives seats 31,
+/// 70 and 108 below the content top, a 38pt step; off the shared share it
+/// gives 31, 69 and 108, a 39pt step, which the export's 0.24pt position grid
+/// cannot reach. The `seat` assertion below pins the first baseline; the mark
+/// family is the model that also puts the other two where the sprites are.
 #[test]
-fn structure_run_fill_alpha_marks_take_the_theme_minor_latin_font() {
-    let pages = fixed_pages("run-fill-alpha.pptx");
-    let text_box = pages[0]
+fn structure_run_fill_alpha_marks_add_no_face_to_their_line() {
+    let data = load_fixture("run-fill-alpha.pptx");
+    let (document, _warnings) = PptxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let Page::Fixed(slide) = &document.pages[0] else {
+        panic!("the fixture's only page is a slide");
+    };
+    let text_box = slide
         .elements
         .iter()
         .find_map(|element| match &element.kind {
@@ -1369,8 +1459,20 @@ fn structure_run_fill_alpha_marks_take_the_theme_minor_latin_font() {
 
     assert_eq!(
         mark_families,
-        vec![Some("Calisto MT"); 3],
-        "a mark declaring nothing must fall to the theme's minor Latin font"
+        vec![Some("Arial"); 3],
+        "an absent mark stays on the face of the run it follows"
+    );
+
+    let source = generate_typst(&document).unwrap().source;
+    let seat_pt: f64 = source
+        .split("top-edge: ")
+        .nth(1)
+        .and_then(|rest| rest.split_once("pt"))
+        .and_then(|(seat, _)| seat.parse().ok())
+        .unwrap_or_else(|| panic!("the label frame emits a line box: {source}"));
+    assert!(
+        (seat_pt - 31.0).abs() < 0.001,
+        "the 32pt label must keep the 31pt seat PowerPoint's export reads          (issue #1179), got {seat_pt}pt"
     );
 }
 
@@ -1649,4 +1751,48 @@ fn polygon_shadow_uses_its_exact_outline_as_the_gaussian_source() {
 #[test]
 fn polygon_shadow_offset_smoke() {
     assert_produces_valid_pdf("polygon_shadow_offset.pptx");
+}
+
+// ---------------------------------------------------------------------------
+// issue_1682_shape_line_cap.pptx
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smoke_issue_1682_shape_line_cap() {
+    assert_produces_valid_pdf("issue_1682_shape_line_cap.pptx");
+}
+
+/// The two slide connectors declare `cap="rnd"` and `cap="sq"` on a `p:cxnSp`
+/// outline, and the slide layout's own two connectors declare no cap at all.
+///
+/// A native macOS PowerPoint export of this deck traces the four strokes as
+/// PDF `linecap` `1`, `2`, `0` and `0` — round, projecting square and two butt
+/// ends — so all three geometries have to survive parsing (issue #1682).
+#[test]
+fn structure_connector_line_caps_reach_the_stroke() {
+    let pages = fixed_pages("issue_1682_shape_line_cap.pptx");
+    assert_eq!(pages.len(), 1);
+
+    let caps: Vec<(f64, LineCap)> = pages[0]
+        .elements
+        .iter()
+        .filter_map(|element| match &element.kind {
+            FixedElementKind::Shape(shape) => shape
+                .stroke
+                .as_ref()
+                .map(|stroke| (stroke.width, stroke.cap)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        caps,
+        vec![
+            (3.5, LineCap::Flat),
+            (1.0, LineCap::Flat),
+            (20.0, LineCap::Round),
+            (20.0, LineCap::Square),
+        ],
+        "the layout's capless connectors stay flat while each slide connector \
+         carries the cap it declares"
+    );
 }

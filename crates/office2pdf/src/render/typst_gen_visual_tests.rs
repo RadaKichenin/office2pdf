@@ -828,6 +828,7 @@ fn test_open_subpath_casts_an_offset_copy_of_its_stroke() {
                 color: Color::new(138, 180, 226),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -888,6 +889,7 @@ fn test_blurred_open_subpath_filters_its_stroke_without_filling_it() {
                 color: Color::new(138, 180, 226),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1219,6 +1221,7 @@ fn test_shadow_silhouette_outsets_by_half_the_outline_width() {
                 color: Color::new(255, 255, 255),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1346,6 +1349,7 @@ fn banner_outline(join: LineJoin) -> Option<BorderSide> {
         color: Color::new(255, 255, 255),
         style: BorderLineStyle::Solid,
         join,
+        cap: LineCap::Flat,
     })
 }
 
@@ -1512,6 +1516,7 @@ fn test_polygon_shadow_offsets_its_outline_instead_of_scaling_it() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Miter,
+            cap: LineCap::Flat,
         }),
         0.0,
     );
@@ -1601,6 +1606,7 @@ fn test_path_shadow_shrinks_a_hole_while_it_grows_the_outline() {
                 color: Color::new(0, 0, 0),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Miter,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1648,6 +1654,7 @@ fn test_blurred_polygon_shadow_compiles_to_pdf() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         24.0,
     );
@@ -1655,4 +1662,185 @@ fn test_blurred_polygon_shadow_compiles_to_pdf() {
         crate::render::pdf::compile_to_pdf(&output.source, &output.images, None, &[], false, false)
             .expect("a filtered polygon shadow should compile as Typst");
     assert!(pdf.starts_with(b"%PDF"));
+}
+
+// ── Inline text box codegen tests (issue #1690) ──
+
+/// A `wp:inline` text box is one item on its paragraph's own line: a Typst
+/// `box` written between the anchor paragraph's runs, so the line grows to hold
+/// it and the text after it keeps the same baseline.
+#[test]
+fn test_inline_text_box_is_emitted_inside_its_anchor_paragraph() {
+    let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: vec![
+            Run {
+                text: "Anchor paragraph with a text box".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+                inline_box: None,
+            },
+            Run {
+                text: String::new(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+                inline_box: Some(Box::new(InlineTextBox {
+                    content: vec![Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![Run {
+                            text: "Box text".to_string(),
+                            style: TextStyle::default(),
+                            href: None,
+                            footnote: None,
+                            inline_box: None,
+                        }],
+                    }],
+                    width: 144.0,
+                    height: 36.0,
+                    padding: Insets {
+                        top: 3.6,
+                        right: 7.2,
+                        bottom: 3.6,
+                        left: 7.2,
+                    },
+                    stroke: Some(BorderSide {
+                        width: 0.75,
+                        color: Color { r: 0, g: 0, b: 0 },
+                        style: BorderLineStyle::Solid,
+                        join: LineJoin::Round,
+                        cap: LineCap::Flat,
+                    }),
+                    fill: Some(Color {
+                        r: 0xFF,
+                        g: 0xFF,
+                        b: 0xFF,
+                    }),
+                })),
+            },
+        ],
+    })])]);
+
+    let source = generate_typst(&doc).unwrap().source;
+
+    // Nothing separates the anchor's text from the box. A paragraph break there
+    // would put the box on a line of its own, which is the defect (#1690).
+    assert!(
+        source.contains("Anchor paragraph with a text box#box("),
+        "the box must sit on the anchor's line, got:\n{source}"
+    );
+
+    assert!(
+        source.contains("#box(width: 144pt, height: 36pt"),
+        "the box takes the drawing's extent, got:\n{source}"
+    );
+    assert!(
+        source.contains("inset: (top: 3.6pt, right: 7.2pt, bottom: 3.6pt, left: 7.2pt)"),
+        "the box takes its `wps:bodyPr` insets, got:\n{source}"
+    );
+    assert!(
+        source.contains("thickness: 0.75pt"),
+        "the box strokes its `a:ln`, got:\n{source}"
+    );
+    assert!(
+        source.contains("fill: rgb(255, 255, 255)"),
+        "the box fills its `a:solidFill`, got:\n{source}"
+    );
+    // Typst aligns an inline box on the first baseline of its in-flow content,
+    // which leaves the box hanging below the line rather than standing on it.
+    // Placing the content out of flow makes the box's own bottom edge its
+    // baseline, which is where Word rests it.
+    assert!(
+        source.contains("#place(top + left)[#block(width: 129.6"),
+        "the box's content is placed out of flow at the inner width, got:\n{source}"
+    );
+    assert!(
+        source.contains("Box text"),
+        "the box's text is emitted inside it, got:\n{source}"
+    );
+}
+
+/// The box travels with the run, so it reaches the page from every paragraph
+/// path — not only the body's. Carrying the rendered markup beside the runs
+/// instead left the box out of the table-cell, list and tabbed-paragraph paths,
+/// where a run with no text of its own emits nothing at all (issue #1690).
+#[test]
+fn test_inline_text_box_survives_a_tab_and_a_table_cell() {
+    let anchor_runs = |leading: &str| {
+        vec![
+            Run {
+                text: leading.to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+                inline_box: None,
+            },
+            Run {
+                text: String::new(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+                inline_box: Some(Box::new(InlineTextBox {
+                    content: vec![Paragraph {
+                        style: ParagraphStyle::default(),
+                        runs: vec![Run {
+                            text: "Box text".to_string(),
+                            style: TextStyle::default(),
+                            href: None,
+                            footnote: None,
+                            inline_box: None,
+                        }],
+                    }],
+                    width: 144.0,
+                    height: 36.0,
+                    padding: Insets::default(),
+                    stroke: None,
+                    fill: None,
+                })),
+            },
+        ]
+    };
+
+    // A tab splits the paragraph's runs into fresh segments before they are
+    // measured and written.
+    let tabbed = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
+        style: ParagraphStyle::default(),
+        runs: anchor_runs("Label:\t"),
+    })])]);
+    let tabbed_source = generate_typst(&tabbed).unwrap().source;
+    assert!(
+        tabbed_source.contains("#box(width: 144pt, height: 36pt"),
+        "a tabbed paragraph still draws its box, got:\n{tabbed_source}"
+    );
+    assert!(
+        tabbed_source.contains("Box text"),
+        "a tabbed paragraph still writes the box's text, got:\n{tabbed_source}"
+    );
+
+    // A table cell's paragraphs go through the table generator, not the body's.
+    let celled = make_doc(vec![make_flow_page(vec![Block::Table(Table {
+        rows: vec![TableRow {
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: anchor_runs("In a cell"),
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+            minimum_height: None,
+        }],
+        column_widths: vec![300.0],
+        ..Table::default()
+    })])]);
+    let celled_source = generate_typst(&celled).unwrap().source;
+    assert!(
+        celled_source.contains("#box(width: 144pt, height: 36pt"),
+        "a table cell still draws its box, got:\n{celled_source}"
+    );
+    assert!(
+        celled_source.contains("Box text"),
+        "a table cell still writes the box's text, got:\n{celled_source}"
+    );
 }

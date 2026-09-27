@@ -1357,3 +1357,43 @@ fn a_picture_keeps_both_frame_flip_attributes() {
     assert!(image.flip_v, "flipV=1 must survive parsing");
     assert_eq!(image.rotation_deg, Some(90.0));
 }
+
+/// A picture outline carries its `a:ln/@cap` too: `p:pic/p:spPr/a:ln` is the
+/// same DrawingML line as a shape's, so an explicit `rnd` or `sq` has to reach
+/// the image's stroke rather than ending flat (issue #1682).
+#[test]
+fn picture_outline_carries_its_stated_line_cap() {
+    for (cap_attribute, expected) in [
+        ("", LineCap::Flat),
+        (r#" cap="flat""#, LineCap::Flat),
+        (r#" cap="rnd""#, LineCap::Round),
+        (r#" cap="sq""#, LineCap::Square),
+    ] {
+        let bmp_data = make_test_bmp();
+        let pic = make_pic_xml_with_sp_pr(
+            0,
+            0,
+            2_000_000,
+            1_000_000,
+            "rId3",
+            &format!(
+                r#"<a:ln w="19050"{cap_attribute}><a:solidFill><a:srgbClr val="980000"/></a:solidFill></a:ln>"#
+            ),
+        );
+        let slide_xml = make_slide_xml(&[pic]);
+        let slide_images = vec![TestSlideImage {
+            rid: "rId3".to_string(),
+            path: "../media/image1.bmp".to_string(),
+            data: bmp_data,
+            relationship_type: None,
+        }];
+        let data = build_test_pptx_with_images(SLIDE_CX, SLIDE_CY, &[(slide_xml, slide_images)]);
+        let parser = PptxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        let page = first_fixed_page(&doc);
+        let img = get_image(&page.elements[0]);
+        let stroke = img.stroke.as_ref().expect("expected a picture outline");
+        assert_eq!(stroke.cap, expected, "cap attribute `{cap_attribute}`");
+    }
+}

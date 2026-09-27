@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{BorderLineStyle, BorderSide, Color, LineJoin};
+use crate::ir::{BorderLineStyle, BorderSide, Color, LineCap, LineJoin};
 
 #[test]
 fn test_rgb_literal() {
@@ -22,6 +22,7 @@ fn test_stroke_value_solid() {
         color: Color::new(10, 20, 30),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     assert_eq!(stroke_value(&side, false), "1.5pt + rgb(10, 20, 30)");
     assert_eq!(
@@ -38,6 +39,7 @@ fn test_stroke_value_integral_width_has_no_decimal_point() {
         color: Color::new(0, 0, 0),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     assert_eq!(stroke_value(&side, false), "2pt + rgb(0, 0, 0)");
 }
@@ -49,6 +51,7 @@ fn test_stroke_value_dashed() {
         color: Color::new(200, 0, 0),
         style: BorderLineStyle::Dashed,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     assert_eq!(
         stroke_value(&side, false),
@@ -63,6 +66,7 @@ fn test_stroke_value_dotted() {
         color: Color::new(0, 0, 0),
         style: BorderLineStyle::Dotted,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     assert_eq!(
         stroke_value(&side, true),
@@ -82,6 +86,7 @@ fn test_stroke_value_double_preserves_caller_divergence() {
         color: Color::new(5, 6, 7),
         style: BorderLineStyle::Double,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     assert_eq!(
         stroke_value(&side, true),
@@ -227,6 +232,7 @@ fn drawingml_stroke_value_rounds_a_corner_by_default() {
         color: Color::new(255, 255, 255),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     };
     assert_eq!(
         drawingml_stroke_value(&side),
@@ -244,6 +250,7 @@ fn drawingml_stroke_value_carries_each_stated_join() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join,
+            cap: LineCap::Flat,
         })
     };
     assert_eq!(
@@ -265,6 +272,7 @@ fn drawingml_stroke_value_keeps_the_join_on_a_dashed_outline() {
         color: Color::new(200, 0, 0),
         style: BorderLineStyle::Dashed,
         join: LineJoin::Miter,
+        cap: LineCap::Flat,
     };
     assert_eq!(
         drawingml_stroke_value(&side),
@@ -282,6 +290,7 @@ fn stroke_value_never_writes_a_join() {
         color: Color::new(0, 0, 0),
         style: BorderLineStyle::Solid,
         join: LineJoin::Miter,
+        cap: LineCap::Flat,
     };
     assert_eq!(stroke_value(&side, true), "1pt + rgb(0, 0, 0)");
 }
@@ -294,4 +303,80 @@ fn drawingml_dash_array_is_absent_for_the_word_only_style() {
         drawingml_dash_array_pt(BorderLineStyle::DashDotDot, 0.5),
         None
     );
+}
+
+/// DrawingML's own `cap` default and Typst's stroke default are both butt ends,
+/// so a flat cap is the one value the stroke dictionary must leave unwritten —
+/// writing it would change every existing DrawingML stroke's spelling for
+/// nothing (issue #1682).
+#[test]
+fn drawingml_stroke_value_omits_a_flat_cap() {
+    let side = BorderSide {
+        width: 3.0,
+        color: Color::new(255, 255, 255),
+        style: BorderLineStyle::Solid,
+        join: LineJoin::Round,
+        cap: LineCap::Flat,
+    };
+    assert_eq!(
+        drawingml_stroke_value(&side),
+        "(paint: rgb(255, 255, 255), thickness: 3pt, join: \"round\")"
+    );
+}
+
+/// `cap="rnd"` and `cap="sq"` reach Typst as its `round` and `square` keywords,
+/// which compile to PDF's `1` and `2` line caps — the values a native macOS
+/// PowerPoint export traces for those two attributes (issue #1682).
+#[test]
+fn drawingml_stroke_value_carries_each_stated_cap() {
+    let with_cap = |cap| {
+        drawingml_stroke_value(&BorderSide {
+            width: 1.0,
+            color: Color::new(0, 0, 0),
+            style: BorderLineStyle::Solid,
+            join: LineJoin::Round,
+            cap,
+        })
+    };
+    assert_eq!(
+        with_cap(LineCap::Round),
+        "(paint: rgb(0, 0, 0), thickness: 1pt, join: \"round\", cap: \"round\")"
+    );
+    assert_eq!(
+        with_cap(LineCap::Square),
+        "(paint: rgb(0, 0, 0), thickness: 1pt, join: \"round\", cap: \"square\")"
+    );
+}
+
+/// A stated cap survives alongside the width-proportional dash array of issue
+/// #678: DrawingML applies the cap to every dash segment, not only to the two
+/// ends of the whole stroke.
+#[test]
+fn drawingml_stroke_value_keeps_the_cap_on_a_dashed_outline() {
+    let side = BorderSide {
+        width: 0.5,
+        color: Color::new(200, 0, 0),
+        style: BorderLineStyle::Dashed,
+        join: LineJoin::Miter,
+        cap: LineCap::Round,
+    };
+    assert_eq!(
+        drawingml_stroke_value(&side),
+        "(paint: rgb(200, 0, 0), thickness: 0.5pt, dash: (2pt, 1.5pt), join: \"miter\", cap: \"round\")"
+    );
+}
+
+/// Word table borders and Excel cell borders have no DrawingML cap, and
+/// `stroke_value` is theirs: it must keep emitting the plain shorthand even
+/// when the side carries a non-default cap.
+#[test]
+fn stroke_value_never_writes_a_cap() {
+    let side = BorderSide {
+        width: 1.0,
+        color: Color::new(0, 0, 0),
+        style: BorderLineStyle::Solid,
+        join: LineJoin::Miter,
+        cap: LineCap::Round,
+    };
+    assert_eq!(stroke_value(&side, true), "1pt + rgb(0, 0, 0)");
 }

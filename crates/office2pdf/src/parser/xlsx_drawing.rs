@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 
 use crate::ir::Chart;
+use crate::ir::LineCap;
 use crate::parser::chart_style::parse_chart_with_style;
 use crate::parser::drawingml::ThemeFontScheme;
 use crate::parser::xml_util;
@@ -1286,6 +1287,7 @@ pub(super) fn parse_drawing_text_boxes(
                             style,
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         });
                     }
                 } else if let (Some(is_from), Some(field)) = (corner_target, current_field)
@@ -1327,6 +1329,7 @@ pub(super) fn parse_drawing_text_boxes(
                                     color,
                                     style: BorderLineStyle::Solid,
                                     join: LineJoin::Round,
+                                    cap: LineCap::Flat,
                                 }),
                                 vertical_center,
                             });
@@ -1662,6 +1665,7 @@ pub(super) fn parse_drawing_line_shapes(
                                     color,
                                     style: BorderLineStyle::Solid,
                                     join: LineJoin::Round,
+                                    cap: LineCap::Flat,
                                 },
                                 flip_h: pending.flip_h,
                                 flip_v: pending.flip_v,

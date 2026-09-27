@@ -25,6 +25,8 @@ mod print_headings;
 mod print_options;
 #[path = "xlsx_row_boundaries.rs"]
 mod row_boundaries;
+#[path = "xlsx_shared_strings.rs"]
+mod shared_strings;
 #[path = "xlsx_sheet_format.rs"]
 mod sheet_format;
 #[path = "xlsx_sparklines.rs"]
@@ -813,6 +815,7 @@ impl XlsxParser {
         options: &ConvertOptions,
         chunk_size: usize,
     ) -> Result<(Vec<Document>, Vec<ConvertWarning>), ConvertError> {
+        shared_strings::validate_shared_string_lengths(data)?;
         let cursor = Cursor::new(data);
         let book = umya_spreadsheet::reader::xlsx::read_reader(cursor, true).map_err(|e| {
             crate::parser::parse_err(format!("Failed to parse XLSX (umya-spreadsheet): {e}"))
@@ -1172,6 +1175,7 @@ impl Parser for XlsxParser {
         data: &[u8],
         options: &ConvertOptions,
     ) -> Result<(Document, Vec<ConvertWarning>), ConvertError> {
+        shared_strings::validate_shared_string_lengths(data)?;
         let cursor = Cursor::new(data);
         let book = umya_spreadsheet::reader::xlsx::read_reader(cursor, true).map_err(|e| {
             crate::parser::parse_err(format!("Failed to parse XLSX (umya-spreadsheet): {e}"))

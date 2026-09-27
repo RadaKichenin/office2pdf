@@ -475,6 +475,7 @@ fn apply_completed_frame_passes(document: &mut PagedDocument) {
     let mut pages: Vec<Page> = document.pages().to_vec();
     super::powerpoint_line_paint::adjust_paragraph_marks(&mut pages);
     super::excel_fill_paint::adjust_cell_fills(&mut pages);
+    super::excel_glyph_pacing::pace_sheet_glyphs_on_whole_points(&mut pages);
     super::word_justified_gap_phases::spread_justified_gaps_as_word_does(&mut pages);
     let info: typst::model::DocumentInfo = typst::model::Document::info(document).clone();
     *document = PagedDocument::new(pages.into_iter().collect(), info);
@@ -645,6 +646,94 @@ fn compiled_text_runs_with_line_seating(
         ))
     })?;
     let mut runs: Vec<PlacedTextRun> = Vec::new();
+    collect(&page.frame, Transform::identity(), &mut runs);
+    Ok(runs)
+}
+
+/// One shaped run's glyph pacing as the layout engine actually placed it.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[derive(Debug, Clone)]
+pub(crate) struct PlacedGlyphRun {
+    /// Distance from the page's left edge to the run's origin, in points.
+    pub left_pt: f64,
+    pub text: String,
+    /// The advance each glyph takes, in points and in layout order. The
+    /// run's glyph origins are this list's running sums from `left_pt`.
+    pub advances_pt: Vec<f64>,
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+impl PlacedGlyphRun {
+    /// Where each glyph after the first starts, relative to the run's origin.
+    pub fn glyph_origins_pt(&self) -> Vec<f64> {
+        let mut pen: f64 = 0.0;
+        self.advances_pt
+            .iter()
+            .take(self.advances_pt.len().saturating_sub(1))
+            .map(|advance| {
+                pen += advance;
+                pen
+            })
+            .collect()
+    }
+
+    pub fn width_pt(&self) -> f64 {
+        self.advances_pt.iter().sum()
+    }
+}
+
+/// Every shaped run's glyph advances on `page_index`, in layout order.
+///
+/// The completed-frame passes rewrite glyph advances rather than emitted
+/// source, so a pacing test has to read the frames. `apply_frame_passes`
+/// selects the placement before or after those passes, which is what lets a
+/// test assert that a pass conserved a run's width.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn compiled_glyph_runs(
+    typst_source: &str,
+    page_index: usize,
+    apply_frame_passes: bool,
+) -> Result<Vec<PlacedGlyphRun>, ConvertError> {
+    use typst::layout::{Frame, FrameItem, Transform};
+
+    fn collect(frame: &Frame, transform: Transform, out: &mut Vec<PlacedGlyphRun>) {
+        for (position, item) in frame.items() {
+            let at: Transform = transform.pre_concat(Transform::translate(position.x, position.y));
+            match item {
+                FrameItem::Group(group) => {
+                    collect(&group.frame, at.pre_concat(group.transform), out);
+                }
+                FrameItem::Text(text) => out.push(PlacedGlyphRun {
+                    left_pt: at.tx.to_pt(),
+                    text: text.text.to_string(),
+                    advances_pt: text
+                        .glyphs
+                        .iter()
+                        .map(|glyph| glyph.x_advance.at(text.size).to_pt())
+                        .collect(),
+                }),
+                _ => {}
+            }
+        }
+    }
+
+    let font_paths: &[PathBuf] = super::font_context::default_font_search_paths();
+    let world = MinimalWorld::new_with_in_memory_fonts(typst_source, &[], font_paths, &[]);
+    let warned = typst::compile::<PagedDocument>(&world);
+    let mut document = warned.output.map_err(|errors| {
+        let messages: Vec<String> = errors.iter().map(|e| e.message.to_string()).collect();
+        ConvertError::Render(format!("Typst compilation failed: {}", messages.join("; ")))
+    })?;
+    if apply_frame_passes {
+        apply_completed_frame_passes(&mut document);
+    }
+    let page = document.pages().get(page_index).ok_or_else(|| {
+        ConvertError::Render(format!(
+            "page {page_index} is past the document's {} pages",
+            document.pages().len()
+        ))
+    })?;
+    let mut runs: Vec<PlacedGlyphRun> = Vec::new();
     collect(&page.frame, Transform::identity(), &mut runs);
     Ok(runs)
 }
@@ -1320,11 +1409,48 @@ mod tests;
 #[cfg(not(target_arch = "wasm32"))]
 fn best_face(family: &str) -> Option<typst::text::Font> {
     let data = active_font_data();
-    first_face_in_chain(family, typst::text::FontVariant::default(), |candidate| {
-        select_face_index(&data, candidate)
+    let variant: typst::text::FontVariant = chain_variant(family, None);
+    first_face_in_chain(family, variant, |candidate| {
+        select_face_index(&data, candidate, variant)
             .and_then(|index| data.fonts.get(index))
             .and_then(|slot| slot.get())
     })
+}
+
+/// The variant a chain walk resolves `family` at.
+///
+/// A family name can state a weight in its style suffix — `Calibri Light`,
+/// `Segoe UI Semibold`, `Arial Black` — and the font book files that face
+/// under the base family with the suffix trimmed, so the chain reaches it only
+/// through the base family, and only the weight tells the member apart from
+/// the family's regular one. Their vertical metrics need not agree: Arial
+/// Black declares an `hhea` ascender of 2254/2048 against Arial's 1854/2048,
+/// and twelve single-spaced 20pt `Arial Black` paragraphs advance 28.189pt in
+/// a native Word export — Arial Black's own 1.4102em sum, not Arial's
+/// 1.1499em. Resolving the chain at the regular variant would read a line box
+/// 18% short (issue #1643).
+///
+/// `explicit_weight` is the weight the *run* states on top of the name, and
+/// the heavier of the two wins — the composition `write_text_params` already
+/// emits, so the face measured is the face painted. A bold cell in `Segoe UI
+/// Semibold` paints the family's bold member, and so measures it.
+#[cfg(not(target_arch = "wasm32"))]
+fn chain_variant(
+    family: &str,
+    explicit_weight: Option<typst::text::FontWeight>,
+) -> typst::text::FontVariant {
+    let stated: Option<typst::text::FontWeight> =
+        super::font_subst::weight_stated_by_family_name(family);
+    let weight: typst::text::FontWeight = match (stated, explicit_weight) {
+        (Some(stated), Some(explicit)) => stated.max(explicit),
+        (Some(stated), None) => stated,
+        (None, Some(explicit)) => explicit,
+        (None, None) => typst::text::FontVariant::default().weight,
+    };
+    typst::text::FontVariant {
+        weight,
+        ..typst::text::FontVariant::default()
+    }
 }
 
 /// The first face the alias and substitute chain of `family` resolves to at
@@ -1359,13 +1485,15 @@ fn first_face_in_chain(
         })
 }
 
-/// Index into `data` of the regular face registered under exactly `candidate`.
+/// Index into `data` of the face registered under exactly `candidate` that
+/// sits nearest `variant`'s weight.
 #[cfg(not(target_arch = "wasm32"))]
-fn select_face_index(data: &CachedFontData, candidate: &str) -> Option<usize> {
-    data.book.select(
-        &candidate.to_lowercase(),
-        typst::text::FontVariant::default(),
-    )
+fn select_face_index(
+    data: &CachedFontData,
+    candidate: &str,
+    variant: typst::text::FontVariant,
+) -> Option<usize> {
+    data.book.select(&candidate.to_lowercase(), variant)
 }
 
 /// The font set the compiler shapes with: the caller's search paths when a
@@ -1404,8 +1532,9 @@ fn active_font_data() -> Arc<CachedFontData> {
 #[cfg(not(target_arch = "wasm32"))]
 fn line_metric_face(family: &str) -> Option<typst::text::Font> {
     let data = active_font_data();
-    first_face_in_chain(family, typst::text::FontVariant::default(), |candidate| {
-        let shaped_index: usize = select_face_index(&data, candidate)?;
+    let variant: typst::text::FontVariant = chain_variant(family, None);
+    first_face_in_chain(family, variant, |candidate| {
+        let shaped_index: usize = select_face_index(&data, candidate, variant)?;
         line_metric_face_at(
             &data,
             super::font_context::default_font_search_paths(),
@@ -1493,7 +1622,18 @@ fn macos_system_font_dirs() -> &'static [PathBuf] {
 
 #[cfg(target_arch = "wasm32")]
 fn best_face(family: &str) -> Option<typst::text::Font> {
-    super::font_subst::active_in_memory_font(family, typst::text::FontVariant::default())
+    // Mirrors the native arm's weight rule: a weight-suffixed name reaches its
+    // member only through the base family, at the weight the name states
+    // (issue #1643).
+    let weight: typst::text::FontWeight = super::font_subst::weight_stated_by_family_name(family)
+        .unwrap_or_else(|| typst::text::FontVariant::default().weight);
+    super::font_subst::active_in_memory_font(
+        family,
+        typst::text::FontVariant {
+            weight,
+            ..typst::text::FontVariant::default()
+        },
+    )
 }
 
 /// Look a per-family `f64` metric up through a process-wide cache.
@@ -1532,13 +1672,12 @@ fn cached_family_metric(
 /// The `hhea` ascender of the face Word measures `family` by, in em units
 /// (see [`line_metric_face`]).
 ///
-/// This is the ascent Word measures a header story's first baseline by, and it
-/// is deliberately *not* [`font_line_metrics_em`]'s first element: that one
-/// folds in the `hhea` line gap, which Word keeps above the header origin
-/// rather than below it. The 0.0327em difference on Arial is why an 8pt header
-/// baseline lands at 42.64pt below `w:pgMar/@w:header` = 35.40pt instead of
-/// 42.90pt — the native export measures 42.72pt on its 0.24pt grid (issues
-/// #508, #629).
+/// The bare ascender, with the `hhea` line gap left out — deliberately *not*
+/// [`font_line_metrics_em`]'s first element, which folds the gap in. Callers
+/// that want Word's line top add the gap back themselves: a header seat does
+/// (`typst_gen_text::word_header_line_ascent_em`, issue #1640), and an East
+/// Asian line box does not, because it leaves the gap out at both ends (issue
+/// #1638). Splitting it here is what lets those two share one ascender read.
 ///
 /// Read out of the `hhea` table directly rather than through
 /// `ttf_parser::Face::ascender`, whose name promises `hhea` but which returns
@@ -1615,7 +1754,8 @@ pub(crate) fn font_cap_height_em(family: &str) -> Option<f64> {
 /// is where Word puts the baseline. Excel does not: it rounds the ascender,
 /// the line gap and the descender into whole points *separately* before it
 /// composes a printed sheet cell's line box, so that path needs the gap on its
-/// own (issue #1161).
+/// own (issue #1161). Word's East Asian line box needs it for the opposite
+/// reason — to take the gap back out of the folded pair (issue #1638).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
     use std::collections::HashMap;
@@ -1652,7 +1792,10 @@ pub(crate) fn font_line_gap_em(family: &str) -> Option<f64> {
 /// the baseline 0.2em off where Word does (issue #508).
 ///
 /// The pitch itself is the `hhea` ascender + descender + line gap sum that
-/// Word uses for "single" line spacing (issue #354).
+/// Word uses for "single" line spacing (issue #354). An East Asian line is the
+/// exception at both ends: it leaves the gap out of the pitch *and* out of the
+/// seat, so that path takes this triple through
+/// `typst_gen_text::word_line_metrics_em` (issue #1638).
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
     use std::collections::HashMap;
@@ -1739,14 +1882,8 @@ pub(crate) fn font_line_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
 pub(crate) fn max_digit_advance_em(family: &str, bold: bool) -> Option<f64> {
     static ADVANCE_CACHE: OnceLock<FaceAdvanceCache> = OnceLock::new();
 
-    let variant = typst::text::FontVariant {
-        weight: if bold {
-            typst::text::FontWeight::BOLD
-        } else {
-            typst::text::FontWeight::REGULAR
-        },
-        ..typst::text::FontVariant::default()
-    };
+    let variant: typst::text::FontVariant =
+        chain_variant(family, bold.then_some(typst::text::FontWeight::BOLD));
 
     face_advance_em(family, variant, &ADVANCE_CACHE, |font| {
         let instance = measured_instance(font);
@@ -1784,7 +1921,7 @@ pub(crate) fn space_advance_em(family: &str) -> Option<f64> {
 
     face_advance_em(
         family,
-        typst::text::FontVariant::default(),
+        chain_variant(family, None),
         &ADVANCE_CACHE,
         |font| {
             let instance = measured_instance(font);
@@ -1809,6 +1946,10 @@ type FaceAdvanceCache = std::sync::Mutex<std::collections::HashMap<(String, bool
 /// One `hmtx`-derived metric of the face `family` resolves to at `variant`'s
 /// weight, cached per `(family, is_bold)` in `cache`.
 ///
+/// `is_bold` narrows the key rather than defining it: the family name is part
+/// of the key, so two weight-suffixed members of one family — resolved at
+/// different weights by [`chain_variant`] — never share an entry.
+///
 /// Shared by the digit and space metrics so both walk the same resolution
 /// order as [`best_face`]: the conversion's in-memory fonts and search paths
 /// when one is active, else the font set the compiler itself will use.
@@ -1827,10 +1968,11 @@ fn face_advance_em(
     if super::font_subst::active_font_search_paths().is_some() {
         let data = active_font_data();
         // Shares `first_face_in_chain` with `best_face` (issue #1629's
-        // interleaved in-memory-then-disk order per candidate) but at the
-        // requested weight instead of the hardcoded regular those line-metric
-        // callers pin to, so this can never drift from that order the way two
-        // independent copies could.
+        // interleaved in-memory-then-disk order per candidate), so this can
+        // never drift from that order the way two independent copies could.
+        // Every caller composes its weight through `chain_variant`, so a
+        // weight-suffixed family measures the member its name denotes here too
+        // (issue #1643).
         return first_face_in_chain(family, variant, |candidate| {
             data.book
                 .select(&candidate.to_lowercase(), variant)
@@ -1911,14 +2053,8 @@ pub(crate) fn glyph_advances_em(family: &str, bold: bool, text: &str) -> Option<
     type ResolvedFaceCache = HashMap<(String, bool), Option<typst::text::Font>>;
     static FACE_CACHE: OnceLock<Mutex<ResolvedFaceCache>> = OnceLock::new();
 
-    let variant = typst::text::FontVariant {
-        weight: if bold {
-            typst::text::FontWeight::BOLD
-        } else {
-            typst::text::FontWeight::REGULAR
-        },
-        ..typst::text::FontVariant::default()
-    };
+    let variant: typst::text::FontVariant =
+        chain_variant(family, bold.then_some(typst::text::FontWeight::BOLD));
     let active_font = super::font_subst::active_in_memory_font(family, variant);
 
     let cache = FACE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
@@ -2225,6 +2361,66 @@ fn powerpoint_face_metrics_em(font: &typst::text::Font) -> (f64, f64) {
         f64::from(hhea.ascender).abs() / upem,
         f64::from(hhea.descender).abs() / upem,
     )
+}
+
+/// The three quantities a PowerPoint chart band measures a face by, as
+/// positive em fractions read from one face: OS/2's `usWin*` ascent and
+/// descent, then `hhea`'s ascent + descent + line gap.
+///
+/// Both halves come from the same [`typst::text::Font`] deliberately. The
+/// Office app bundles its own copy of several faces, and the two copies do not
+/// always agree — `Times New Roman` declares an 87-unit `hhea` line gap in
+/// `/System/Library/Fonts/Supplemental` and none at all in Office's `DFonts` —
+/// so taking the window box from one copy and the gap from another would
+/// describe a face that exists nowhere (issue #1284).
+///
+/// `hhea`'s three fields are read from the table directly rather than through
+/// `ttf_parser::Face`'s accessors, which answer with OS/2's `sTypo*` values
+/// whenever `fsSelection` sets `USE_TYPO_METRICS` — see
+/// [`font_hhea_ascender_em`].
+fn chart_band_face_metrics_em(font: &typst::text::Font) -> (f64, f64, f64) {
+    let (window_ascent_em, window_descent_em) = powerpoint_face_metrics_em(font);
+    let instance = measured_instance(font);
+    let ttf = instance.ttf();
+    let upem: f64 = f64::from(ttf.units_per_em()).max(1.0);
+    let hhea = ttf.tables().hhea;
+    let leaded_em: f64 =
+        (f64::from(hhea.ascender) - f64::from(hhea.descender) + f64::from(hhea.line_gap)) / upem;
+    (window_ascent_em, window_descent_em, leaded_em)
+}
+
+/// [`chart_band_face_metrics_em`] for the best face resolved for `family`.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn font_chart_band_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    type BandMetricsEm = Option<(f64, f64, f64)>;
+    static CACHE: OnceLock<Mutex<HashMap<String, BandMetricsEm>>> = OnceLock::new();
+
+    if super::font_subst::active_font_search_paths().is_some() {
+        return best_face(family).map(|font| chart_band_face_metrics_em(&font));
+    }
+
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key: String = family.to_lowercase();
+    if let Some(cached) = cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .get(&key)
+    {
+        return *cached;
+    }
+    let metrics: BandMetricsEm = best_face(family).map(|font| chart_band_face_metrics_em(&font));
+    cache
+        .lock()
+        .expect("metrics cache mutex should not be poisoned")
+        .insert(key, metrics);
+    metrics
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn font_chart_band_metrics_em(family: &str) -> Option<(f64, f64, f64)> {
+    best_face(family).map(|font| chart_band_face_metrics_em(&font))
 }
 
 /// The `(ascent, descent)` pair the best face resolved for `family` measures

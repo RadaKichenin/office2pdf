@@ -18,6 +18,10 @@ mod math;
 mod notes;
 #[path = "docx_context_page_numbers.rs"]
 mod page_numbers;
+#[path = "docx_context_paragraph_cursor.rs"]
+mod paragraph_cursor;
+#[path = "docx_context_paragraph_mark.rs"]
+mod paragraph_mark;
 #[path = "docx_context_paragraph_shading.rs"]
 mod paragraph_shading;
 #[path = "docx_context_small_caps.rs"]
@@ -45,6 +49,7 @@ pub(super) use notes::{
     NoteContent, NoteContext, build_note_context_from_xml, is_note_reference_run, read_zip_text,
 };
 pub(super) use page_numbers::scan_page_numbering;
+pub(super) use paragraph_mark::ParagraphMarkContext;
 pub(super) use paragraph_shading::{ParagraphShadingContext, scan_style_paragraph_shading};
 pub(super) use small_caps::SmallCapsContext;
 pub(super) use table_header::TableHeaderContext;
@@ -74,6 +79,9 @@ pub(super) struct DocxConversionContext {
     /// Each paragraph's `w:contextualSpacing`, which drops `w:spacing` gaps
     /// between paragraphs of the same style (issue #1684).
     pub(super) contextual_spacing: ContextualSpacingContext,
+    /// Which paragraph marks a tracked deletion or move removed from the final
+    /// document, so those paragraphs merge into the next one (issue #1710).
+    pub(super) paragraph_marks: ParagraphMarkContext,
     pub(super) fields: FieldContext,
     /// Whether `word/styles.xml` explicitly defines the default paragraph
     /// style. Decides the East Asian auto space for paragraphs without a

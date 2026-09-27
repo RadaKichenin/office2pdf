@@ -11,6 +11,7 @@ fn test_table_cell_with_multiple_paragraphs() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }),
             Block::Paragraph(Paragraph {
@@ -20,6 +21,7 @@ fn test_table_cell_with_multiple_paragraphs() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }),
         ],
@@ -59,6 +61,7 @@ fn test_table_cell_simple_list_uses_compact_fixed_text_layout() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -72,6 +75,7 @@ fn test_table_cell_simple_list_uses_compact_fixed_text_layout() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -124,6 +128,7 @@ fn test_table_cell_simple_list_treats_default_and_explicit_left_as_same_style() 
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -137,6 +142,7 @@ fn test_table_cell_simple_list_treats_default_and_explicit_left_as_same_style() 
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -190,6 +196,7 @@ fn test_table_cell_compact_list_adds_inter_item_spacing_from_line_spacing() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -209,6 +216,7 @@ fn test_table_cell_compact_list_adds_inter_item_spacing_from_line_spacing() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -281,6 +289,7 @@ fn test_east_asian_table_cell_snaps_to_the_document_grid() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -324,6 +333,58 @@ fn test_east_asian_table_cell_snaps_to_the_document_grid() {
     );
 }
 
+/// A Word table cell takes the same gap-free East Asian line as the body: the
+/// row pitch of a Batang table would otherwise grow by 1.3 x its 152/1024
+/// line gap per line (issue #1638).
+#[test]
+fn east_asian_table_cell_leaves_the_faces_line_gap_out_of_its_box() {
+    let bare_line_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + NOTO_SANS_CJK_DESCENDER_EM;
+    let top_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + 0.15 * bare_line_em;
+    let bottom_em: f64 = 1.3 * bare_line_em - top_em;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "会议议程".to_string(),
+                style: TextStyle {
+                    font_family: Some(NOTO_SANS_CJK_SC.to_string()),
+                    font_size: Some(10.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+                inline_box: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![200.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let context = noto_sans_cjk_context_with_line_gap(300);
+    let result: String = crate::render::typst_gen::generate_typst_with_options_and_font_context(
+        &doc,
+        &ConvertOptions::default(),
+        Some(&context),
+    )
+    .unwrap()
+    .source;
+
+    let (top, bottom) =
+        emitted_line_box_em(&result).unwrap_or_else(|| panic!("no cell line box in: {result}"));
+    assert!(
+        (top - top_em).abs() < 0.001 && (bottom - bottom_em).abs() < 0.001,
+        "the cell box should be {top_em}/{bottom_em}em, got {top}/{bottom}em: {result}"
+    );
+}
+
 #[test]
 fn test_latin_table_cell_uses_natural_line_height() {
     // Latin cells likewise fill the font's full hhea line box (Word single
@@ -349,6 +410,7 @@ fn test_latin_table_cell_uses_natural_line_height() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -402,6 +464,7 @@ fn mixed_script_row_shares_one_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -463,6 +526,7 @@ fn latin_only_row_under_a_grid_keeps_the_font_line() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -529,6 +593,7 @@ fn latin_only_row_in_east_asian_face_keeps_the_east_asian_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -586,6 +651,7 @@ fn latin_only_row_in_east_asian_face_does_not_snap_to_the_grid() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -697,6 +763,7 @@ fn latin_only_spreadsheet_row_in_east_asian_face_keeps_the_hhea_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -831,6 +898,7 @@ fn spreadsheet_rows_share_one_line_box_whatever_script() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             vertical_align: Some(CellVerticalAlign::Top),
@@ -968,6 +1036,7 @@ fn grid_cell_absorbs_space_after_into_the_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1023,6 +1092,7 @@ fn ungridded_cell_still_emits_space_after() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1056,12 +1126,14 @@ fn cell_border_width_joins_the_inset() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         bottom: Some(BorderSide {
             width: 0.5,
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         left: None,
         right: None,
@@ -1074,6 +1146,7 @@ fn cell_border_width_joins_the_inset() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(border),
@@ -1153,6 +1226,7 @@ fn bottom_aligned_spreadsheet_cell_seats_its_line_box_on_the_descender() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1233,6 +1307,7 @@ fn center_aligned_spreadsheet_cell_keeps_the_symmetric_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align: Some(CellVerticalAlign::Center),
@@ -1313,6 +1388,7 @@ fn bottom_aligned_spreadsheet_cell_in_auto_height_row_keeps_the_symmetric_line_b
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1516,6 +1592,7 @@ fn compressed_word_table_cell_source(
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align,
@@ -1570,6 +1647,7 @@ fn expanded_word_bottom_cell_uses_the_native_quarter_point_last_line_seat() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align: Some(CellVerticalAlign::Bottom),
@@ -1646,6 +1724,7 @@ fn stacked_cell_paragraphs_zero_the_default_block_spacing() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1706,6 +1785,7 @@ fn stacked_cell_paragraphs_without_w_after_stack_flush() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1736,6 +1816,14 @@ fn stacked_cell_paragraphs_without_w_after_stack_flush() {
     );
 }
 
+/// The table's own emission, with the body-flow wrapper that pins a table's
+/// vertical gaps (issue #1688) cut away. These tests assert about what a *cell*
+/// emits, so the wrapper's own `above: 0pt, below: 0pt` must not be counted.
+fn table_emission(source: &str) -> &str {
+    let start: usize = source.find("#table(").expect("table emission");
+    &source[start..]
+}
+
 /// A single-paragraph cell has no sibling block to leak spacing against, so
 /// its emission must stay byte-identical to before the #625 fix: the plain
 /// `#block()` wrapper, the fixed line box, and the trailing `#v(w:after)`
@@ -1761,6 +1849,7 @@ fn single_paragraph_cell_emission_is_unchanged() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1782,7 +1871,7 @@ fn single_paragraph_cell_emission_is_unchanged() {
         "a lone cell paragraph keeps its exact pre-fix wrapper: {result}"
     );
     assert!(
-        !result.contains("above: 0pt"),
+        !table_emission(&result).contains("above: 0pt"),
         "a lone cell paragraph gains no spacing parameters: {result}"
     );
     assert!(
@@ -1820,6 +1909,7 @@ fn line_spaced_stacked_cell_paragraphs_take_a_scaled_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1853,7 +1943,9 @@ fn line_spaced_stacked_cell_paragraphs_take_a_scaled_line_box() {
         "each paragraph takes a box 1.5 x Word's line: {result}"
     );
     assert_eq!(
-        result.matches("above: 0pt, below: 0pt").count(),
+        table_emission(&result)
+            .matches("above: 0pt, below: 0pt")
+            .count(),
         2,
         "and the box carrying the advance means the wrapper contributes none: {result}"
     );
@@ -1889,6 +1981,7 @@ fn an_empty_cell_paragraph_holds_one_full_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1950,6 +2043,7 @@ fn cell_paragraph_carries_its_left_indent() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     });
     let flush = Block::Paragraph(Paragraph {
@@ -1959,6 +2053,7 @@ fn cell_paragraph_carries_its_left_indent() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     });
     let table = Table {
@@ -2010,6 +2105,7 @@ fn cell_paragraph_carries_its_right_indent() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 ..TableCell::default()
@@ -2057,6 +2153,7 @@ fn a_line_spaced_cell_paragraph_scales_its_line_box() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             ..TableCell::default()
@@ -2128,6 +2225,7 @@ fn an_exactly_spaced_cell_paragraph_takes_the_stated_advance() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 ..TableCell::default()
@@ -2175,6 +2273,7 @@ fn a_grid_snapped_line_spaced_cell_emits_its_space_after_once() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -2229,6 +2328,7 @@ fn mixed_alignment_tight_sheet_row_seats_every_cell_on_one_baseline() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align,
@@ -2302,6 +2402,7 @@ fn tight_sheet_row_resolves_one_metric_family_for_every_cell() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -2377,6 +2478,7 @@ fn row_spanning_cell_keeps_its_declared_alignment_in_a_tight_row() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             row_span,
@@ -2455,6 +2557,7 @@ fn boundary_rule_does_not_make_a_roomy_sheet_row_tight() {
             color: Color::white(),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     };
     let make_cell = |text: &str, ruled: bool| TableCell {
@@ -2469,6 +2572,7 @@ fn boundary_rule_does_not_make_a_roomy_sheet_row_tight() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: ruled.then(|| CellBorder {
@@ -2547,6 +2651,7 @@ fn boundary_rule_leaves_a_tight_sheet_row_tight() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 border: Some(CellBorder {
@@ -2556,6 +2661,7 @@ fn boundary_rule_leaves_a_tight_sheet_row_tight() {
                         color: Color::white(),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -2797,6 +2903,7 @@ fn horizontal_sheet_merge_selects_the_lower_odd_centering_half() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 col_span: 2,
@@ -2933,6 +3040,7 @@ fn centered_two_row_sheet_merge_uses_the_full_fixed_track_seat() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     col_span: 2,
@@ -3054,6 +3162,7 @@ fn sheet_cell_line_box_uses_the_face_that_paints_korean_fallback_text() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Center),
@@ -3147,6 +3256,7 @@ fn bottom_aligned_merged_sheet_cell_uses_the_native_five_point_floor() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     col_span,
@@ -3234,6 +3344,7 @@ fn fixed_track_sheet_cell_seats_its_centred_line_on_the_track() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Center),
@@ -3309,6 +3420,7 @@ fn bottom_aligned_sheet_cell_rests_its_descender_on_the_row_boundary() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Bottom),
@@ -3705,6 +3817,7 @@ fn a_thick_bottom_row_prints_its_baseline_one_sheet_point_above_an_unflagged_twi
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 row_has_thick_bottom,
@@ -3774,6 +3887,7 @@ fn a_descender_seat_inside_the_border_inset_still_lands_on_the_row_boundary() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             border,
@@ -3787,6 +3901,7 @@ fn a_descender_seat_inside_the_border_inset_still_lands_on_the_row_boundary() {
             color: Color::black(),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         ..CellBorder::default()
     };
@@ -3908,6 +4023,7 @@ fn a_floored_sheet_cell_ends_its_box_on_excel_minimum_gap() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     vertical_align: Some(CellVerticalAlign::Bottom),
@@ -4166,6 +4282,7 @@ fn substituted_sheet_face_keeps_the_declared_excel_wrapped_advance() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }];
     let painted_row_line = SheetRowLine {
         metric_family: PAINTED_METRIC_FAMILY.to_string(),
@@ -4221,6 +4338,7 @@ fn centered_fixed_sheet_rows_share_one_center_across_two_and_three_wrapped_lines
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align: Some(CellVerticalAlign::Center),
@@ -4368,6 +4486,7 @@ fn wrapping_cell_source(family: &str, font_size_pt: f64, in_sheet: bool) -> Stri
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align: Some(CellVerticalAlign::Center),
@@ -4507,6 +4626,7 @@ fn top_aligned_fixed_track_sheet_cell_starts_on_the_native_seat() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     vertical_align: Some(CellVerticalAlign::Top),
@@ -4608,6 +4728,7 @@ fn hangul_bold_run(text: &str, font_family: &str) -> Run {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -4778,4 +4899,343 @@ fn test_generic_table_cell_hangul_run_keeps_bold_when_font_needs_substitution() 
         "a generic (non-sheet) table cell must keep the run's declared bold \
          even under an unavailable font:\n{source}"
     );
+}
+
+/// Isolated native rows expose the small Malgun seats hidden by the older
+/// four-point workbook floor. Each size is independently observed (#1815).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn small_malgun_sheet_baselines_match_native_isolated_rows() {
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return;
+    }
+    let data = include_bytes!("../../../../tests/visual_audits/issue-1815/source.xlsx");
+    let (document, _) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &ConvertOptions::default(),
+    )
+    .unwrap();
+    let source = generate_typst(&document).unwrap().source;
+    let runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+    let mut differences: Vec<String> = Vec::new();
+    for (size, expected_baseline) in [
+        (8, 104.0),
+        (9, 179.0),
+        (10, 254.0),
+        (11, 328.0),
+        (12, 403.0),
+        (13, 478.0),
+        (14, 553.0),
+    ] {
+        let label = format!("Malgun size {size}");
+        let run = runs
+            .iter()
+            .find(|run| run.text == label)
+            .expect("each native label remains present");
+        if (run.baseline_pt - expected_baseline).abs() > 0.01 {
+            differences.push(format!(
+                "{label}: expected {expected_baseline}, got {}",
+                run.baseline_pt
+            ));
+        }
+    }
+    assert!(differences.is_empty(), "{}", differences.join("\n"));
+}
+
+/// A table row whose cells hold nothing but an empty `<w:p>` is as tall as a
+/// row of text: Word gives each paragraph mark a full line of its own, sized
+/// from the run formatting the mark resolves. The cell path had no runs and no
+/// sibling paragraph to borrow metrics from, so it emitted nothing at all and
+/// the row collapsed onto its own rule — 0.500pt rule-to-rule against our
+/// 13.149pt text rows, where native Word for Mac 16.113.2 prints 13.200pt for
+/// both (issue #1700).
+#[test]
+fn a_blank_only_cell_paragraph_holds_the_line_its_mark_resolves() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 11.0;
+    let table = Table {
+        rows: vec![blank_mark_row("Libertinus Serif", font_size)],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * font_size)
+        )),
+        "a cell holding only an empty paragraph must still hold one full line \
+         box, sized from the mark's own formatting: {result}"
+    );
+}
+
+/// Triangulation, measured rather than assumed: the probe of issue #1700 with
+/// `<w:pPr><w:rPr><w:sz w:val="48"/></w:rPr></w:pPr>` on every blank cell —
+/// one factor changed — prints its blank row 28.080pt tall in Word for Mac
+/// 16.113.2 against 13.200pt for the inheriting package, which is 24pt of
+/// Arial's own line plus the 0.48pt rule. So the mark's size scales the line,
+/// and a fixed height or the neighbouring row's would both be wrong.
+#[test]
+fn a_blank_cell_line_scales_with_its_mark_size() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    for font_size in [11.0_f64, 24.0, 7.5] {
+        let table = Table {
+            rows: vec![blank_mark_row("Libertinus Serif", font_size)],
+            column_widths: vec![150.0],
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(&format!(
+                "#box(width: 0pt, height: {}pt)",
+                format_f64(word_pitch_em * font_size)
+            )),
+            "the blank line must scale with the mark's own size, {font_size}pt \
+             here: {result}"
+        );
+    }
+}
+
+/// The mark's *face* decides the line too, so two faces whose line metrics
+/// differ give two different blank rows. This is what keeps the fix from
+/// standing in one hardcoded family's metrics for every document.
+#[test]
+fn a_blank_cell_line_follows_its_mark_face() {
+    let faces: Vec<(&str, f64)> = ["Libertinus Serif", "DejaVu Sans", "Arial", "Helvetica"]
+        .into_iter()
+        .filter_map(|family| {
+            crate::render::pdf::font_line_metrics_em(family)
+                .map(|(_, _, word_pitch_em)| (family, word_pitch_em))
+        })
+        .collect();
+    let Some((first, first_pitch_em)) = faces.first().copied() else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let Some(&(second, second_pitch_em)) = faces
+        .iter()
+        .find(|(_, pitch_em)| (pitch_em - first_pitch_em).abs() > 1e-6)
+    else {
+        return; // this machine has no two faces with distinguishable lines
+    };
+    let font_size: f64 = 11.0;
+    for (family, pitch_em) in [(first, first_pitch_em), (second, second_pitch_em)] {
+        let table = Table {
+            rows: vec![blank_mark_row(family, font_size)],
+            column_widths: vec![150.0],
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(&format!(
+                "#box(width: 0pt, height: {}pt)",
+                format_f64(pitch_em * font_size)
+            )),
+            "the blank line must take {family}'s own line: {result}"
+        );
+    }
+}
+
+/// The blank row and a text row of the same face and size take the same line,
+/// which is the whole observable claim of issue #1700: Word prints both at
+/// 13.200pt. The text row states its box as `top-edge`/`bottom-edge` over the
+/// font's em, the blank row as an absolute strut, so this compares the two
+/// models rather than two copies of one.
+#[test]
+fn a_blank_row_takes_the_same_line_as_a_text_row() {
+    let Some((ascender_em, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 11.0;
+    let text_row = TableRow {
+        minimum_height: None,
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "a".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                    inline_box: None,
+                }],
+            })],
+            ..TableCell::default()
+        }],
+        height: None,
+    };
+    let table = Table {
+        rows: vec![
+            text_row.clone(),
+            blank_mark_row("Libertinus Serif", font_size),
+            text_row,
+        ],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result
+            .matches(&format!(
+                "#set text(top-edge: {}em, bottom-edge: -{}em)",
+                format_f64(ascender_em),
+                format_f64(word_pitch_em - ascender_em)
+            ))
+            .count(),
+        2,
+        "both text rows keep Word's hhea line box: {result}"
+    );
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * font_size)
+        )),
+        "and the blank row between them holds the same line as a strut: {result}"
+    );
+}
+
+/// A blank paragraph that *does* have a sibling paragraph in its cell keeps
+/// borrowing that sibling's runs (issue #625). The mark resolution is the
+/// fallback for a cell with nothing to borrow from, not a replacement: Word's
+/// own rule is the mark's formatting either way, but no native export here
+/// measures a document whose runs and mark disagree, so the settled path stays
+/// as it is.
+#[test]
+fn a_blank_cell_paragraph_with_a_sibling_still_borrows_it() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let sibling_size: f64 = 9.5;
+    let mark_size: f64 = 24.0;
+    let cell = TableCell {
+        content: vec![
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "Hanbit Tech Co., Ltd.".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(sibling_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                    inline_box: None,
+                }],
+            }),
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    paragraph_mark_text_style: Some(Box::new(TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(mark_size),
+                        ..TextStyle::default()
+                    })),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![],
+            }),
+        ],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * sibling_size)
+        )),
+        "the sibling's line stays the spacer's height: {result}"
+    );
+    assert!(
+        !result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * mark_size)
+        )),
+        "the mark's own size must not take over a cell that has a sibling: {result}"
+    );
+}
+
+/// A blank cell whose mark resolves no formatting at all — every PowerPoint
+/// and Excel blank cell, and any DOCX paragraph whose face does not resolve —
+/// keeps the pre-fix emission, so nothing outside Word's flow gains a strut it
+/// was never measured to have.
+#[test]
+fn a_blank_cell_without_a_resolved_mark_emits_no_strut() {
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![],
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("#box(width: 0pt, height:"),
+        "a mark that resolves nothing must not invent a line: {result}"
+    );
+}
+
+/// One row of a single cell holding nothing but a run-less paragraph whose
+/// mark resolves to `family` at `font_size`.
+fn blank_mark_row(family: &str, font_size: f64) -> TableRow {
+    TableRow {
+        minimum_height: None,
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    paragraph_mark_text_style: Some(Box::new(TextStyle {
+                        font_family: Some(family.to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    })),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![],
+            })],
+            ..TableCell::default()
+        }],
+        height: None,
+    }
 }

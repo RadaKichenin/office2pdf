@@ -3,13 +3,13 @@ use crate::ir::DataLabels;
 use crate::ir::MarkerSymbol;
 use crate::ir::{ChartAreaFill, ChartAreaOutline};
 use crate::render::typst_gen::diagrams::{
-    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, GAP, LABEL_W, LEGEND_ENTRY_W,
-    LEGEND_KEY_BASELINE_PT, LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM,
+    CHART_AREA_OUTLINE, CHART_AUTOMATIC_LINE, CHART_DEFAULT_TEXT_PT, ChartFaceLineBox, GAP,
+    LABEL_W, LEGEND_ENTRY_W, LEGEND_KEY_BASELINE_PT, LEGEND_KEY_LEN_PT, PPTX_LEGEND_KEY_EM,
     PPTX_LEGEND_KEY_LABEL_GAP_KEY_SHARE, PPTX_LEGEND_KEY_LABEL_GAP_PT,
     PPTX_RIGHT_LEGEND_Y_SHIFT_EM, PPTX_RIGHT_LEGEND_Y_SHIFT_PT, ROW, SERIES_LINE_PT,
     SERIES_MARKER_SIZE_PT, TICK_GAP, axis_plot_rect, chart_area_title_h, chart_category_band_pt,
     chart_category_gutter_pt, chart_category_rotated_label_x, chart_category_rotated_label_y,
-    chart_face_line_metrics_em, chart_text_advance_em, chart_tick_band_pt,
+    chart_face_line_box_em, chart_face_line_metrics_em, chart_text_advance_em, chart_tick_band_pt,
     excel_legend_trailing_gutter_pt, legend_marker_cap_pt, powerpoint_right_legend_y_shift,
     pptx_column_data_label_seat_pt,
 };
@@ -1301,6 +1301,7 @@ fn every_legend_family_uses_the_legends_own_run_properties() {
         bold: Some(true),
         letter_spacing_hundredths: Some(125),
         color: Some(Color::new(0xC0, 0x2A, 0x7A)),
+        alpha: None,
         ellipsis_overflow: false,
     };
     for (chart_type, label) in [
@@ -2895,13 +2896,32 @@ fn emitted_rects(source: &str) -> Vec<PlacedRect> {
         .filter_map(|line| {
             let (placement, extent) = line.split_once("rect(width: ")?;
             Some(PlacedRect {
-                dx: leading_pt(placement.split_once("dx: ")?.1)?,
-                dy: leading_pt(placement.split_once("dy: ")?.1)?,
+                dx: chained_placement(placement, "dx")?,
+                dy: chained_placement(placement, "dy")?,
                 width: leading_pt(extent)?,
                 height: leading_pt(extent.split_once("height: ")?.1)?,
             })
         })
         .collect()
+}
+
+/// What `placement` displaces the primitive that follows it along `axis`,
+/// summed over every `#place` in the chain.
+///
+/// A worksheet chart's plotted data is placed three times on one line — the
+/// clip box on the chart's own coordinates, an inner placement returning the
+/// origin to the chart's, then the primitive's own — so only the total is the
+/// coordinate it lands on (#1745). An unclipped primitive has one placement and
+/// reads back unchanged.
+fn chained_placement(placement: &str, axis: &str) -> Option<f64> {
+    let needle: String = format!("{axis}: ");
+    let mut rest: &str = placement;
+    let mut total: Option<f64> = None;
+    while let Some((_, after)) = rest.split_once(needle.as_str()) {
+        total = Some(total.unwrap_or(0.0) + leading_pt(after)?);
+        rest = after;
+    }
+    total
 }
 
 /// Each bar as `(start, thickness)` along the category axis — the horizontal
@@ -4123,6 +4143,7 @@ fn sized_bar_chart(size_pt: f64) -> Chart {
         bold: None,
         letter_spacing_hundredths: None,
         color: None,
+        alpha: None,
         ellipsis_overflow: false,
     };
     chart
@@ -4179,6 +4200,7 @@ fn title_run_style(
         bold,
         letter_spacing_hundredths: None,
         color,
+        alpha: None,
         ellipsis_overflow: false,
     }
 }
@@ -4402,6 +4424,7 @@ fn category_labels_take_the_axis_weight() {
         bold: Some(true),
         letter_spacing_hundredths: None,
         color: None,
+        alpha: None,
         ellipsis_overflow: false,
     };
     let source: String = chart_source(chart);
@@ -4419,6 +4442,7 @@ fn an_axis_size_overrides_the_chart_space_size_for_that_axis_only() {
         bold: None,
         letter_spacing_hundredths: None,
         color: None,
+        alpha: None,
         ellipsis_overflow: false,
     };
     let source: String = chart_source(chart);
@@ -4527,6 +4551,7 @@ fn bar_chart_at(size_pt: Option<f64>, categories: &[&str]) -> Chart {
         bold: None,
         letter_spacing_hundredths: None,
         color: None,
+        alpha: None,
         ellipsis_overflow: false,
     };
     chart
@@ -5219,6 +5244,7 @@ fn powerpoint_column_probe_chart(chart_space_pt: f64, title_pt: Option<f64>) -> 
         .map(|category| (*category).to_string())
         .collect();
     chart.title = Some("Sales".to_string());
+    chart.text_font_family = Some("Calibri".to_string());
     chart.text_style.size_pt = Some(chart_space_pt);
     chart.title_text_style.size_pt = title_pt;
     chart
@@ -5277,14 +5303,14 @@ fn a_powerpoint_column_plot_takes_the_native_automatic_top_band() {
 #[test]
 fn a_powerpoint_column_plot_reserves_the_native_category_band() {
     // The same exports, plot bottom read off the category axis line. The 36pt
-    // chart space is left out: PowerPoint wraps `4th Qtr` onto a second line
-    // there and we slant it instead, so neither side is drawing one flat band
-    // (issue #1675).
+    // chart space wraps `1st Qtr` onto a second line natively, and reserves the
+    // extra leaded line for it (issue #1675).
     for (chart_space_pt, native_band) in [
         (10.0, 25.052),
         (12.0, 28.767),
         (18.0, 39.902),
         (24.0, 51.028),
+        (36.0, 117.240),
     ] {
         let chart = powerpoint_column_probe_chart(chart_space_pt, None);
         let (_, band) = powerpoint_column_probe_bands(&chart);
@@ -5322,13 +5348,380 @@ fn a_powerpoint_bar_plot_keeps_its_own_measured_top_band() {
     );
 }
 
+/// Every face `scripts/probes/issue-1674-column-plot-face.json` exports, as
+/// the `(usWinAscent, usWinDescent, hhea ascent + descent + line gap)` triple
+/// the band model reads, in units of the face's own em, with the bands a
+/// native PowerPoint 16.113.1 export of that variant measures.
+///
+/// The bands are the plot's top edge below the frame's, and its bottom edge
+/// above the frame's, on the deck's own 480 x 320pt graphic frame. Every
+/// variant holds the chart space at 18pt, so the automatic title is 21.6pt and
+/// both axes are 18pt throughout and only the face moves.
+struct NativeColumnFaceBand {
+    face: &'static str,
+    /// `(usWinAscent, usWinDescent, hhea ascent + descent + line gap)`.
+    metrics_per_2048em: (f64, f64, f64),
+    top_band_pt: f64,
+    bottom_band_pt: f64,
+}
+
+const NATIVE_COLUMN_FACE_BANDS: [NativeColumnFaceBand; 13] = [
+    NativeColumnFaceBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        top_band_pt: 51.3525,
+        bottom_band_pt: 39.9017,
+    },
+    NativeColumnFaceBand {
+        face: "Arial",
+        metrics_per_2048em: (1854.0, 434.0, 2355.0),
+        top_band_pt: 48.8901,
+        bottom_band_pt: 37.4734,
+    },
+    NativeColumnFaceBand {
+        face: "Times New Roman",
+        metrics_per_2048em: (1825.0, 443.0, 2268.0),
+        top_band_pt: 47.8874,
+        bottom_band_pt: 37.1283,
+    },
+    NativeColumnFaceBand {
+        face: "Courier New",
+        metrics_per_2048em: (1705.0, 615.0, 2320.0),
+        top_band_pt: 48.6601,
+        bottom_band_pt: 36.8800,
+    },
+    NativeColumnFaceBand {
+        face: "Georgia",
+        metrics_per_2048em: (1878.0, 449.0, 2327.0),
+        top_band_pt: 48.7650,
+        bottom_band_pt: 37.9534,
+    },
+    NativeColumnFaceBand {
+        face: "Trebuchet MS",
+        metrics_per_2048em: (1923.0, 455.0, 2378.0),
+        top_band_pt: 49.5300,
+        bottom_band_pt: 38.6666,
+    },
+    NativeColumnFaceBand {
+        face: "Verdana",
+        metrics_per_2048em: (2059.0, 430.0, 2489.0),
+        top_band_pt: 51.1875,
+        bottom_band_pt: 40.4383,
+    },
+    NativeColumnFaceBand {
+        face: "Comic Sans MS",
+        metrics_per_2048em: (2257.0, 597.0, 2854.0),
+        top_band_pt: 56.6400,
+        bottom_band_pt: 44.8034,
+    },
+    NativeColumnFaceBand {
+        face: "Candara",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        top_band_pt: 51.3525,
+        bottom_band_pt: 39.9017,
+    },
+    NativeColumnFaceBand {
+        face: "Constantia",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        top_band_pt: 51.3525,
+        bottom_band_pt: 39.9017,
+    },
+    NativeColumnFaceBand {
+        face: "Corbel",
+        metrics_per_2048em: (1950.0, 550.0, 2473.0),
+        top_band_pt: 51.3525,
+        bottom_band_pt: 39.9017,
+    },
+    NativeColumnFaceBand {
+        face: "Consolas",
+        metrics_per_2048em: (1884.0, 514.0, 2398.0),
+        top_band_pt: 49.8300,
+        bottom_band_pt: 38.6200,
+    },
+    NativeColumnFaceBand {
+        face: "Goudy Old Style",
+        metrics_per_2048em: (1792.0, 486.0, 2458.0),
+        top_band_pt: 49.9350,
+        bottom_band_pt: 37.0200,
+    },
+];
+
+/// A framed PowerPoint column plot sizes all three of its automatic vertical
+/// terms from the face, not from the declared size alone.
+///
+/// Twenty-nine native PowerPoint 16.113.1 exports settle the composition:
+/// `scripts/probes/issue-1674-column-plot-face.json` moves the chart space's
+/// face, which carries the title and both axes at once, while
+/// `issue-1674-column-title-face.json` and `issue-1674-column-value-axis-face.json`
+/// move one of them at a time so the terms separate. The model has no free
+/// parameter left once the three fixed points are read off #1437's Calibri
+/// series, and none of the forty-two bands they measure sits further than
+/// 0.006pt from it.
+///
+/// The metric source is OS/2's `usWin*` pair rather than `hhea`'s box, and only
+/// the title's term adds `hhea`'s line gap — taking the greater of the two
+/// boxes. Three faces settle that in both directions at once: `Corbel` has a
+/// 1.0em `hhea` box against a 1.2207em window pair and lands on the window
+/// pair, `Goudy Old Style` has the larger `hhea` box and lands on that, and
+/// `Arial`, whose two boxes differ by its 67-unit line gap alone, lands on the
+/// leaded one. `Candara` and `Constantia` share `Calibri`'s window pair while
+/// declaring a 1.0em `hhea` box, and the native export puts all three on the
+/// same band to the last emitted digit (issue #1674).
+#[test]
+fn a_powerpoint_column_plot_sizes_its_bands_from_the_face_line_box() {
+    for band in NATIVE_COLUMN_FACE_BANDS {
+        let NativeColumnFaceBand {
+            face,
+            metrics_per_2048em: (window_ascent, window_descent, leaded),
+            top_band_pt: native_top,
+            bottom_band_pt: native_bottom,
+        } = band;
+        let upem: f64 = 2048.0;
+        let metrics = ChartFaceLineBox::from_face_metrics_em(
+            window_ascent / upem,
+            window_descent / upem,
+            leaded / upem,
+        );
+        // The automatic title is the chart space's 18pt scaled by 1.2.
+        let top: f64 = metrics.title_band_pt(21.6) + metrics.plot_top_inset_pt(18.0);
+        assert!(
+            (top - native_top).abs() <= 0.01,
+            "{face}: PowerPoint starts the plot {native_top}pt below the frame, got {top:.4}"
+        );
+        let bottom: f64 = metrics.category_band_pt(18.0);
+        assert!(
+            (bottom - native_bottom).abs() <= 0.01,
+            "{face}: PowerPoint reserves {native_bottom}pt under the plot, got {bottom:.4}"
+        );
+    }
+}
+
+/// The faces the calibration itself rests on answer from the table rather than
+/// from whatever the runner has installed.
+///
+/// Neither `Calibri` nor `Arial` exists on the Linux CI image, and the band a
+/// substitute would size is not the band the native exports measured. The
+/// leaded box is the discriminating half: `Arial`'s 67-unit `hhea` line gap
+/// puts it at 2355/2048em against a 2288/2048em window pair (issue #1674).
+#[test]
+fn a_calibrated_chart_face_answers_its_own_line_box() {
+    for (face, window_ascent, window_descent, leaded) in [
+        ("Calibri", 1950.0, 550.0, 2500.0),
+        ("Arial", 1854.0, 434.0, 2355.0),
+    ] {
+        let upem: f64 = 2048.0;
+        let metrics = chart_face_line_box_em(face).expect("a calibrated face answers everywhere");
+        assert!(
+            (metrics.window_ascent_em - window_ascent / upem).abs() < 1e-9
+                && (metrics.window_descent_em - window_descent / upem).abs() < 1e-9
+                && (metrics.leaded_em - leaded / upem).abs() < 1e-9,
+            "{face}: expected {window_ascent}/{window_descent}/{leaded} per 2048em, got {metrics:?}"
+        );
+    }
+}
+
+/// Page 8 of the #1220 deck is the second face and the third pair of sizes the
+/// model meets, and it is the chart the band was 1.7-2.0pt long on.
+///
+/// Its chart frame is 689.187 x 221.058pt, its theme minor latin is `Arial`,
+/// its title states `sz="1862"` and both axes state `sz="1197"`. The native
+/// PowerPoint 16.112 export puts the plot 42.095pt below the frame's top edge
+/// and 27.093pt above its bottom one, for a 151.870pt plot (issue #1674).
+#[test]
+fn the_page_eight_column_plot_matches_its_native_bands() {
+    let mut chart: Chart = powerpoint_column_probe_chart(11.97, Some(18.62));
+    chart.text_font_family = Some("Arial".to_string());
+    chart.value_axis_text_style.size_pt = Some(11.97);
+    chart.category_axis_text_style.size_pt = Some(11.97);
+    let frame: (f64, f64) = (689.187, 221.058);
+    let (_, top, _, bottom) = axis_plot_rect(&chart, frame, true);
+    let band_below: f64 = frame.1 - bottom;
+    assert!(
+        (top - 42.095).abs() <= 0.05,
+        "page 8 starts its plot 42.095pt below the frame; got {top:.3}"
+    );
+    assert!(
+        (band_below - 27.093).abs() <= 0.05,
+        "page 8 reserves 27.093pt under its plot; got {band_below:.3}"
+    );
+    assert!(
+        (bottom - top - 151.870).abs() <= 0.1,
+        "page 8 plots 151.870pt tall; got {:.3}",
+        bottom - top
+    );
+}
+
+/// The same probe chart in the theme's own Calibri, which is the face the
+/// #1663 exports measure the horizontal rectangle in.
+///
+/// `value_pt` is what the value axis states for itself; the chart space stays
+/// on the 18pt every probe holds it at, so the sweep moves the tick labels
+/// alone.
+fn powerpoint_column_horizontal_probe_chart(value_pt: f64) -> Chart {
+    let mut chart: Chart = powerpoint_column_probe_chart(18.0, None);
+    chart.text_font_family = Some("Calibri".to_string());
+    chart.value_axis_text_style.size_pt = Some(value_pt);
+    chart
+}
+
+/// A framed PowerPoint column plot spends its left gutter on the value tick
+/// labels themselves: the widest starts 6.5pt inside the chart frame and the
+/// plot begins one face-measured clearance past its end — the same composition
+/// the line family and Excel's worksheet columns measure.
+///
+/// The gutters are read off native PowerPoint 16.113.1 exports of
+/// `tests/fixtures/pptx/bar-chart.pptx` repackaged as a column chart, as the x
+/// of the gridline strokes in a `mutool draw -F trace` minus the frame's own
+/// 120pt origin. `scripts/probes/issue-1663-column-value-size.json` sweeps the
+/// label size with the format held and `issue-1663-column-value-format.json`
+/// sweeps the format with the size held, so a fit that drops either term fails
+/// here. `issue-1663-column-value-tickmark.json` separately holds the gutter at
+/// 32.326pt through `none`, `out` and `cross` major tick marks, which is why no
+/// tick term appears in the model (issue #1663).
+#[test]
+fn a_powerpoint_column_plot_reserves_the_native_value_label_gutter() {
+    for (value_pt, number_format, native_gutter_pt) in [
+        (9.0, None, 19.409),
+        (12.0, None, 23.713),
+        (18.0, None, 32.326),
+        (18.0, Some("0.00"), 55.121),
+        (18.0, Some("0.0000"), 73.371),
+    ] {
+        let mut chart: Chart = powerpoint_column_horizontal_probe_chart(value_pt);
+        chart.value_axis_number_format = number_format.map(str::to_string);
+        let (left, ..) = axis_plot_rect(&chart, PROBE_LINE_FRAME, true);
+        assert!(
+            (left - native_gutter_pt).abs() <= 0.1,
+            "{value_pt}pt labels in {number_format:?}: PowerPoint starts the plot \
+             {native_gutter_pt:.3}pt inside the frame, got {left:.3}pt"
+        );
+
+        // The gutter is spent on the labels, so they have to sit inside it on
+        // the 6.5pt frame inset every one of the fifteen exports measures.
+        let source: String = framed_chart_source(&chart, PROBE_LINE_FRAME.0, PROBE_LINE_FRAME.1);
+        let labels: Vec<(f64, String)> = emitted_value_labels_at_size(&source, value_pt);
+        // The category labels share the chart space's size, so the tick labels
+        // are the numeric ones.
+        let widest: &str = labels
+            .iter()
+            .map(|(_, label)| label.as_str())
+            .filter(|label| {
+                label
+                    .chars()
+                    .all(|character| character.is_ascii_digit() || ".,-%".contains(character))
+            })
+            .max_by(|left, right| left.len().cmp(&right.len()))
+            .expect("a drawn value axis prints its tick labels");
+        let placed: PlacedBox = placed_box_holding(&source, widest);
+        assert!(
+            (placed.dx - 6.5).abs() < 0.001,
+            "{value_pt}pt labels in {number_format:?}: the widest label `{widest}` starts \
+             6.5pt inside the frame, got {:.3}pt in:\n{source}",
+            placed.dx
+        );
+        assert!(
+            placed.dx + placed.width <= left,
+            "{value_pt}pt labels in {number_format:?}: the label box ends before the plot, \
+             got {:.3}pt against {left:.3}pt in:\n{source}",
+            placed.dx + placed.width
+        );
+    }
+}
+
+/// DrawingML tracking widens the labels, and the gutter follows it.
+///
+/// `scripts/probes/issue-1663-column-value-tracking.json` sweeps
+/// `c:valAx/.../a:defRPr@spc` over 0, 1 and 2pt on the four-glyph `0.00`
+/// labels: the native gutter moves by exactly 4.000pt per point of tracking,
+/// so PowerPoint adds one step after *every* glyph, the last included. That is
+/// what the pre-#1663 `9.5 + 3.13 em` column fit was carrying — the #841
+/// deck's three-glyph `80%` labels declare `spc="100"`, and 6.5 + 3 x 1pt is
+/// its 9.5 (issue #1663).
+#[test]
+fn a_powerpoint_column_value_gutter_follows_drawingml_tracking() {
+    for (tracking_hundredths, native_gutter_pt) in [(0, 55.121), (100, 59.121), (200, 63.121)] {
+        let mut chart: Chart = powerpoint_column_horizontal_probe_chart(18.0);
+        chart.value_axis_number_format = Some("0.00".to_string());
+        chart.value_axis_text_style.letter_spacing_hundredths = Some(tracking_hundredths);
+        let (left, ..) = axis_plot_rect(&chart, PROBE_LINE_FRAME, true);
+        assert!(
+            (left - native_gutter_pt).abs() <= 0.1,
+            "{tracking_hundredths} hundredths of tracking must start the plot \
+             {native_gutter_pt:.3}pt inside the frame, got {left:.3}pt"
+        );
+    }
+}
+
+/// A framed PowerPoint column plot stops a measured distance before the left
+/// edge of the legend it keeps on its right, rather than taking the flat 11pt
+/// inset a legend-free plot keeps.
+///
+/// The bands are `frame width - plot right` off the same native exports.
+/// `scripts/probes/issue-1663-column-legend-size.json` sweeps the legend's own
+/// size and `issue-1663-column-legend-label.json` sweeps the series name, so
+/// the key term and the label term are separated;
+/// `issue-1663-column-legend-absent.json` removes the legend and measures the
+/// 11.000pt that is left. The value axis cannot reach this edge: all fifteen
+/// value-side exports hold the band at 79.793pt (issue #1663).
+#[test]
+fn a_powerpoint_column_plot_stops_before_its_right_legend() {
+    for (legend_pt, series_name, native_band_pt) in [
+        (9.0, "Sales", 51.397),
+        (12.0, "Sales", 60.870),
+        (18.0, "Sales", 79.793),
+        (24.0, "Sales", 98.721),
+        (18.0, "S", 51.047),
+    ] {
+        let mut chart: Chart = powerpoint_column_horizontal_probe_chart(18.0);
+        chart.legend_text_style.size_pt = Some(legend_pt);
+        chart.series[0].name = Some(series_name.to_string());
+        let (.., right, _) = axis_plot_rect(&chart, PROBE_LINE_FRAME, true);
+        let band: f64 = PROBE_LINE_FRAME.0 - right;
+        assert!(
+            (band - native_band_pt).abs() <= 0.1,
+            "a {legend_pt}pt legend labelled `{series_name}` must leave \
+             {native_band_pt:.3}pt beside the plot, got {band:.3}pt"
+        );
+    }
+
+    let mut chart: Chart = powerpoint_column_horizontal_probe_chart(18.0);
+    chart.has_legend = false;
+    let (.., right, _) = axis_plot_rect(&chart, PROBE_LINE_FRAME, true);
+    assert!(
+        (PROBE_LINE_FRAME.0 - right - 11.0).abs() <= 0.1,
+        "a legend-free column plot keeps the flat 11pt right inset, got {:.3}pt",
+        PROBE_LINE_FRAME.0 - right
+    );
+}
+
+/// Reserving less for the legend must not move the legend: PowerPoint fits the
+/// drawn stack against the chart area's own right edge, so the key stays where
+/// #1435 and #1436 measured it whatever the plot gives back (issue #1663).
+#[test]
+fn a_shrinking_column_legend_band_leaves_the_drawn_legend_where_it_was() {
+    let chart: Chart = powerpoint_column_horizontal_probe_chart(18.0);
+    let source: String = framed_chart_source(&chart, PROBE_LINE_FRAME.0, PROBE_LINE_FRAME.1);
+    let placed: PlacedBox = placed_box_holding(&source, "Sales");
+    // Native key left edge 538.402pt inside the probe deck's own 120pt frame
+    // origin, read off the legend swatch's `fill_path` in a `mutool` trace.
+    assert!(
+        (placed.dx - (538.402 - 120.0)).abs() <= 0.1,
+        "the legend entry must stay on its native 418.402pt, got {:.3}pt in:\n{source}",
+        placed.dx
+    );
+}
+
 #[test]
 fn an_explicit_powerpoint_column_value_axis_keeps_the_native_label_inset() {
-    // The #841 chart's plot is already aligned, but each right-aligned tick
-    // label was 6.087pt left of PowerPoint. The calibrated plot gutter still
-    // needs the same 6pt inner inset the legacy `TICK_GAP + GAP` layout had.
+    // The #841 chart's plot was already aligned while each right-aligned tick
+    // label sat 6.087pt left of PowerPoint's (#1015). All fifteen #1663
+    // exports put the widest label's first glyph on 6.500pt, so the box is the
+    // label's own advance seated on that pad rather than the flat tick band —
+    // and the plot then starts one face clearance past its end, which is what
+    // keeps a short-labelled plot from overlapping the labels.
     let mut chart = crowded_column_chart();
     chart.host = crate::ir::ChartHost::Presentation;
+    chart.text_font_family = Some("Avenir Next LT Pro".to_string());
     chart.text_style.size_pt = Some(11.97);
     chart.value_axis_text_style.size_pt = Some(11.97);
     let source = framed_chart_source(&chart, 401.95, 344.25);
@@ -5336,10 +5729,15 @@ fn an_explicit_powerpoint_column_value_axis_keeps_the_native_label_inset() {
         .lines()
         .find(|line| line.contains("align(right + horizon)") && line.ends_with("[0]]])"))
         .expect("the zero value-axis label is emitted");
-    assert!(zero.contains("dx: 6pt"), "{zero}");
+    assert!(zero.contains("dx: 6.5pt"), "{zero}");
+
+    let box_right: f64 = placed_box_holding(&source, "0").width + 6.5;
+    let (plot_left, ..) = axis_plot_rect(&chart, (401.95, 344.25), false);
+    // 5/6 of Avenir Next LT Pro's ascent plus half its descent, at 11.97pt.
     assert!(
-        zero.contains("box(width: 28.784350000000003pt"),
-        "the fix must translate, not widen, the value-label box: {zero}"
+        (plot_left - box_right - 11.101).abs() <= 0.01,
+        "the plot must start one 11.101pt clearance past the label box's \
+         {box_right}pt right edge, got {plot_left}pt"
     );
 }
 
@@ -5814,6 +6212,181 @@ fn an_anchored_excel_worksheet_chart_rounds_column_edges_to_whole_sheet_points()
                  relative to the second category's {reference}pt; got:\n{source}"
             );
         }
+    }
+}
+
+/// The clip each line matching `needle` was wrapped in, one entry per line —
+/// `None` where that line places its markup unclipped.
+///
+/// A worksheet chart's plotted data is the only chart markup written inside a
+/// clip, and each primitive carries its own, so reading the clip off the
+/// needle's own line keeps the sheet table's clipped cells out of the answer.
+fn clips_wrapping(source: &str, needle: &str) -> Vec<Option<PlacedBox>> {
+    let lines: Vec<&str> = source
+        .lines()
+        .filter(|line| line.contains(needle))
+        .collect();
+    assert!(!lines.is_empty(), "no {needle} markup in:\n{source}");
+    lines
+        .into_iter()
+        .map(|line| {
+            let (placement, clipped) = line.split_once(", clip: true)[")?;
+            if !clipped.contains(needle) {
+                return None;
+            }
+            let (opening, extent) = placement.rsplit_once("box(width: ")?;
+            Some(PlacedBox {
+                dx: leading_pt(opening.rsplit_once("dx: ")?.1)?,
+                dy: leading_pt(opening.rsplit_once("dy: ")?.1)?,
+                width: leading_pt(extent)?,
+                height: leading_pt(extent.split_once("height: ")?.1)?,
+            })
+        })
+        .collect()
+}
+
+/// The one clip every line matching `needle` shares.
+fn shared_clip(source: &str, needle: &str) -> PlacedBox {
+    let clips: Vec<Option<PlacedBox>> = clips_wrapping(source, needle);
+    let first: PlacedBox =
+        clips[0].unwrap_or_else(|| panic!("{needle} is placed unclipped; source:\n{source}"));
+    for clip in &clips {
+        let clip: PlacedBox =
+            clip.unwrap_or_else(|| panic!("{needle} is placed unclipped; source:\n{source}"));
+        assert!(
+            same_length(clip.dx, first.dx)
+                && same_length(clip.dy, first.dy)
+                && same_length(clip.width, first.width)
+                && same_length(clip.height, first.height),
+            "{needle} uses two different clips, {first:?} and {clip:?}; source:\n{source}"
+        );
+    }
+    first
+}
+
+/// The `(left, top, right, bottom)` sheet-point edges of the clip every line
+/// matching `needle` shares, on a chart frame whose top edge sits at
+/// `frame_top` sheet points. Horizontal edges stay chart-local: the harness
+/// pins no frame x seat.
+fn plot_clip_sheet_edges(source: &str, needle: &str, frame_top: f64) -> (f64, f64, f64, f64) {
+    let clip: PlacedBox = shared_clip(source, needle);
+    (
+        clip.dx,
+        frame_top + clip.dy,
+        clip.dx + clip.width,
+        frame_top + clip.dy + clip.height,
+    )
+}
+
+#[test]
+fn an_anchored_excel_worksheet_chart_clips_its_plotted_series_to_whole_sheet_points() {
+    // Native Excel 16.112 wraps the columns and the overlaid line of the #982
+    // workbook's chart in a clip at the plot rectangle's whole sheet points and
+    // paints the axis rules and the markers outside it. The unscaled control
+    // clips at x 380..1350, y 143..391 sheet points around a continuous plot of
+    // 380.109..1349.965 x 143.013..391.193; the 0.82 fitted export clips at
+    // x 388..1358, y 154..402 sheet points (page 318.16..1113.56 x
+    // 126.28..329.64). A zero-value run of the 2.239pt line then leaves the
+    // 0.737pt category axis visible under it instead of burying it (#1745).
+    let chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    let (plot_left, plot_top, plot_right, plot_bottom) =
+        axis_plot_rect(&chart, EXCEL_GIFT_CHART_FRAME, false);
+    let source: String = anchored_excel_gift_chart_source(chart, EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
+
+    let (clip_left, clip_top, clip_right, clip_bottom) =
+        plot_clip_sheet_edges(&source, "curve(stroke: ", EXCEL_GIFT_CHART_SPACE_FRAME_TOP);
+    // The frame's own sheet seat pins the vertical edges outright: this plot
+    // runs 154.013..402.193 sheet points, so Excel's clip is 154..402.
+    assert!(
+        same_length(clip_top, 154.0) && same_length(clip_bottom, 402.0),
+        "the series clip spans {clip_top}..{clip_bottom} sheet pt, native Excel clips \
+         154..402 sheet pt; source:\n{source}"
+    );
+    // Horizontally the harness pins no frame seat, so the column edges #1543
+    // already rounds are the whole-point grid the clip has to share. The second
+    // category's column is interior at this gap width.
+    let reference: f64 = emitted_rects(&source)
+        .into_iter()
+        .filter(|rect| rect.dy < 270.0)
+        .nth(2)
+        .expect("twelve categories of two column series are placed")
+        .dx;
+    let whole = |value: f64| (value - value.round()).abs() <= 1e-6;
+    assert!(
+        whole(clip_left - reference) && whole(clip_right - reference),
+        "the series clip spans {clip_left}..{clip_right}pt, which is not on the whole sheet \
+         points the columns at {reference}pt use; source:\n{source}"
+    );
+    // The clip is the plot's own rectangle rounded, not a band of its own.
+    assert!(
+        (clip_left - plot_left).abs() <= 0.5
+            && (clip_right - plot_right).abs() <= 0.5
+            && (clip_top - (EXCEL_GIFT_CHART_SPACE_FRAME_TOP + plot_top)).abs() <= 0.5
+            && (clip_bottom - (EXCEL_GIFT_CHART_SPACE_FRAME_TOP + plot_bottom)).abs() <= 0.5,
+        "the series clip {clip_left}..{clip_right} x {clip_top}..{clip_bottom} is more than half \
+         a point from the plot's own {plot_left}..{plot_right}pt x {plot_top}..{plot_bottom}pt; \
+         source:\n{source}"
+    );
+
+    // The columns are plotted data and share that clip; the axis rules, the
+    // gridlines and the markers are chrome Excel paints outside it.
+    let column_clip: PlacedBox = shared_clip(&source, "rect(width: ");
+    assert!(
+        same_length(column_clip.dx, clip_left)
+            && same_length(column_clip.width, clip_right - clip_left)
+            && same_length(column_clip.dy + EXCEL_GIFT_CHART_SPACE_FRAME_TOP, clip_top)
+            && same_length(column_clip.height, clip_bottom - clip_top),
+        "the columns use {column_clip:?} rather than the series' own clip; source:\n{source}"
+    );
+    for (needle, what) in [
+        ("line(end: (", "the axis rules and gridlines"),
+        ("polygon(", "the series markers"),
+    ] {
+        assert!(
+            clips_wrapping(&source, needle).iter().all(Option::is_none),
+            "{what} must stay outside the plot clip; source:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn an_anchored_excel_worksheet_plot_clip_rounds_rather_than_truncates() {
+    // Excel rounds each plot edge to the nearest whole sheet point: the fitted
+    // export's 1357.966pt right edge clips at 1358, not 1357. Moving the frame's
+    // sheet phase carries the plot's own fractions across the half-point
+    // boundary, so a truncating or a ceiling clip parts from the rounding one.
+    for (phase, expected_top, expected_bottom) in [
+        (0.0, 154.0, 402.0),
+        (0.4, 154.0, 403.0),
+        (0.6, 155.0, 403.0),
+    ] {
+        let frame_top: f64 = EXCEL_GIFT_CHART_SPACE_FRAME_TOP + phase;
+        let source: String =
+            anchored_excel_gift_chart_source(excel_gift_vertical_chart(9.0, 9.0, 9.0), frame_top);
+        let (_, clip_top, _, clip_bottom) =
+            plot_clip_sheet_edges(&source, "curve(stroke: ", frame_top);
+        assert!(
+            same_length(clip_top, expected_top) && same_length(clip_bottom, expected_bottom),
+            "at a {phase}pt sheet phase the clip spans {clip_top}..{clip_bottom} sheet pt, \
+             rounding the plot's 154.013..402.193 gives {expected_top}..{expected_bottom}; \
+             source:\n{source}"
+        );
+    }
+}
+
+#[test]
+fn a_chart_outside_a_worksheet_keeps_its_unclipped_series() {
+    // The whole-point clip is Excel's worksheet geometry, measured on the #982
+    // workbook's two print scales. A PowerPoint or Word chart has no sheet
+    // origin to snap to, so nothing wraps its series (#1745).
+    let chart = excel_gift_vertical_chart(9.0, 9.0, 9.0);
+    let source: String =
+        framed_chart_source(&chart, EXCEL_GIFT_CHART_FRAME.0, EXCEL_GIFT_CHART_FRAME.1);
+    for needle in ["curve(stroke: ", "rect(width: "] {
+        assert!(
+            clips_wrapping(&source, needle).iter().all(Option::is_none),
+            "a frame without a sheet origin must place {needle} unclipped; source:\n{source}"
+        );
     }
 }
 
@@ -7576,6 +8149,320 @@ fn a_stated_major_unit_sets_the_tick_interval() {
     );
 }
 
+// ----- Crowded category labels wrap (issue #1675) -----
+
+/// One native PowerPoint 16.113.1 export of the #1675 probe frame: the face the
+/// chart space states, the size it states, the labels it carries, the lines
+/// PowerPoint broke them into and the band it reserved under the plot.
+struct NativeWrappedBand {
+    face: &'static str,
+    /// `usWinAscent`, `usWinDescent` and `hhea` ascent + descent + line gap,
+    /// per 2048em.
+    metrics_per_2048em: (f64, f64, f64),
+    chart_space_pt: f64,
+    lines: usize,
+    band_pt: f64,
+}
+
+/// Every wrapped band the #1675 probes measured, over four faces, seven sizes
+/// and one to four lines.
+///
+/// `Calibri` cannot see which line box the extra line takes — its window pair
+/// and its leaded box are the same 2500/2048em, as `Corbel`'s max() is — so
+/// `Arial` (a 67-unit line gap apart) and `Goudy Old Style` (180 units apart)
+/// are the two rows that settle it.
+const NATIVE_WRAPPED_BANDS: &[NativeWrappedBand] = &[
+    // scripts/probes/issue-1675-column-label-wrap.json — `Q1`..`Q4` fit flat,
+    // `1st Qtr`..`4th Qtr` wrap at the space.
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 36.0,
+        lines: 1,
+        band_pt: 73.2950,
+    },
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 36.0,
+        lines: 2,
+        band_pt: 117.2400,
+    },
+    // scripts/probes/issue-1675-column-label-lines.json — `First Quarter` and
+    // `First Quarter Net Sales Revenue` at 18pt.
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 18.0,
+        lines: 2,
+        band_pt: 61.8767,
+    },
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 18.0,
+        lines: 4,
+        band_pt: 105.8268,
+    },
+    // scripts/probes/issue-1675-column-label-floor.json — the same five words
+    // at 22pt.
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 22.0,
+        lines: 4,
+        band_pt: 127.8835,
+    },
+    // scripts/probes/issue-1675-column-label-share.json — `1st Qtr Net`, which
+    // takes three lines up to 30pt and none at all from 32pt.
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 28.0,
+        lines: 3,
+        band_pt: 126.8132,
+    },
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 30.0,
+        lines: 3,
+        band_pt: 135.4036,
+    },
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 32.0,
+        lines: 1,
+        band_pt: 65.8783,
+    },
+    NativeWrappedBand {
+        face: "Calibri",
+        metrics_per_2048em: (1950.0, 550.0, 2500.0),
+        chart_space_pt: 34.0,
+        lines: 1,
+        band_pt: 69.5884,
+    },
+    // scripts/probes/issue-1675-column-wrap-face.json — `1st Qtr`..`4th Qtr`
+    // wrapped at 36pt in four faces.
+    NativeWrappedBand {
+        face: "Arial",
+        metrics_per_2048em: (1854.0, 434.0, 2355.0),
+        chart_space_pt: 36.0,
+        lines: 2,
+        band_pt: 109.8466,
+    },
+    NativeWrappedBand {
+        face: "Corbel",
+        metrics_per_2048em: (1950.0, 550.0, 2473.0),
+        chart_space_pt: 36.0,
+        lines: 2,
+        band_pt: 117.2400,
+    },
+    NativeWrappedBand {
+        face: "Goudy Old Style",
+        metrics_per_2048em: (1792.0, 486.0, 2458.0),
+        chart_space_pt: 36.0,
+        lines: 2,
+        band_pt: 110.7551,
+    },
+];
+
+#[test]
+fn a_wrapped_category_band_adds_one_leaded_line_per_extra_line() {
+    for band in NATIVE_WRAPPED_BANDS {
+        let NativeWrappedBand {
+            face,
+            metrics_per_2048em: (window_ascent, window_descent, leaded),
+            chart_space_pt,
+            lines,
+            band_pt: native,
+        } = band;
+        let upem: f64 = 2048.0;
+        let metrics = ChartFaceLineBox::from_face_metrics_em(
+            window_ascent / upem,
+            window_descent / upem,
+            leaded / upem,
+        );
+        let actual: f64 = metrics.wrapped_category_band_pt(*chart_space_pt, *lines);
+        assert!(
+            (actual - native).abs() <= 0.02,
+            "{face} at {chart_space_pt}pt over {lines} line(s): PowerPoint \
+             reserves {native}pt, got {actual:.4}"
+        );
+    }
+}
+
+/// The probe chart with its categories replaced, which is the one factor the
+/// #1675 probes move.
+fn powerpoint_column_labelled_chart(chart_space_pt: f64, categories: &[&str]) -> Chart {
+    let mut chart = powerpoint_column_probe_chart(chart_space_pt, None);
+    chart.categories = categories
+        .iter()
+        .map(|category| (*category).to_string())
+        .collect();
+    chart.series[0].values = vec![8.2, 3.2, 1.4, 1.2];
+    chart.series[0].values.truncate(categories.len());
+    chart
+}
+
+/// The `dy` of every category-label box the generator placed, in the order
+/// written, keyed by the text inside it.
+fn category_label_seats(source: &str) -> Vec<(String, f64)> {
+    let mut seats: Vec<(String, f64)> = Vec::new();
+    for line in source.lines() {
+        let Some(rest) = line.strip_prefix("#place(top + left, dx: ") else {
+            continue;
+        };
+        if !line.contains("align(center + horizon)") {
+            continue;
+        }
+        let Some((_, after_dy)) = rest.split_once(", dy: ") else {
+            continue;
+        };
+        let Some((dy, _)) = after_dy.split_once("pt,") else {
+            continue;
+        };
+        let Some((_, tail)) = line.rsplit_once(")[") else {
+            continue;
+        };
+        let text: String = tail.trim_end_matches(')').trim_end_matches(']').to_string();
+        if let Ok(dy) = dy.parse::<f64>() {
+            seats.push((text, dy));
+        }
+    }
+    seats
+}
+
+#[test]
+fn a_powerpoint_column_label_wider_than_its_band_wraps_at_its_spaces() {
+    let chart =
+        powerpoint_column_labelled_chart(36.0, &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    assert!(
+        !source.contains("rotate(-45deg"),
+        "a label PowerPoint wraps must not slant, got:\n{source}"
+    );
+    let seats = category_label_seats(&source);
+    let words: Vec<&str> = seats.iter().map(|(text, _)| text.as_str()).collect();
+    assert_eq!(
+        words,
+        ["1st", "Qtr", "2nd", "Qtr", "3rd", "Qtr", "4th", "Qtr"],
+        "each label breaks at its own space, got:\n{source}"
+    );
+    // The second line sits one whole leaded line of Calibri below the first.
+    let pitch: f64 = 2500.0 / 2048.0 * 36.0;
+    for pair in seats.chunks(2) {
+        let dy: f64 = pair[1].1 - pair[0].1;
+        assert!(
+            (dy - pitch).abs() <= 0.01,
+            "the wrapped line advances {dy}pt, expected {pitch}pt"
+        );
+    }
+}
+
+#[test]
+fn a_powerpoint_column_label_inside_its_band_stays_on_one_line() {
+    // Triangulation: the same chart at the same size, with labels that fit.
+    let chart = powerpoint_column_labelled_chart(36.0, &["Q1", "Q2", "Q3", "Q4"]);
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    let words: Vec<String> = category_label_seats(&source)
+        .into_iter()
+        .map(|(text, _)| text)
+        .collect();
+    assert_eq!(words, ["Q1", "Q2", "Q3", "Q4"], "got:\n{source}");
+}
+
+#[test]
+fn a_powerpoint_column_label_whose_word_overflows_its_band_still_slants() {
+    // `1stQtr`..`4thQtr` carry the same letters with no space to break at, and
+    // the native export slants and ellipsizes them instead of wrapping.
+    let chart = powerpoint_column_labelled_chart(36.0, &["1stQtr", "2ndQtr", "3rdQtr", "4thQtr"]);
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    assert!(
+        source.contains("rotate(-45deg, origin: top + right"),
+        "a label no wrap can fit must still slant, got:\n{source}"
+    );
+}
+
+#[test]
+fn a_wrapped_band_past_the_measured_share_goes_back_to_one_line() {
+    // `1st Qtr Net` takes three lines natively up to 30pt; from 32pt the band
+    // that would need is more of the frame than PowerPoint will give it, and
+    // the export puts every label back on one overlapping line rather than
+    // slanting it — every one of its words fits the band on its own.
+    for (chart_space_pt, native_band) in [
+        (28.0, 126.8132),
+        (30.0, 135.4036),
+        (32.0, 65.8783),
+        (34.0, 69.5884),
+        (36.0, 73.2950),
+    ] {
+        let chart = powerpoint_column_labelled_chart(
+            chart_space_pt,
+            &["1st Qtr Net", "2nd Qtr Net", "3rd Qtr Net", "4th Qtr Net"],
+        );
+        let source: String = framed_chart_source(&chart, 480.0, 320.0);
+        assert!(
+            !source.contains("rotate(-45deg"),
+            "a label whose every word fits its band must not slant at \
+             {chart_space_pt}pt, got:\n{source}"
+        );
+        let (_, band) = powerpoint_column_probe_bands(&chart);
+        assert!(
+            (band - native_band).abs() <= 0.1,
+            "at {chart_space_pt}pt PowerPoint reserves {native_band}pt under \
+             the plot; got {band}"
+        );
+        // Refused, every label is back on the one line it started with.
+        if native_band < 100.0 {
+            let seats = category_label_seats(&source);
+            assert_eq!(
+                seats.len(),
+                4,
+                "a refused wrap draws one line per label at {chart_space_pt}pt, \
+                 got {seats:?}"
+            );
+        }
+    }
+}
+
+/// Only a framed PowerPoint column axis wraps: no native Excel or Word export
+/// has measured a wrapped band, so those hosts keep the slant of #884.
+#[test]
+fn a_crowded_worksheet_column_axis_keeps_its_slant() {
+    for host in [
+        crate::ir::ChartHost::Spreadsheet,
+        crate::ir::ChartHost::SpreadsheetChartsheet,
+        crate::ir::ChartHost::WordProcessing,
+    ] {
+        let mut chart =
+            powerpoint_column_labelled_chart(36.0, &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+        chart.host = host;
+        let source: String = framed_chart_source(&chart, 480.0, 320.0);
+        assert!(
+            source.contains("rotate(-45deg, origin: top + right"),
+            "{host:?} must keep slanting its crowded labels, got:\n{source}"
+        );
+    }
+}
+
+/// An axis asking for a truncated label keeps the slant of #884 too: every
+/// package behind the wrap law writes a bare `<a:bodyPr/>`, so no native export
+/// says what PowerPoint does when a `vertOverflow="ellipsis"` policy meets a
+/// label it would otherwise wrap.
+#[test]
+fn an_ellipsising_category_axis_keeps_its_slant() {
+    let mut chart =
+        powerpoint_column_labelled_chart(36.0, &["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]);
+    chart.category_axis_text_style.ellipsis_overflow = true;
+    let source: String = framed_chart_source(&chart, 480.0, 320.0);
+    assert!(
+        source.contains("rotate(-45deg, origin: top + right"),
+        "an ellipsising axis keeps the slant it had, got:\n{source}"
+    );
+}
+
 // ----- Crowded category labels slant (issue #884) -----
 
 /// A column chart whose category labels are far longer than their bands, as
@@ -8871,6 +9758,218 @@ fn a_stated_plot_rectangle_that_overruns_the_chart_area_is_pulled_back_inside_it
     }
 }
 
+// ----- A pulled-back bar plot keeps its value labels inside (issue #1634) -----
+
+/// The chart area the reported workbook's drawing anchor gives its `january
+/// income:` bar chart, in points before the sheet's 0.78 print scale. The
+/// native export prints it 240.23pt wide, which is this at 0.78.
+const INCOME_BAR_CHART_FRAME: (f64, f64) = (307.985, 207.523);
+
+/// That chart's `c:plotArea/c:layout/c:manualLayout`, verbatim.
+const INCOME_BAR_PLOT_LAYOUT: crate::ir::ChartPlotAreaLayout = crate::ir::ChartPlotAreaLayout {
+    x: 0.302_222_981_850_811_3,
+    y: 0.346_254_853_367_148_95,
+    width: 0.641_393_111_355_616_6,
+    height: 0.557_117_057_893_036_4,
+};
+
+/// The `january income:` chart: horizontal bars over five categories, the
+/// value axis printing percentage tick labels under the plot from 0 to 0.5.
+///
+/// The labels are set in Calibri rather than the workbook's Trebuchet MS so the
+/// expected overhang reads the same calibrated advance table on every runner.
+fn income_bar_chart(value_format: &str, value_size_pt: f64) -> Chart {
+    let mut chart: Chart = cash_flow_bar_chart();
+    chart.host = crate::ir::ChartHost::Spreadsheet;
+    chart.grouping = ChartGrouping::Clustered;
+    chart.categories = [
+        "other",
+        "from savings",
+        "family help",
+        "wages (after-tax)",
+        "financial aid",
+    ]
+    .map(str::to_string)
+    .to_vec();
+    chart.series.truncate(1);
+    chart.series[0].values = vec![0.0, 0.0, 0.05, 0.4, 0.3];
+    chart.value_axis_min = Some(0.0);
+    chart.value_axis_max = Some(0.5);
+    chart.value_axis_major_unit = Some(0.1);
+    chart.value_axis_number_format = Some(value_format.to_string());
+    chart.text_font_family = Some("Calibri".to_string());
+    chart.text_style.size_pt = Some(10.0);
+    chart.value_axis_text_style.size_pt = Some(value_size_pt);
+    chart
+}
+
+/// Half the last value label's advance plus Excel's flat 6pt: how far inside
+/// the chart area's right edge a pulled-back plot ends.
+fn income_bar_overhang_pt(last_label: &str, value_size_pt: f64) -> f64 {
+    chart_text_advance_em("Calibri", false, last_label).expect("Calibri is calibrated")
+        * value_size_pt
+        / 2.0
+        + 6.0
+}
+
+/// Assert a plot's four edges, as `(left, top, right, bottom)` in points.
+fn assert_plot_edges(case: &str, actual: (f64, f64, f64, f64), expected: (f64, f64, f64, f64)) {
+    let errors = [
+        ("left", actual.0, expected.0),
+        ("top", actual.1, expected.1),
+        ("right", actual.2, expected.2),
+        ("bottom", actual.3, expected.3),
+    ]
+    .map(|(edge, actual, expected)| (edge, actual, expected, (actual - expected).abs()));
+    assert!(
+        errors.iter().all(|(_, _, _, error)| *error <= 0.01),
+        "{case}: plot edges {errors:?}"
+    );
+}
+
+/// A bar plot whose value tick labels run under it is pulled back until the
+/// last label, centred on its right edge, stops 6pt inside the chart area —
+/// not until the plot's own edge reaches the chart area's.
+///
+/// Native Excel for Mac 16.112 exports of the reported workbook with one value
+/// of this chart's layout rewritten per variant end the plot at 0.9538 of the
+/// chart area for `x` 0.33, 0.36, 0.40 and 0.50 alike — 0.33 would still have
+/// ended inside it — and further in for a wider last label (`50.00%`, 0.9308)
+/// or a larger one (`50%` at 14pt, 0.9431). The file's own `x` fits and stays.
+/// Taking only the plot's own edge as the limit put the `x` 0.5 plot 11.1pt
+/// right of the export (issue #1634).
+#[test]
+fn a_pulled_back_bar_plot_keeps_its_last_value_label_inside_the_chart_area() {
+    let (frame_w, frame_h) = INCOME_BAR_CHART_FRAME;
+    let layout = INCOME_BAR_PLOT_LAYOUT;
+    let top: f64 = layout.y * frame_h;
+    let bottom: f64 = top + layout.height * frame_h;
+    let plot_w: f64 = layout.width * frame_w;
+
+    let mut as_written: Chart = income_bar_chart("0%", 10.0);
+    as_written.plot_area_layout = Some(layout);
+    assert_plot_edges(
+        "the file's own layout fits",
+        axis_plot_rect(&as_written, INCOME_BAR_CHART_FRAME, false),
+        (layout.x * frame_w, top, layout.x * frame_w + plot_w, bottom),
+    );
+
+    let cases: [(&str, f64, &str, &str, f64); 6] = [
+        ("x 0.33", 0.33, "0%", "50%", 10.0),
+        ("x 0.36", 0.36, "0%", "50%", 10.0),
+        ("x 0.40", 0.40, "0%", "50%", 10.0),
+        ("x 0.50", 0.50, "0%", "50%", 10.0),
+        ("x 0.50, a wider last label", 0.50, "0.00%", "50.00%", 10.0),
+        ("x 0.50, a larger last label", 0.50, "0%", "50%", 14.0),
+    ];
+    for (case, x, value_format, last_label, value_size_pt) in cases {
+        let mut chart: Chart = income_bar_chart(value_format, value_size_pt);
+        chart.plot_area_layout = Some(crate::ir::ChartPlotAreaLayout { x, ..layout });
+        let right: f64 = frame_w - income_bar_overhang_pt(last_label, value_size_pt);
+        assert_plot_edges(
+            case,
+            axis_plot_rect(&chart, INCOME_BAR_CHART_FRAME, false),
+            (right - plot_w, top, right, bottom),
+        );
+    }
+}
+
+/// A stated bar plot too wide to pull back past its category labels is cut to
+/// start where those labels end, rather than pushing them off the chart area.
+///
+/// Excel's export of `w` 0.9 on the reported chart runs the plot from 0.2863 to
+/// 0.9538 of the chart area: the right edge at the labelled limit, the left
+/// 1.525pt + 0.89152em past the widest category label, a band four exports at
+/// 8, 10, 14 and 18pt category labels fit to 0.005pt. `x` 0.1 with `w` 0.9
+/// prints on the same band, but `x` 0.1 with the file's own `w` fits and stays
+/// at 0.1, the labels cut short to make room (issue #1634).
+#[test]
+fn a_bar_plot_too_wide_to_pull_back_is_cut_to_its_category_labels() {
+    let (frame_w, frame_h) = INCOME_BAR_CHART_FRAME;
+    let layout = INCOME_BAR_PLOT_LAYOUT;
+    let top: f64 = layout.y * frame_h;
+    let bottom: f64 = top + layout.height * frame_h;
+    let right: f64 = frame_w - income_bar_overhang_pt("50%", 10.0);
+    let widest_em: f64 = chart_text_advance_em("Calibri", false, "wages (after-tax)")
+        .expect("Calibri is calibrated");
+    let band_pt = |category_size_pt: f64| -> f64 {
+        widest_em * category_size_pt + 1.525 + 0.89152 * category_size_pt
+    };
+
+    let cases: [(&str, f64, f64, f64); 3] = [
+        ("w 0.9", layout.x, 10.0, band_pt(10.0)),
+        ("x 0.1 w 0.9", 0.1, 10.0, band_pt(10.0)),
+        ("w 0.9, 14pt category labels", layout.x, 14.0, band_pt(14.0)),
+    ];
+    for (case, x, category_size_pt, left) in cases {
+        let mut chart: Chart = income_bar_chart("0%", 10.0);
+        chart.category_axis_text_style.size_pt = Some(category_size_pt);
+        chart.plot_area_layout = Some(crate::ir::ChartPlotAreaLayout {
+            x,
+            width: 0.9,
+            ..layout
+        });
+        assert_plot_edges(
+            case,
+            axis_plot_rect(&chart, INCOME_BAR_CHART_FRAME, false),
+            (left, top, right, bottom),
+        );
+    }
+
+    assert!(
+        band_pt(10.0) > 0.1 * frame_w,
+        "the labels must need more than 0.1 of the frame for the fitting case \
+         to test anything"
+    );
+    let mut fits: Chart = income_bar_chart("0%", 10.0);
+    fits.plot_area_layout = Some(crate::ir::ChartPlotAreaLayout { x: 0.1, ..layout });
+    assert_plot_edges(
+        "x 0.1 fits",
+        axis_plot_rect(&fits, INCOME_BAR_CHART_FRAME, false),
+        (0.1 * frame_w, top, (0.1 + layout.width) * frame_w, bottom),
+    );
+}
+
+/// The label reserve covers only what was measured: an Excel bar plot whose
+/// value axis prints labels at a stated size. A column plot, a deleted value
+/// axis, a PowerPoint chart and a chart stating no size keep #1272's limit on
+/// the plot's own edge.
+#[test]
+fn the_value_label_reserve_stays_off_charts_it_was_not_measured_on() {
+    let (frame_w, frame_h) = INCOME_BAR_CHART_FRAME;
+    let layout = crate::ir::ChartPlotAreaLayout {
+        x: 0.5,
+        ..INCOME_BAR_PLOT_LAYOUT
+    };
+    let top: f64 = layout.y * frame_h;
+    let bottom: f64 = top + layout.height * frame_h;
+    let own_edge_limit = ((1.0 - layout.width) * frame_w, top, frame_w, bottom);
+
+    let mut column: Chart = income_bar_chart("0%", 10.0);
+    column.chart_type = ChartType::Column;
+    let mut deleted_axis: Chart = income_bar_chart("0%", 10.0);
+    deleted_axis.value_axis_deleted = true;
+    let mut presentation: Chart = income_bar_chart("0%", 10.0);
+    presentation.host = crate::ir::ChartHost::Presentation;
+    let mut undeclared_size: Chart = income_bar_chart("0%", 10.0);
+    undeclared_size.text_style.size_pt = None;
+    undeclared_size.value_axis_text_style.size_pt = None;
+
+    for (case, mut chart) in [
+        ("column plot", column),
+        ("deleted value axis", deleted_axis),
+        ("PowerPoint host", presentation),
+        ("no stated size", undeclared_size),
+    ] {
+        chart.plot_area_layout = Some(layout);
+        assert_plot_edges(
+            case,
+            axis_plot_rect(&chart, INCOME_BAR_CHART_FRAME, false),
+            own_edge_limit,
+        );
+    }
+}
+
 // ----- Line-family plot rectangles (issue #1265) -----
 
 /// The chart area and inner plot rectangle of `xl/charts/chart2.xml` in
@@ -8983,23 +10082,10 @@ fn cash_flow_bar_chart() -> Chart {
 
 /// The `dx`/`dy` a `#place` line puts its content at.
 fn place_origin(line: &str) -> Option<(f64, f64)> {
-    let dx: f64 = line
-        .split("dx: ")
-        .nth(1)?
-        .split("pt")
-        .next()?
-        .trim()
-        .parse()
-        .ok()?;
-    let dy: f64 = line
-        .split("dy: ")
-        .nth(1)?
-        .split("pt")
-        .next()?
-        .trim()
-        .parse()
-        .ok()?;
-    Some((dx, dy))
+    Some((
+        chained_placement(line, "dx")?,
+        chained_placement(line, "dy")?,
+    ))
 }
 
 /// Origin and length of the one vertical axis line in the generated source.
@@ -9317,6 +10403,7 @@ fn cash_flow_caption() -> crate::ir::ChartUserShape {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         text_insets: crate::ir::Insets {
@@ -10847,7 +11934,13 @@ fn dual_axis_line_chart() -> Chart {
 /// gridline in a box of stated height; a category label's box states none,
 /// which is what tells the two apart.
 fn emitted_value_labels(source: &str) -> Vec<(f64, String)> {
-    let marker: String = format!("text(size: {}pt)[", format_f64(CHART_DEFAULT_TEXT_PT));
+    emitted_value_labels_at_size(source, CHART_DEFAULT_TEXT_PT)
+}
+
+/// The same census of one chart's value tick labels, for a chart whose axis
+/// states a size of its own.
+fn emitted_value_labels_at_size(source: &str, size_pt: f64) -> Vec<(f64, String)> {
+    let marker: String = format!("text(size: {}pt)[", format_f64(size_pt));
     source
         .lines()
         .filter(|line| {
@@ -10963,6 +12056,189 @@ fn a_framed_chart_reserves_a_gutter_for_its_secondary_axis_labels() {
             placed.dx + placed.width <= frame_w + 1e-6,
             "a secondary label box ends inside the {frame_w}pt frame, got {:.2}pt in:\n{source}",
             placed.dx + placed.width
+        );
+    }
+}
+
+/// A chart that declares no `<c:legend>` reserves no legend band, so its plot
+/// runs to the frame's right gutter.
+///
+/// The line renderer built its `LegendBox` from `<c:legendPos>` alone while
+/// `has_legend` only gated whether entries were drawn, so a legendless line
+/// chart still gave up the column a right legend would take and every
+/// right-hand element sat that far left — 94pt of it on page 11 of the #1220
+/// deck (issue #1649). The axis, radar and pie renderers already reclaimed it
+/// (issue #762).
+#[test]
+fn a_line_chart_without_a_legend_reserves_no_legend_band() {
+    // Both families the line renderer draws, at two frame widths: the band a
+    // legend would take is a fixed column, so a renderer that merely scaled
+    // the plot down would pass one width and fail the other.
+    for chart_type in [ChartType::Line, ChartType::Area] {
+        for frame_w in [400.0_f64, 560.0_f64] {
+            let frame_h: f64 = 200.0;
+
+            let mut legendless: Chart = dual_axis_line_chart();
+            legendless.chart_type = chart_type.clone();
+            legendless.legend_position = LegendPosition::Right;
+            assert!(
+                !legendless.has_legend,
+                "the #1220 `Success Ratios` fixture declares no legend"
+            );
+            let without: String = framed_chart_source(&legendless, frame_w, frame_h);
+            let (plot_x, _, plot_w, _) = plot_rect(&emitted_lines(&without));
+
+            // The only thing between the plot and the frame edge is the
+            // secondary axis' own label gutter, which mirrors the primary's on
+            // the left. Anything wider is a band reserved for a legend that
+            // does not exist.
+            let right_gutter: f64 = frame_w - (plot_x + plot_w);
+            assert!(
+                (right_gutter - plot_x).abs() < 1e-6,
+                "{chart_type:?} at {frame_w}pt: the right gutter is the secondary axis' \
+                 {plot_x:.2}pt label band, got {right_gutter:.2}pt in:\n{without}"
+            );
+
+            // Triangulation: a declared legend still takes its column, and it
+            // takes the same column at either frame width.
+            let mut legended: Chart = dual_axis_line_chart();
+            legended.chart_type = chart_type.clone();
+            legended.legend_position = LegendPosition::Right;
+            legended.has_legend = true;
+            let with: String = framed_chart_source(&legended, frame_w, frame_h);
+            let (_, _, legended_plot_w, _) = plot_rect(&emitted_lines(&with));
+            assert!(
+                plot_w > legended_plot_w,
+                "{chart_type:?} at {frame_w}pt: a declared right legend still reserves a \
+                 column: {plot_w:.2}pt vs {legended_plot_w:.2}pt"
+            );
+        }
+    }
+}
+
+/// The reclaimed band is the legend's own column, not a share of the frame:
+/// it is the same width whatever the frame measures.
+#[test]
+fn the_reclaimed_line_legend_band_is_a_fixed_column() {
+    let bands: Vec<f64> = [400.0_f64, 560.0_f64]
+        .into_iter()
+        .map(|frame_w| {
+            let mut legended: Chart = dual_axis_line_chart();
+            legended.legend_position = LegendPosition::Right;
+            legended.has_legend = true;
+            let with: String = framed_chart_source(&legended, frame_w, 200.0);
+            let without: String = framed_chart_source(&dual_axis_line_chart(), frame_w, 200.0);
+            plot_rect(&emitted_lines(&without)).2 - plot_rect(&emitted_lines(&with)).2
+        })
+        .collect();
+
+    assert!(
+        (bands[0] - bands[1]).abs() < 1e-6,
+        "the legend column is frame-independent, got {:.2}pt and {:.2}pt",
+        bands[0],
+        bands[1]
+    );
+    assert!(
+        bands[0] > 0.0,
+        "a declared right legend reserves a column, got {:.2}pt",
+        bands[0]
+    );
+}
+
+/// A line chart's category label is laid out in its own category band, so a
+/// label wider than the retired fixed 24pt box stays on the one line every
+/// reference exporter prints it on.
+///
+/// On page 11 of the `GENERAL SERVICES.pptx` deck from #1220 the three
+/// `Year N` labels are set at 11.97pt over bands more than four times the old
+/// box wide, and both the LibreOffice reference and a native PowerPoint export
+/// print each on one line; the fixed box broke every one into `Year` over its
+/// digit. The column renderer has always laid its labels out in `row`, the
+/// band width, so this is the same law on the other renderer (issue #1650).
+#[test]
+fn a_line_chart_lays_each_category_label_out_in_its_band() {
+    // Two frame widths and two category counts: the band is the plot divided
+    // by the categories, so a renderer that merely widened the constant, or
+    // that scaled it with the frame alone, passes at most one of these.
+    for (frame_w, categories) in [(400.0_f64, 3usize), (560.0_f64, 4usize)] {
+        let mut chart: Chart = dual_axis_line_chart();
+        chart.categories = (1..=categories)
+            .map(|year| format!("Year {year}"))
+            .collect();
+        for series in &mut chart.series {
+            series.values = (0..categories).map(|index| index as f64).collect();
+        }
+        chart.category_axis_text_style.size_pt = Some(12.0);
+
+        let source: String = framed_chart_source(&chart, frame_w, 200.0);
+        let (plot_x, _, plot_w, _) = plot_rect(&emitted_lines(&source));
+        let band_w: f64 = plot_w / categories as f64;
+        assert!(
+            band_w > 24.0,
+            "the fixture must give each label a band wider than the retired box \
+             for this to distinguish them, got {band_w:.2}pt"
+        );
+
+        for (index, category) in chart.categories.iter().enumerate() {
+            let placed: PlacedBox = placed_box_holding(&source, category);
+            assert!(
+                same_length(placed.width, band_w),
+                "{categories} categories in a {frame_w}pt frame: `{category}` must be \
+                 laid out in its {band_w:.2}pt band, got a {:.2}pt box in:\n{source}",
+                placed.width
+            );
+            // The band starts where the previous one ends, so the label stays
+            // centred on its point while the box grows around it.
+            let band_start: f64 = plot_x + index as f64 * band_w;
+            assert!(
+                same_length(placed.dx, band_start),
+                "{categories} categories in a {frame_w}pt frame: `{category}`'s band \
+                 starts at {band_start:.2}pt, got {:.2}pt in:\n{source}",
+                placed.dx
+            );
+            // A height would hand Typst a second axis to centre in, moving the
+            // baseline `line_category_baseline_pt` seats (issue #672).
+            assert!(
+                same_length(placed.height, 0.0),
+                "a category label box states no height, got {:.2}pt in:\n{source}",
+                placed.height
+            );
+        }
+    }
+}
+
+/// The band is the layout, not a floor under it: a crowded axis gives each
+/// label a band narrower than the retired 24pt box, and the label is laid out
+/// in that narrower band — the same thing the column renderer does with `row`.
+#[test]
+fn a_crowded_line_axis_narrows_every_category_box_to_its_band() {
+    let categories: usize = 16;
+    let mut chart: Chart = dual_axis_line_chart();
+    chart.categories = (1..=categories).map(|week| format!("W{week}")).collect();
+    for series in &mut chart.series {
+        series.values = (0..categories).map(|index| index as f64).collect();
+    }
+
+    let source: String = framed_chart_source(&chart, 400.0, 200.0);
+    let (plot_x, _, plot_w, _) = plot_rect(&emitted_lines(&source));
+    let band_w: f64 = plot_w / categories as f64;
+    assert!(
+        band_w < 24.0,
+        "the fixture must crowd the axis below the retired box, got {band_w:.2}pt"
+    );
+
+    for (index, category) in chart.categories.iter().enumerate() {
+        let placed: PlacedBox = placed_box_holding(&source, category);
+        assert!(
+            same_length(placed.width, band_w),
+            "`{category}` must take its {band_w:.2}pt band rather than a floor, \
+             got a {:.2}pt box in:\n{source}",
+            placed.width
+        );
+        assert!(
+            same_length(placed.dx, plot_x + index as f64 * band_w),
+            "`{category}` must start on its own band boundary, got {:.2}pt in:\n{source}",
+            placed.dx
         );
     }
 }
@@ -11402,6 +12678,273 @@ fn a_turned_ring_keeps_its_centre_diameter_and_hole() {
             (inner / outer - 0.71).abs() < 1e-6,
             "{authored:?}: hole ratio {:.4}, expected 0.7100",
             inner / outer
+        );
+    }
+}
+
+/// The line chart `tests/fixtures/pptx/line-chart.pptx` draws, which the
+/// native PowerPoint probes of #1651 measured one factor at a time: a single
+/// Calibri series over four quarters whose automatic value axis runs 0..9,
+/// drawn in the deck's 480 x 320pt graphic frame.
+fn probe_line_chart(size_pt: f64) -> Chart {
+    let mut chart: Chart = dual_axis_line_chart();
+    chart.host = crate::ir::ChartHost::Presentation;
+    chart.has_legend = false;
+    chart.secondary_value_axis = None;
+    chart.categories = ["1st Qtr", "2nd Qtr", "3rd Qtr", "4th Qtr"]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    chart.series.truncate(1);
+    chart.series[0].name = Some("Sales".to_string());
+    chart.series[0].values = vec![8.2, 3.2, 1.4, 1.2];
+    chart.series[0].number_format = None;
+    chart.series[0].value_axis = crate::ir::ChartValueAxisRole::Primary;
+    chart.value_axis_max = None;
+    chart.value_axis_number_format = None;
+    chart.text_font_family = Some("Calibri".to_string());
+    chart.text_style.size_pt = Some(size_pt);
+    chart
+}
+
+/// The frame the #1651 probes exported the chart in.
+const PROBE_LINE_FRAME: (f64, f64) = (480.0, 320.0);
+
+/// PowerPoint reserves its line plot's value-label gutter from the labels
+/// themselves: the widest one starts 6.5pt inside the chart frame and the plot
+/// begins a face-measured clearance past its end.
+///
+/// The gutters below are read off native PowerPoint exports of
+/// `tests/fixtures/pptx/line-chart.pptx` — `scripts/probes/
+/// issue-1651-line-value-size.json` sweeps the label size with the format
+/// held, `issue-1651-line-value-format.json` sweeps the format with the size
+/// held — as the x of the value-axis line in a `mutool draw -F trace`, minus
+/// the frame's own 120pt origin. Size alone cannot explain the pair at 18pt,
+/// and label width alone cannot explain the three at one format, so a fit that
+/// drops either term fails here (issue #1651).
+#[test]
+fn a_powerpoint_line_plot_reserves_the_native_value_label_gutter() {
+    for (size_pt, number_format, native_gutter_pt) in [
+        (9.0, None, 19.409),
+        (12.0, None, 23.713),
+        (18.0, None, 32.326),
+        (18.0, Some("0.00"), 55.121),
+    ] {
+        let mut chart: Chart = probe_line_chart(size_pt);
+        chart.value_axis_number_format = number_format.map(str::to_string);
+        let (frame_w, frame_h) = PROBE_LINE_FRAME;
+        let source: String = framed_chart_source(&chart, frame_w, frame_h);
+        let (plot_x, ..) = plot_rect(&emitted_lines(&source));
+
+        assert!(
+            (plot_x - native_gutter_pt).abs() < 0.1,
+            "{size_pt}pt labels in {number_format:?}: PowerPoint starts the plot \
+             {native_gutter_pt:.3}pt inside the frame, got {plot_x:.3}pt in:\n{source}"
+        );
+
+        // The gutter is spent on the labels, so they have to sit in it: the
+        // widest starts on the 6.5pt frame inset every export measures.
+        let labels: Vec<(f64, String)> = emitted_value_labels_at_size(&source, size_pt);
+        let widest: &str = labels
+            .iter()
+            .map(|(_, label)| label.as_str())
+            .max_by(|left, right| left.len().cmp(&right.len()))
+            .expect("a drawn value axis prints its tick labels");
+        let placed: PlacedBox = placed_box_holding(&source, widest);
+        assert!(
+            (placed.dx - 6.5).abs() < 0.001,
+            "{size_pt}pt labels in {number_format:?}: the widest label `{widest}` starts \
+             6.5pt inside the frame, got {:.3}pt in:\n{source}",
+            placed.dx
+        );
+        assert!(
+            placed.dx + placed.width < plot_x,
+            "{size_pt}pt labels in {number_format:?}: the label box ends before the plot, \
+             got {:.3}pt against {plot_x:.3}pt in:\n{source}",
+            placed.dx + placed.width
+        );
+    }
+}
+
+/// A drawn secondary value axis takes the same gutter on the right, mirrored:
+/// its widest label ends 6.5pt inside the frame and the plot stops the same
+/// clearance before it.
+///
+/// Page 11 of the #1220 deck measures the mirror natively — its secondary
+/// labels `0`..`7` at 11.97pt end 6.500pt inside the frame with the plot
+/// 10.296pt before them, against the 10.299pt the primary gutter's clearance
+/// predicts — and the numbers below are that model in the probe fixture's
+/// Calibri, whose single-digit labels make the two gutters equal (#1651).
+#[test]
+fn a_powerpoint_line_plot_mirrors_the_gutter_on_a_secondary_axis() {
+    for (secondary_format, native_gutter_pt) in [(None, 32.326), (Some("0.00"), 55.121)] {
+        let mut chart: Chart = probe_line_chart(18.0);
+        chart.secondary_value_axis = Some(crate::ir::ChartSecondaryValueAxis {
+            side: crate::ir::ValueAxisSide::Right,
+            deleted: false,
+            number_format: secondary_format.map(str::to_string),
+            major_unit: None,
+            min: None,
+            max: None,
+            major_tick_mark: AxisTickMark::None,
+            line: crate::ir::ChartLine::Suppressed,
+            text_font_family: None,
+            text_style: crate::ir::ChartTextStyle::default(),
+        });
+        let mut second: crate::ir::ChartSeries = chart.series[0].clone();
+        second.name = Some("Share".to_string());
+        second.value_axis = crate::ir::ChartValueAxisRole::Secondary;
+        chart.series.push(second);
+
+        let (frame_w, frame_h) = PROBE_LINE_FRAME;
+        let source: String = framed_chart_source(&chart, frame_w, frame_h);
+        let (plot_x, _, plot_w, _) = plot_rect(&emitted_lines(&source));
+        let right_gutter: f64 = frame_w - (plot_x + plot_w);
+
+        assert!(
+            (right_gutter - native_gutter_pt).abs() < 0.1,
+            "secondary labels in {secondary_format:?}: PowerPoint stops the plot \
+             {native_gutter_pt:.3}pt inside the frame, got {right_gutter:.3}pt in:\n{source}"
+        );
+    }
+}
+
+/// The band below a PowerPoint line plot is twice the clearance its value
+/// labels take, plus the same 6.5pt frame pad — so it grows with the category
+/// label's face and size and with nothing else.
+///
+/// Measured on the native exports of `scripts/probes/
+/// issue-1651-line-category-size.json` as the frame's bottom edge minus the y
+/// of the category axis line in a `mutool draw -F trace` (issue #1651).
+#[test]
+fn a_powerpoint_line_plot_reserves_the_native_category_label_band() {
+    for (size_pt, native_band_pt) in [
+        (9.0, 23.198),
+        (12.0, 28.767),
+        (18.0, 39.902),
+        (24.0, 51.028),
+    ] {
+        let mut chart: Chart = probe_line_chart(18.0);
+        chart.category_axis_text_style.size_pt = Some(size_pt);
+        let (frame_w, frame_h) = PROBE_LINE_FRAME;
+        let source: String = framed_chart_source(&chart, frame_w, frame_h);
+        let (_, plot_y, _, plot_h) = plot_rect(&emitted_lines(&source));
+        let band: f64 = frame_h - (plot_y + plot_h);
+
+        assert!(
+            (band - native_band_pt).abs() < 0.1,
+            "{size_pt}pt category labels: PowerPoint keeps the plot {native_band_pt:.3}pt \
+             above the frame's bottom edge, got {band:.3}pt in:\n{source}"
+        );
+    }
+}
+
+/// The category label sits at the bottom of that band, its line box resting on
+/// the same 6.5pt pad the frame keeps everywhere else, so its baseline is a
+/// descent above the pad.
+///
+/// The baselines below are the native exports' own, frame-relative. PowerPoint
+/// rounds the label block itself, so they scatter by up to half a point around
+/// the model — which is still a quarter of the 2.35pt the fixed 3pt box left on
+/// page 11 of the #1220 deck (issue #1651).
+#[test]
+fn a_powerpoint_line_category_label_seats_on_the_native_baseline() {
+    for (size_pt, native_baseline_pt) in [
+        (9.0, 311.44),
+        (12.0, 309.76),
+        (18.0, 308.56),
+        (24.0, 307.12),
+    ] {
+        let mut chart: Chart = probe_line_chart(18.0);
+        chart.category_axis_text_style.size_pt = Some(size_pt);
+        let (frame_w, frame_h) = PROBE_LINE_FRAME;
+        let source: String = framed_chart_source(&chart, frame_w, frame_h);
+        let placed: PlacedBox = placed_box_holding(&source, "1st Qtr");
+
+        assert!(
+            (placed.dy - native_baseline_pt).abs() < 0.6,
+            "{size_pt}pt category labels: PowerPoint seats the baseline \
+             {native_baseline_pt:.2}pt below the frame's top edge, got {:.2}pt in:\n{source}",
+            placed.dy
+        );
+    }
+}
+
+/// A declared axis-label opacity has to reach the generated source as an alpha
+/// channel, and has to leave the chart's geometry and strings untouched.
+///
+/// `chart8.xml` of the deck in #1220 asks for `tx2` at 70%, which composites
+/// to gray 97 over the white slide; dropping the alpha printed the tick and
+/// category labels at the opaque colour's own gray 29 (issue #1677).
+#[test]
+fn axis_labels_keep_their_declared_opacity() {
+    let colors = std::collections::HashMap::from([
+        ("dk1".to_string(), Color::new(0, 0, 0)),
+        ("dk2".to_string(), Color::new(0, 41, 46)),
+    ]);
+    let aliases = std::collections::HashMap::new();
+    let scheme = crate::parser::drawingml::SchemeColors {
+        colors: &colors,
+        aliases: &aliases,
+    };
+    let chart_xml = |fill: &str| -> String {
+        let tx_pr = format!(
+            r#"<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1197"><a:solidFill>{fill}</a:solidFill></a:defRPr></a:pPr></a:p></c:txPr>"#
+        );
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+            <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+                          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <c:chart><c:plotArea><c:barChart><c:barDir val="col"/>
+                <c:ser><c:idx val="0"/><c:order val="0"/>
+                  <c:cat><c:strRef><c:strCache>
+                    <c:pt idx="0"><c:v>Year 1</c:v></c:pt>
+                    <c:pt idx="1"><c:v>Year 2</c:v></c:pt>
+                  </c:strCache></c:strRef></c:cat>
+                  <c:val><c:numRef><c:numCache>
+                    <c:pt idx="0"><c:v>800</c:v></c:pt>
+                    <c:pt idx="1"><c:v>400</c:v></c:pt>
+                  </c:numCache></c:numRef></c:val>
+                </c:ser>
+              </c:barChart>
+              <c:catAx><c:axId val="1"/>{tx_pr}</c:catAx>
+              <c:valAx><c:axId val="2"/>{tx_pr}</c:valAx>
+              </c:plotArea></c:chart>
+            </c:chartSpace>"#
+        )
+    };
+
+    let opaque_chart =
+        crate::parser::chart::parse_chart_xml(&chart_xml(r#"<a:schemeClr val="tx2"/>"#), &scheme)
+            .expect("chart parses");
+    let opaque_source = framed_chart_source(&opaque_chart, 480.0, 240.0);
+    assert!(
+        opaque_source.contains("fill: rgb(0, 41, 46)"),
+        "the opaque control must paint the declared colour"
+    );
+
+    // Each declared percentage maps to its own alpha byte, so no single
+    // hardcoded value passes.
+    for (declared, byte) in [(70000, 179), (25000, 64), (50000, 128), (100000, 255)] {
+        let source = framed_chart_source(
+            &crate::parser::chart::parse_chart_xml(
+                &chart_xml(&format!(
+                    r#"<a:schemeClr val="tx2"><a:alpha val="{declared}"/></a:schemeClr>"#
+                )),
+                &scheme,
+            )
+            .expect("chart parses"),
+            480.0,
+            240.0,
+        );
+        assert!(
+            source.contains(&format!("fill: rgb(0, 41, 46, {byte})")),
+            "alpha {declared} must reach the axis labels as rgb(0, 41, 46, {byte})"
+        );
+        assert_eq!(
+            source.replace(&format!("rgb(0, 41, 46, {byte})"), "rgb(0, 41, 46)"),
+            opaque_source,
+            "alpha {declared} must not move the chart's geometry or strings"
         );
     }
 }

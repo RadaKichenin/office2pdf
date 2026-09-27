@@ -64,6 +64,7 @@ fn test_generate_bold_text() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -86,6 +87,7 @@ fn test_generate_italic_text() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -108,6 +110,7 @@ fn test_generate_underline_text() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -137,6 +140,7 @@ fn test_generate_font_size() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -158,6 +162,7 @@ fn test_generate_font_color() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -182,6 +187,7 @@ fn test_generate_combined_text_styles() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -204,6 +210,7 @@ fn test_generate_alignment_center() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -225,6 +232,7 @@ fn test_generate_alignment_right() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -246,6 +254,7 @@ fn test_generate_alignment_justify() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -284,6 +293,7 @@ fn justified_paragraph_document(text: &str, mode: WordCompatibilityMode) -> Docu
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     doc.styles.word_compatibility_mode = Some(mode);
@@ -375,6 +385,7 @@ fn test_punctuation_never_hangs_regardless_of_alignment() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -402,6 +413,7 @@ fn test_generate_line_spacing_proportional() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -423,6 +435,7 @@ fn test_generate_line_spacing_exact() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -448,6 +461,7 @@ fn test_generate_word_default_line_box() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let source = generate_typst(&doc).unwrap().source;
@@ -478,6 +492,7 @@ fn test_generate_letter_spacing() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -499,6 +514,7 @@ fn test_generate_letter_spacing_negative() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -517,6 +533,7 @@ fn test_generate_tab_uses_measured_default_stops() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -563,6 +580,7 @@ fn test_generate_tab_uses_next_explicit_stop_and_alignment() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -598,6 +616,7 @@ fn test_generate_tab_falls_back_to_next_default_stop_after_explicit_tabs() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -623,6 +642,7 @@ fn test_generate_tab_uses_paragraph_default_stop_interval() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -651,6 +671,7 @@ fn test_generate_tab_leader_uses_repeat_fill() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -678,6 +699,7 @@ fn test_generate_decimal_tab_uses_decimal_separator_not_thousands_separator() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -705,6 +727,7 @@ fn test_generate_decimal_tab_handles_comma_decimal_locale() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -739,6 +762,7 @@ fn test_generate_paragraph_with_multiple_runs() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "bold".to_string(),
@@ -748,12 +772,14 @@ fn test_generate_paragraph_with_multiple_runs() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: " normal again".to_string(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -798,6 +824,7 @@ fn test_centered_paragraph_with_spacing_keeps_full_width_block() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -837,6 +864,7 @@ fn test_document_grid_pitch_snaps_line_height() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })]) {
         Page::Flow(flow) => flow,
@@ -876,6 +904,7 @@ fn test_latin_paragraph_ignores_document_grid() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })]) {
         Page::Flow(flow) => flow,
@@ -916,6 +945,7 @@ fn test_no_document_grid_uses_word_single_spacing() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -946,6 +976,7 @@ fn test_generate_paragraph_with_background_shading() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -971,6 +1002,7 @@ fn test_generate_paragraph_with_bottom_border_rule() {
                     color: Color::new(0x1E, 0x27, 0x61),
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 ..CellBorder::default()
             })),
@@ -981,6 +1013,7 @@ fn test_generate_paragraph_with_bottom_border_rule() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1009,6 +1042,7 @@ fn test_generate_paragraph_with_double_bottom_border() {
                     color: Color::black(),
                     style: BorderLineStyle::Double,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 ..CellBorder::default()
             })),
@@ -1019,6 +1053,7 @@ fn test_generate_paragraph_with_double_bottom_border() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1041,6 +1076,7 @@ fn make_tab_paragraph() -> Block {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -1107,6 +1143,7 @@ fn test_latin_paragraph_space_after_stays_raw_gap() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1149,6 +1186,7 @@ fn test_consecutive_paragraphs_each_advance_by_the_full_font_line() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1205,6 +1243,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "--font-path".to_string(),
@@ -1215,6 +1254,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "\nfiles. Missing fonts fall back to substitutes.".to_string(),
@@ -1225,6 +1265,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -1286,6 +1327,7 @@ fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "\nsecond Courier run ".to_string(),
@@ -1296,6 +1338,7 @@ fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "with taller Arial ascent".to_string(),
@@ -1306,6 +1349,7 @@ fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -1348,6 +1392,7 @@ fn uniform_font_runs_keep_only_the_paragraph_level_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "second Arial run".to_string(),
@@ -1358,6 +1403,7 @@ fn uniform_font_runs_keep_only_the_paragraph_level_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -1411,6 +1457,7 @@ fn test_grid_paragraph_space_after_stays_raw_gap() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })]) {
         Page::Flow(flow) => flow,
@@ -1442,6 +1489,7 @@ fn test_paragraph_left_indent_offsets_the_text_column() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1464,6 +1512,7 @@ fn test_paragraph_right_indent_narrows_the_text_column() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1492,6 +1541,7 @@ fn test_indented_paragraph_shading_starts_at_the_indent() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1521,6 +1571,7 @@ fn test_unindented_paragraph_keeps_a_single_block() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1566,7 +1617,21 @@ fn test_empty_indented_paragraph_closes_its_block() {
 
 /// One paragraph of `text` in `family` at `font_size`, with no grid.
 fn line_box_for_text(text: &str, family: &str, font_size: f64) -> Option<(f64, f64)> {
-    crate::render::pdf::font_line_metrics_em(family)?;
+    line_box_for_text_in_context(text, family, font_size, None)
+}
+
+/// The same box, generated under `font_context` — which must be handed to the
+/// generator rather than merely installed around it, because generation
+/// replaces the ambient context with the one it is given.
+fn line_box_for_text_in_context(
+    text: &str,
+    family: &str,
+    font_size: f64,
+    font_context: Option<&crate::render::font_context::FontSearchContext>,
+) -> Option<(f64, f64)> {
+    crate::render::font_subst::with_font_search_context(font_context, || {
+        crate::render::pdf::font_line_metrics_em(family)
+    })?;
     let doc = make_doc(vec![make_flow_page(vec![Block::Paragraph(Paragraph {
         style: ParagraphStyle::default(),
         runs: vec![Run {
@@ -1578,9 +1643,18 @@ fn line_box_for_text(text: &str, family: &str, font_size: f64) -> Option<(f64, f
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
-    emitted_line_box_em(&generate_typst(&doc).unwrap().source)
+    emitted_line_box_em(
+        &crate::render::typst_gen::generate_typst_with_options_and_font_context(
+            &doc,
+            &ConvertOptions::default(),
+            font_context,
+        )
+        .unwrap()
+        .source,
+    )
 }
 
 #[test]
@@ -1677,6 +1751,116 @@ fn the_east_asian_bonus_scales_with_the_font_size_not_with_the_text() {
     );
 }
 
+/// The body line box of one 10.5pt paragraph of `text` set in Noto Sans CJK
+/// SC whose `hhea` line gap is `line_gap` units.
+fn line_box_with_cjk_line_gap(line_gap: i16, text: &str) -> (f64, f64) {
+    let context = noto_sans_cjk_context_with_line_gap(line_gap);
+    line_box_for_text_in_context(text, NOTO_SANS_CJK_SC, 10.5, Some(&context))
+        .expect("the conversion-local face resolves")
+}
+
+#[test]
+fn an_east_asian_line_leaves_the_faces_line_gap_out_of_its_box() {
+    // Word builds its 1.3x East Asian line from the `hhea` ascender and
+    // descender alone. A native Word for Mac export of a 10.5pt Batang
+    // paragraph (hhea 879/-145, line gap 152 of 1024 units) advances 13.65pt
+    // per line = 1.3 x (asc + desc), where carrying the gap gave 15.68pt, and
+    // seats the first baseline at asc + 0.15 x (asc + desc) below the margin
+    // (issue #1638).
+    let (top, bottom) = line_box_with_cjk_line_gap(300, "本合同由双方签订");
+    let bare_line_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + NOTO_SANS_CJK_DESCENDER_EM;
+
+    assert!(
+        (top + bottom - 1.3 * bare_line_em).abs() < 0.001,
+        "the East Asian advance {}em should be 1.3 x the gap-free {bare_line_em}em line",
+        top + bottom
+    );
+    assert!(
+        (top - (NOTO_SANS_CJK_ASCENDER_EM + 0.15 * bare_line_em)).abs() < 0.001,
+        "the baseline should sit asc + 0.15 x (asc + desc) below the box top, got {top}em"
+    );
+}
+
+#[test]
+fn an_east_asian_line_box_does_not_move_with_the_line_gap() {
+    // Triangulation: Batang's 152/1024 gap is one value, and a model keyed to
+    // it would pass the test above. Word's box ignores the gap at any size of
+    // it — Yu Gothic's 1024/2048 and Hiragino Sans GB's 500/1000 export the
+    // same gap-free pitch (issue #1638).
+    let without_gap: (f64, f64) = line_box_with_cjk_line_gap(0, "表");
+    for line_gap in [76, 148, 500] {
+        let (top, bottom) = line_box_with_cjk_line_gap(line_gap, "完全不同的一句中文");
+        assert!(
+            (top - without_gap.0).abs() < 0.001 && (bottom - without_gap.1).abs() < 0.001,
+            "a {line_gap}-unit gap moved the East Asian box to {top}/{bottom}em from \
+             {}/{}em",
+            without_gap.0,
+            without_gap.1
+        );
+    }
+}
+
+#[test]
+fn a_latin_line_in_the_same_face_keeps_the_line_gap() {
+    // The gap stays in Word's Latin single line, above the baseline: Arial's
+    // 67/2048 (#508, #514) and the system Times New Roman's 87/2048 (#1284)
+    // were both measured that way. Only the East Asian box drops it.
+    let (top, bottom) = line_box_with_cjk_line_gap(300, "plain body text");
+    let line_gap_em: f64 = 0.300;
+
+    assert!(
+        (top + bottom - (NOTO_SANS_CJK_ASCENDER_EM + NOTO_SANS_CJK_DESCENDER_EM + line_gap_em))
+            .abs()
+            < 0.001,
+        "a Latin line advances the gap-inclusive hhea line, got {}em",
+        top + bottom
+    );
+    assert!(
+        (top - (NOTO_SANS_CJK_ASCENDER_EM + line_gap_em)).abs() < 0.001,
+        "a Latin baseline keeps the `hhea ascender + lineGap` seat, got {top}em"
+    );
+}
+
+#[test]
+fn a_header_or_footer_east_asian_line_leaves_the_line_gap_out() {
+    // Header and footer stories size their band, their `w:pBdr` rule and
+    // their seat from the same East Asian line as the body, so they must drop
+    // the gap with it or a Batang header would outgrow its body (issue #1638).
+    let runs: Vec<Run> = vec![Run {
+        text: "本合同由双方签订".to_string(),
+        style: TextStyle {
+            font_family: Some(NOTO_SANS_CJK_SC.to_string()),
+            font_size: Some(10.0),
+            ..TextStyle::default()
+        },
+        href: None,
+        footnote: None,
+        inline_box: None,
+    }];
+    let bare_line_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + NOTO_SANS_CJK_DESCENDER_EM;
+    let context = noto_sans_cjk_context_with_line_gap(300);
+    let (advance_pt, descent_em) =
+        crate::render::font_subst::with_font_search_context(Some(&context), || {
+            (
+                text::word_line_advance_pt(&runs),
+                text::word_line_box_descent_em(&runs),
+            )
+        });
+
+    let advance_pt: f64 = advance_pt.expect("the face resolves");
+    assert!(
+        (advance_pt - 1.3 * bare_line_em * 10.0).abs() < 0.001,
+        "the story line should advance 1.3 x the gap-free line, got {advance_pt}pt"
+    );
+    let descent_em: f64 = descent_em.expect("the face resolves");
+    let expected_descent_em: f64 = NOTO_SANS_CJK_DESCENDER_EM + 0.15 * bare_line_em;
+    assert!(
+        (descent_em - expected_descent_em).abs() < 0.001,
+        "the line box should end desc + 0.15 x (asc + desc) below the baseline, \
+         got {descent_em}em"
+    );
+}
+
 /// One paragraph with a bottom rule of `style` at `width`pt and `space`pt of
 /// `w:pBdr` gap.
 fn bordered_paragraph_source(width: f64, style: BorderLineStyle, space: f64) -> String {
@@ -1688,6 +1872,7 @@ fn bordered_paragraph_source(width: f64, style: BorderLineStyle, space: f64) -> 
                     color: Color::black(),
                     style,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 ..CellBorder::default()
             })),
@@ -1704,6 +1889,7 @@ fn bordered_paragraph_source(width: f64, style: BorderLineStyle, space: f64) -> 
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     generate_typst(&doc).unwrap().source
@@ -1798,6 +1984,7 @@ fn test_generate_heading_with_style_border_rule() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     });
     let heading = Block::Paragraph(Paragraph {
@@ -1811,6 +1998,7 @@ fn test_generate_heading_with_style_border_rule() {
                     color: Color::new(0x2E, 0x74, 0xB5),
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 ..CellBorder::default()
             })),
@@ -1821,6 +2009,7 @@ fn test_generate_heading_with_style_border_rule() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     });
     let doc = make_doc(vec![make_flow_page(vec![body, heading])]);
@@ -1855,6 +2044,7 @@ fn heading_source(style: ParagraphStyle) -> String {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
@@ -1947,6 +2137,7 @@ fn theme_heading_source(family: &str) -> String {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
@@ -1995,6 +2186,7 @@ fn test_generate_undecorated_heading_keeps_its_bare_form() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2008,9 +2200,158 @@ fn test_generate_undecorated_heading_keeps_its_bare_form() {
     );
 }
 
+/// A one-run paragraph of `text` carrying `style`, set bold at 16pt so a
+/// heading's own show rule has no size or weight left to change.
+#[cfg(not(target_arch = "wasm32"))]
+fn placement_probe_paragraph(style: ParagraphStyle, text: &str) -> Block {
+    Block::Paragraph(Paragraph {
+        style,
+        runs: vec![Run {
+            text: text.to_string(),
+            style: TextStyle {
+                bold: Some(true),
+                font_size: Some(16.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+            inline_box: None,
+        }],
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_heading_is_placed_across_the_line_exactly_like_body_copy() {
+    // An outline level makes a paragraph a heading for the navigation pane
+    // and the contents, not a different kind of paragraph: Word lays it out
+    // with the same `w:jc`, `w:ind` and `w:bidi` as body copy. The heading
+    // branch was a second copy of the paragraph emitter that picked up the
+    // vertical settings one issue at a time (#581, #1132) but none of the
+    // horizontal ones, so a centred zh-CN Word "Title" — which carries
+    // `w:outlineLvl 0` — printed flush left (issue #1820).
+    //
+    // Each case gets its own page holding a body paragraph and a heading
+    // with the same settings, so the two runs on a page must share an x.
+    let cases: Vec<(&str, ParagraphStyle)> = vec![
+        ("default", ParagraphStyle::default()),
+        (
+            "left",
+            ParagraphStyle {
+                alignment: Some(Alignment::Left),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "centre",
+            ParagraphStyle {
+                alignment: Some(Alignment::Center),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "right",
+            ParagraphStyle {
+                alignment: Some(Alignment::Right),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "left indent",
+            ParagraphStyle {
+                indent_left: Some(144.0),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "centre inside both indents",
+            ParagraphStyle {
+                alignment: Some(Alignment::Center),
+                indent_left: Some(144.0),
+                indent_right: Some(36.0),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "right inside a right indent",
+            ParagraphStyle {
+                alignment: Some(Alignment::Right),
+                indent_right: Some(90.0),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "centre with spacing and a rule",
+            ParagraphStyle {
+                alignment: Some(Alignment::Center),
+                space_before: Some(12.0),
+                space_after: Some(3.0),
+                border: Some(Box::new(CellBorder {
+                    bottom: Some(BorderSide {
+                        width: 0.75,
+                        color: Color::new(0, 0, 0),
+                        style: BorderLineStyle::Solid,
+                        join: LineJoin::Miter,
+                        cap: LineCap::Flat,
+                    }),
+                    ..CellBorder::default()
+                })),
+                ..ParagraphStyle::default()
+            },
+        ),
+        (
+            "right-to-left",
+            ParagraphStyle {
+                direction: Some(TextDirection::Rtl),
+                ..ParagraphStyle::default()
+            },
+        ),
+    ];
+    let pages: Vec<Page> = cases
+        .iter()
+        .map(|(_, style)| {
+            make_flow_page(vec![
+                placement_probe_paragraph(style.clone(), "Overview"),
+                placement_probe_paragraph(
+                    ParagraphStyle {
+                        heading_level: Some(1),
+                        ..style.clone()
+                    },
+                    "Overview",
+                ),
+            ])
+        })
+        .collect();
+    let source: String = generate_typst(&make_doc(pages)).unwrap().source;
+
+    let left_margin: f64 = Margins::default().left;
+    for (page_index, (label, _)) in cases.iter().enumerate() {
+        let lefts: Vec<f64> = crate::render::pdf::compiled_text_runs(&source, page_index)
+            .unwrap()
+            .into_iter()
+            .filter(|run| run.text == "Overview")
+            .map(|run| run.left_pt)
+            .collect();
+        let [body, heading] = lefts[..] else {
+            panic!("{label}: expected one body and one heading run, got {lefts:?}");
+        };
+        assert!(
+            (body - heading).abs() < 0.01,
+            "{label}: the heading starts at {heading}pt where body copy starts at {body}pt"
+        );
+        if *label != "default" && *label != "left" {
+            assert!(
+                body > left_margin + 1.0,
+                "{label}: the case must move text off the margin to test anything: {body}pt"
+            );
+        }
+    }
+}
+
 /// Build a header paragraph in Word's running-head shape: segments separated
 /// by `<w:tab/>` runs, with the stops that place them declared on the
 /// paragraph.
+#[cfg(not(target_arch = "wasm32"))]
 fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterParagraph {
     let mut elements: Vec<HFInline> = Vec::new();
     for (index, text) in texts.iter().enumerate() {
@@ -2020,6 +2361,7 @@ fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterP
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }));
         }
         elements.push(HFInline::Run(Run {
@@ -2027,6 +2369,7 @@ fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterP
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }));
     }
     crate::ir::HeaderFooterParagraph {
@@ -2042,14 +2385,7 @@ fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterP
     }
 }
 
-fn page_with_header(header: crate::ir::HeaderFooter) -> Page {
-    let Page::Flow(mut flow) = make_flow_page(vec![]) else {
-        unreachable!()
-    };
-    flow.header = Some(header);
-    Page::Flow(flow)
-}
-
+#[cfg(not(target_arch = "wasm32"))]
 fn stop(position: f64, alignment: TabAlignment) -> TabStop {
     TabStop {
         position,
@@ -2058,76 +2394,116 @@ fn stop(position: f64, alignment: TabAlignment) -> TabStop {
     }
 }
 
-#[test]
-fn test_header_right_tab_stop_pushes_its_segment_to_the_margin() {
-    // A `<w:tab/>` was advanced by a fixed 1em however the paragraph's stops
-    // were declared, so the segment a right stop should have pushed to the
-    // right margin sat beside the left one (issue #579).
-    let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
-        shapes: Vec::new(),
-        paragraphs: vec![running_head(
-            &["office2pdf 기술 소개서", "본문"],
-            vec![stop(465.3, TabAlignment::Right)],
-        )],
-        distance_from_edge: None,
-        sheet_print_scale: None,
-    })]);
-    let result = generate_typst(&doc).unwrap().source;
-
-    assert!(
-        result.contains("#grid(columns: (1fr, auto)"),
-        "a right stop lays the two segments out against the margins: {result}"
-    );
-    assert!(
-        !result.contains("#h(1em)"),
-        "the tab must not fall back to a fixed advance: {result}"
-    );
+/// A body paragraph with the same segments and stops as `running_head`.
+#[cfg(not(target_arch = "wasm32"))]
+fn tabbed_body_paragraph(texts: &[&str], stops: Option<Vec<TabStop>>) -> Block {
+    Block::Paragraph(Paragraph {
+        style: ParagraphStyle {
+            tab_stops: stops,
+            ..ParagraphStyle::default()
+        },
+        runs: vec![Run {
+            text: texts.join("\t"),
+            style: TextStyle::default(),
+            href: None,
+            footnote: None,
+            inline_box: None,
+        }],
+    })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn test_header_center_and_right_tab_stops_lay_out_three_segments() {
-    let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
-        shapes: Vec::new(),
-        paragraphs: vec![running_head(
-            &["left", "middle", "right"],
-            vec![
-                stop(232.6, TabAlignment::Center),
-                stop(465.3, TabAlignment::Right),
-            ],
-        )],
-        distance_from_edge: None,
-        sheet_print_scale: None,
-    })]);
-    let result = generate_typst(&doc).unwrap().source;
+fn a_header_tab_places_its_segment_exactly_like_a_body_tab() {
+    // Word advances every tab to the first stop past the pen, in a header as
+    // in the body. Header tabs were instead matched against two running-head
+    // shapes: one tab went to the right margin whenever the last stop was a
+    // right stop, so `<tab>Title` under the Header style's centre and right
+    // stops printed right-aligned instead of centred (issue #1821), and any
+    // other shape collapsed the tab to a space. Body paragraphs already
+    // measure the pen and resolve each tab against the stops, so a header
+    // segment must land exactly where the same runs land in the body.
+    let centre_and_right = || {
+        Some(vec![
+            stop(225.6, TabAlignment::Center),
+            stop(451.3, TabAlignment::Right),
+        ])
+    };
+    let cases: Vec<(Vec<&str>, Option<Vec<TabStop>>)> = vec![
+        // No declared stop: the document's default stops apply. First, because
+        // only the first page's header can be written before the page's
+        // default is in force.
+        (vec!["Section", "Detail"], None),
+        (vec!["", "Centred"], centre_and_right()),
+        (vec!["Confidential", "Draft"], centre_and_right()),
+        (vec!["Left", "Middle", "Margin"], centre_and_right()),
+        // The #579 running head: a lone right stop at the text edge.
+        (
+            vec!["Handbook", "Chapter"],
+            Some(vec![stop(451.3, TabAlignment::Right)]),
+        ),
+        (
+            vec!["Label", "Value"],
+            Some(vec![stop(144.0, TabAlignment::Left)]),
+        ),
+    ];
+    let pages: Vec<Page> = cases
+        .iter()
+        .map(|(texts, stops)| {
+            let mut head = running_head(texts, stops.clone().unwrap_or_default());
+            head.style.tab_stops = stops.clone();
+            let Page::Flow(mut flow) =
+                make_flow_page(vec![tabbed_body_paragraph(texts, stops.clone())])
+            else {
+                unreachable!()
+            };
+            flow.header = Some(crate::ir::HeaderFooter {
+                shapes: Vec::new(),
+                paragraphs: vec![head],
+                distance_from_edge: None,
+                sheet_print_scale: None,
+            });
+            Page::Flow(flow)
+        })
+        .collect();
+    // A declared `w:defaultTabStop` (708 twips) rather than the 36pt fallback,
+    // so a header written before the page's default is in force shows up.
+    let mut doc: Document = make_doc(pages);
+    doc.styles.default_tab_stop_pt = Some(35.4);
+    let source: String = generate_typst(&doc).unwrap().source;
 
-    assert!(
-        result.contains("#grid(columns: (1fr, auto, 1fr), align: (left, center, right)"),
-        "a centre and a right stop give three placed segments: {result}"
-    );
-}
+    for (page_index, (texts, _)) in cases.iter().enumerate() {
+        let runs = crate::render::pdf::compiled_text_runs(&source, page_index).unwrap();
+        for text in texts.iter().filter(|text| !text.is_empty()) {
+            let mut placed: Vec<(f64, f64)> = runs
+                .iter()
+                .filter(|run| run.text == *text)
+                .map(|run| (run.baseline_pt, run.left_pt))
+                .collect();
+            placed.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let [(_, header_x), (_, body_x)] = placed[..] else {
+                panic!(
+                    "{texts:?}: expected '{text}' once in the header and once in the body, got {placed:?}"
+                );
+            };
+            assert!(
+                (header_x - body_x).abs() < 0.01,
+                "{texts:?}: header '{text}' starts at {header_x}pt, the body places it at {body_x}pt"
+            );
+        }
+    }
 
-#[test]
-fn test_header_tab_without_a_matching_stop_keeps_the_plain_advance() {
-    // Only the two running-head shapes are laid out; a header that tabs for
-    // some other reason keeps the behaviour it had.
-    let doc = make_doc(vec![page_with_header(crate::ir::HeaderFooter {
-        shapes: Vec::new(),
-        paragraphs: vec![running_head(
-            &["a", "b"],
-            vec![stop(72.0, TabAlignment::Left)],
-        )],
-        distance_from_edge: None,
-        sheet_print_scale: None,
-    })]);
-    let result = generate_typst(&doc).unwrap().source;
-
+    // The case the running-head shapes got wrong lands on the centre stop,
+    // not the right margin: the stop sits 225.6pt into a 72pt margin.
+    let centred_x: f64 = crate::render::pdf::compiled_text_runs(&source, 1)
+        .unwrap()
+        .into_iter()
+        .filter(|run| run.text == "Centred")
+        .map(|run| run.left_pt)
+        .fold(f64::INFINITY, f64::min);
     assert!(
-        !result.contains("#grid(columns: (1fr, auto)"),
-        "a left stop is not the running-head idiom: {result}"
-    );
-    assert!(
-        result.contains('\t'),
-        "the tab stays a literal tab for Typst to collapse: {result}"
+        (72.0 + 225.6 - 40.0..72.0 + 225.6).contains(&centred_x),
+        "a lone tab before a centre stop centres its segment on that stop: {centred_x}pt"
     );
 }
 
@@ -2151,6 +2527,7 @@ fn test_letter_spacing_disables_ligatures() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2171,6 +2548,7 @@ fn test_untracked_text_keeps_ligatures() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2193,6 +2571,7 @@ fn test_zero_letter_spacing_keeps_ligatures() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2252,6 +2631,7 @@ fn test_letter_spacing_disables_kerning() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2272,6 +2652,7 @@ fn test_untracked_text_keeps_kerning() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2295,6 +2676,7 @@ fn test_zero_letter_spacing_keeps_kerning() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;

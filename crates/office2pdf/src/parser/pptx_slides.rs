@@ -679,6 +679,9 @@ struct PictureState {
     ln_dash_style: BorderLineStyle,
     /// The `a:ln` corner join, or `None` when it names none (issue #1090).
     ln_join: Option<LineJoin>,
+    /// The `a:ln` end geometry, or `None` when the element states no `cap`
+    /// (issue #1682).
+    ln_cap: Option<LineCap>,
 }
 
 impl PictureState {
@@ -759,6 +762,10 @@ struct ShapeState {
     /// `<a:lnRef>` theme line decides and DrawingML's round default backs it
     /// (issue #1090).
     ln_join: Option<LineJoin>,
+    /// The `a:ln` end geometry, or `None` when the element states no `cap`, in
+    /// which case the `<a:lnRef>` theme line decides and DrawingML's flat
+    /// default backs it (issue #1682).
+    ln_cap: Option<LineCap>,
     /// Arrowhead at line start.
     head_end: ArrowHead,
     /// Arrowhead at line end.
@@ -823,6 +830,7 @@ impl Default for ShapeState {
             ln_color: None,
             ln_dash_style: BorderLineStyle::Solid,
             ln_join: None,
+            ln_cap: None,
             head_end: ArrowHead::None,
             tail_end: ArrowHead::None,
             adj_values: Vec::new(),
@@ -879,6 +887,12 @@ fn finalize_shape(
         .ln_join
         .or_else(|| referenced_line_style.and_then(|style| style.join))
         .unwrap_or_default();
+    // End geometry: the shape's own `a:ln/@cap`, else the referenced theme
+    // line's, else DrawingML's flat default (issue #1682).
+    let effective_ln_cap: LineCap = shape
+        .ln_cap
+        .or_else(|| referenced_line_style.and_then(|style| style.cap))
+        .unwrap_or_default();
 
     // Resolve effective fill: explicit > noFill > style fallback.
     let effective_fill: Option<Color> = if shape.fill.is_some() {
@@ -903,6 +917,7 @@ fn finalize_shape(
         color,
         style: shape.ln_dash_style,
         join: effective_ln_join,
+        cap: effective_ln_cap,
     });
     let mut picture_fill: Option<FixedElement> = if shape.blip_embed.is_some() {
         let picture = PictureState {
@@ -922,6 +937,7 @@ fn finalize_shape(
             ln_color: effective_ln_color,
             ln_dash_style: shape.ln_dash_style,
             ln_join: Some(effective_ln_join),
+            ln_cap: Some(effective_ln_cap),
             shadow: shape.shadow.clone(),
             ..PictureState::default()
         };
@@ -1214,6 +1230,7 @@ fn finalize_picture(
         color,
         style: pic.ln_dash_style,
         join: pic.ln_join.unwrap_or_default(),
+        cap: pic.ln_cap.unwrap_or_default(),
     });
     let element = selected_asset.and_then(|asset| {
         asset.format().map(|format| {
@@ -1723,6 +1740,9 @@ struct SlideXmlParser<'a> {
     para_level: u32,
     para_default_run_style: TextStyle,
     para_end_run_style: TextStyle,
+    /// Whether the open paragraph wrote an `<a:endParaRPr>` element.
+    /// An absent mark takes no inherited face onto the line (issue #1645).
+    para_declares_end_para_rpr: bool,
     para_bullet_definition: PptxBulletDefinition,
     in_ln_spc: bool,
     in_spc_bef: bool,
@@ -1792,6 +1812,7 @@ impl<'a> SlideXmlParser<'a> {
             para_level: 0,
             para_default_run_style: TextStyle::default(),
             para_end_run_style: TextStyle::default(),
+            para_declares_end_para_rpr: false,
             para_bullet_definition: PptxBulletDefinition::default(),
             in_ln_spc: false,
             in_spc_bef: false,
@@ -2019,6 +2040,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.shape.ln_width_emu = get_attr_i64(e, b"w").unwrap_or(12700);
                 self.shape.ln_dash_style = BorderLineStyle::Solid;
                 self.shape.ln_join = None;
+                self.shape.ln_cap = crate::parser::drawingml::line_cap(e);
             }
             b"prstDash" if self.shape.in_ln => {
                 self.shape.ln_dash_style = get_attr_str(e, b"val")
@@ -2120,6 +2142,7 @@ impl<'a> SlideXmlParser<'a> {
                     .text_body_style_defaults
                     .run_style_for_level(self.para_level);
                 self.para_end_run_style = self.para_default_run_style.clone();
+                self.para_declares_end_para_rpr = false;
                 self.para_bullet_definition = self
                     .text_body_style_defaults
                     .bullet_for_level(self.para_level);
@@ -2260,6 +2283,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.rpr_applied_latin_typeface = false;
                 self.rpr_applied_east_asian_typeface = false;
                 self.para_end_run_style = self.para_default_run_style.clone();
+                self.para_declares_end_para_rpr = true;
                 extract_rpr_attributes(e, &mut self.para_end_run_style);
             }
             b"ln" if self.in_rpr || self.in_end_para_rpr => {
@@ -2407,6 +2431,7 @@ impl<'a> SlideXmlParser<'a> {
                 self.pic.ln_width_emu = get_attr_i64(e, b"w").unwrap_or(12700);
                 self.pic.ln_dash_style = BorderLineStyle::Solid;
                 self.pic.ln_join = None;
+                self.pic.ln_cap = crate::parser::drawingml::line_cap(e);
             }
             b"solidFill" if self.in_pic && self.pic.in_ln => {
                 self.solid_fill_ctx = SolidFillCtx::PicLineFill;
@@ -2583,6 +2608,7 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"ln" if self.shape.in_sp_pr => {
                 self.shape.ln_width_emu = get_attr_i64(e, b"w").unwrap_or(12700);
+                self.shape.ln_cap = crate::parser::drawingml::line_cap(e);
             }
             b"prstDash" if self.shape.in_ln => {
                 self.shape.ln_dash_style = get_attr_str(e, b"val")
@@ -2692,6 +2718,7 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"endParaRPr" if self.in_para && !self.in_run => {
                 self.para_end_run_style = self.para_default_run_style.clone();
+                self.para_declares_end_para_rpr = true;
                 extract_rpr_attributes(e, &mut self.para_end_run_style);
             }
             b"ln" if self.in_rpr || self.in_end_para_rpr => {
@@ -3025,10 +3052,16 @@ impl<'a> SlideXmlParser<'a> {
                     &self.para_default_run_style,
                 );
                 let mut paragraph_runs = std::mem::take(&mut self.runs);
-                insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
                 let mut paragraph_style: ParagraphStyle = self.para_style.clone();
-                paragraph_style.paragraph_mark_font_family =
-                    pptx_paragraph_mark_font_family(&self.para_end_run_style, self.ctx.theme);
+                paragraph_style.paragraph_mark_font_family = pptx_paragraph_mark_font_family(
+                    &self.para_end_run_style,
+                    self.ctx.theme,
+                    PptxParagraphMark::for_paragraph(
+                        self.para_declares_end_para_rpr,
+                        &paragraph_runs,
+                    ),
+                );
+                insert_hangul_kinsoku_break_markers(&mut paragraph_runs);
                 // `a:tab pos` is measured from the text origin — the box edge
                 // plus `lIns` — not from the box edge itself: the native
                 // export of customGeo.pptx page 46 lands its value run at
@@ -3065,6 +3098,7 @@ impl<'a> SlideXmlParser<'a> {
                             style: self.run_style.clone(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     );
                 }
