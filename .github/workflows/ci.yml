@@ -22,6 +22,7 @@ env:
 # Every rust-cache step saves only on main. The repository's Actions cache is
 # capped at 10 GB; when each PR also saved its own ~1 GB entries, they evicted
 # main's and most jobs restored nothing. PRs restore main's entries instead.
+# Jobs whose dependency graphs match share one entry for the same reason.
 
 permissions:
   contents: read
@@ -190,6 +191,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          # rust-cache keys ignore the Cargo profile, so a key that already
+          # held dev-profile dependencies would restore as a full match and
+          # never save the optimized ones. The name marks the ci profile.
+          shared-key: test-ci-profile
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install qpdf
         if: runner.os == 'Linux'
@@ -213,7 +218,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # Restores Test's entry, which differs only in typst-kit's font
+          # feature, and never saves: one ~1 GB entry per OS instead of two.
+          shared-key: test-ci-profile
+          save-if: false
       - name: Test native conversion without Typst fonts
         run: |
           cargo test --locked -p office2pdf --no-default-features --profile ci --lib font_feature
@@ -252,8 +260,10 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.feature }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # wasm-cjk-font adds no dependency over wasm, so both legs share one
+          # ~1.5 GB entry and only one leg saves it.
+          shared-key: wasm
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.feature == 'wasm' }}
       - name: Check wasm32 feature combinations
         if: matrix.feature == 'wasm'
         run: |
