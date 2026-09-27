@@ -2752,6 +2752,7 @@
     "xlsx/poi/no_drawing_patriarch.xlsx": "success",
     "xlsx/poi/npe.xlsx": "success",
     "xlsx/poi/picture.xlsx": "success",
+    "xlsx/poi/poc-shared-strings.xlsx": "expected_error",
     "xlsx/poi/protected_passtika.xlsx": "expected_error",
     "xlsx/poi/ref-56737.xlsx": "success",
     "xlsx/poi/ref2-56737.xlsx": "success",

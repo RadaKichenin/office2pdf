@@ -251,6 +251,10 @@ Native Rust callers can use the same per-conversion path through
 XLSX workbooks with cells beyond Excel's 16,384-column or 1,048,576-row grid
 are rejected before layout expansion.
 
+A workbook whose shared string table holds an item longer than Excel's
+32,767-character cell limit is rejected as well, before the reader copies that
+item into every cell referencing it.
+
 ## Workspace Crates
 
 | Crate | Published | Purpose |

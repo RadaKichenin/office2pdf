@@ -3745,3 +3745,52 @@ fn xlsx_rejects_cells_past_excel_grid_limits() {
         assert!(streaming.unwrap_err().to_string().contains("Excel grid"));
     }
 }
+
+/// A one-cell workbook whose only shared string holds `characters` characters.
+/// umya registers every string cell in `xl/sharedStrings.xml`, so the item's
+/// length follows from the cell value alone.
+fn build_xlsx_with_shared_string_of(characters: usize) -> Vec<u8> {
+    build_xlsx_bytes("Sheet1", &[("A1", &"x".repeat(characters))])
+}
+
+#[test]
+fn xlsx_rejects_a_shared_string_past_excels_cell_character_limit() {
+    // One character past the limit is the whole difference: Excel stores at
+    // most 32,767 characters in a cell, and the reader copies each shared
+    // string into every cell that references it (issue #1702).
+    let data = build_xlsx_with_shared_string_of(32_768);
+    let result = XlsxParser.parse(&data, &ConvertOptions::default());
+    let message: String = result
+        .expect_err("a shared string past the cell limit must be rejected")
+        .to_string();
+    assert!(
+        message.contains("Excel's 32767-character cell limit"),
+        "{message}"
+    );
+    let streaming = XlsxParser.parse_streaming(&data, &ConvertOptions::default(), 100);
+    assert!(
+        streaming
+            .expect_err("streaming must reject it too")
+            .to_string()
+            .contains("Excel's 32767-character cell limit")
+    );
+}
+
+#[test]
+fn xlsx_accepts_a_shared_string_at_excels_cell_character_limit() {
+    // The boundary itself is a workbook Excel opens, so the guard must not
+    // round it away: the part is longer than the limit in bytes, which forces
+    // the scanner to count characters per item rather than trust the size.
+    let data = build_xlsx_with_shared_string_of(32_767);
+    let (document, _warnings) = XlsxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("the limit itself converts");
+    let sheet = get_sheet_page(&document, 0);
+    assert_eq!(
+        cell_text(&sheet.table.rows[0].cells[0]).chars().count(),
+        32_767
+    );
+    XlsxParser
+        .parse_streaming(&data, &ConvertOptions::default(), 100)
+        .expect("streaming accepts the limit itself");
+}
