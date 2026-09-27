@@ -3730,7 +3730,10 @@ fn column_section_layout(content: Vec<Block>, columns: Option<ColumnLayout>) -> 
     let pages =
         crate::render::pdf::compile_page_count_with_fonts(&output.source, &output.images, &[], &[])
             .unwrap_or_else(|error| {
-                panic!("a page break in a column section must compile: {error}\n{}", output.source)
+                panic!(
+                    "a page break in a column section must compile: {error}\n{}",
+                    output.source
+                )
             });
     (output.source, pages)
 }
