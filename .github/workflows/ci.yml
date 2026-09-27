@@ -218,15 +218,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          # Restores Test's entry, which differs only in typst-kit's font
-          # feature, and never saves: one ~1 GB entry per OS instead of two.
-          shared-key: test-ci-profile
-          save-if: false
+          # This job differs from Test only in typst-kit's font feature, but
+          # that flip rebuilds the Typst crates: ~5 min on Windows, where it
+          # was the critical path. Windows keeps its own ~1 GB entry; the other
+          # legs restore Test's and save nothing, to stay within the 10 GB cap.
+          shared-key: ${{ runner.os == 'Windows' && 'no-embedded-fonts-ci-profile' || 'test-ci-profile' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && runner.os == 'Windows' }}
       - name: Test native conversion without Typst fonts
         run: |
           cargo test --locked -p office2pdf --no-default-features --profile ci --lib font_feature
           cargo test --locked -p office2pdf --no-default-features --profile ci --test font_features
-          cargo check --locked -p office2pdf-cli --no-default-features
+          # Built under the ci profile so it reuses the dependencies compiled
+          # above instead of a second, dev-profile pass. office2pdf itself
+          # rebuilds once more because the CLI also enables `pdf-ops`.
+          cargo build --locked -p office2pdf-cli --no-default-features --profile ci
 
   clippy:
     name: Clippy
