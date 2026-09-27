@@ -1839,3 +1839,86 @@ fn a_suffixed_request_paints_through_its_base_family() {
         "the base family must follow the suffixed request, got {chain}"
     );
 }
+
+/// A LibreOffice-authored document names `Liberation Serif` constantly, and
+/// the table did not list it: `substitutes` returned `None`, so the family
+/// contributed nothing at all to its own paint chain. Times New Roman leads
+/// because Liberation Serif was designed as its metric twin, which is the
+/// same relationship the `times new roman` entry states the other way round
+/// (issue #1707).
+#[test]
+fn liberation_serif_substitutes_lead_with_its_metric_twin() {
+    let subs = substitutes("Liberation Serif").expect("Liberation Serif should have substitutes");
+    assert_eq!(
+        subs[0], "Times New Roman",
+        "the metric twin leads Liberation Serif's chain: {subs:?}"
+    );
+}
+
+/// Word shapes a run's Latin codepoints with `w:ascii`, so the Latin family
+/// owns a run that holds no East Asian character. Ranking the East Asian
+/// family and its substitutes first painted the `fr-FR` body of a
+/// LibreOffice-authored fixture in SimSun, where Word uses Times New Roman
+/// (issue #1707).
+#[test]
+fn latin_text_resolves_through_the_latin_family_before_any_east_asian_face() {
+    let list = font_with_east_asian_fallbacks("Liberation Serif", "Noto Serif CJK SC", "Un texte");
+
+    let latin_substitute = list
+        .find("\"Times New Roman\"")
+        .unwrap_or_else(|| panic!("Liberation Serif's metric twin is offered: {list}"));
+    for east_asian in [
+        "\"Noto Serif CJK SC\"",
+        "\"Noto Serif SC\"",
+        "\"STSong\"",
+        "\"SimSun\"",
+    ] {
+        let Some(index) = list.find(east_asian) else {
+            continue;
+        };
+        assert!(
+            latin_substitute < index,
+            "{east_asian} must follow the Latin substitutes: {list}"
+        );
+    }
+}
+
+/// Triangulation for the rule above with an unrelated family pair: the rule
+/// is "the run's script decides which declared family resolves first", not
+/// anything specific to Liberation Serif.
+#[test]
+fn latin_text_ranks_a_latin_substitute_ahead_of_a_korean_one() {
+    let list = font_with_east_asian_fallbacks("Cambria", "Batang", "Introduction");
+
+    let latin_substitute = list
+        .find("\"Caladea\"")
+        .unwrap_or_else(|| panic!("Cambria's metric twin is offered: {list}"));
+    let east_asian = list
+        .find("\"Batang\"")
+        .unwrap_or_else(|| panic!("the declared East Asian family is offered: {list}"));
+    assert!(
+        latin_substitute < east_asian,
+        "a Latin run resolves the Latin family first: {list}"
+    );
+}
+
+/// The gate on the rule above: East Asian text still reaches the East Asian
+/// family and its substitutes before any Latin stand-in, which is what issues
+/// #537 and #575 established.
+#[test]
+fn east_asian_text_still_resolves_through_the_east_asian_family_first() {
+    let list = font_with_east_asian_fallbacks("Liberation Serif", "Noto Serif CJK SC", "中文文書");
+
+    let east_asian = list
+        .find("\"Noto Serif CJK SC\"")
+        .unwrap_or_else(|| panic!("the declared East Asian family is offered: {list}"));
+    for latin in ["\"Times New Roman\"", "\"Tinos\"", "\"DejaVu Serif\""] {
+        let Some(index) = list.find(latin) else {
+            continue;
+        };
+        assert!(
+            east_asian < index,
+            "{latin} must follow the East Asian faces over East Asian text: {list}"
+        );
+    }
+}
