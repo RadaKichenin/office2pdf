@@ -23,8 +23,45 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    # A PR touching only `.md` files, `assets/` or `references/` skips the Rust
+    # jobs (AGENTS.md, Testing). Pushes to main always build everything so each
+    # merge commit gets a full run. A skipped job reports success, so nothing
+    # waits on a pending check.
+    name: Detect Rust-relevant changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - id: filter
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "rust=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' > "${RUNNER_TEMP}/changed.txt"
+          # No Rust code reads Markdown, bug-fix evidence, validation notes or
+          # reference summaries at runtime. The Python contract jobs, which do
+          # read README.md and AGENTS.md, are not gated.
+          if grep -qvE '\.md$|^assets/|^references/' "${RUNNER_TEMP}/changed.txt"; then
+            echo "rust=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "rust=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Only documentation or evidence changed; Rust jobs skipped"
+          fi
+
   publish-verification:
     name: Publish Verification
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -118,6 +155,8 @@ jobs:
     # Stable is already compiled per OS by Test (and on Linux by Clippy), so
     # only the MSRV needs a separate check.
     name: Check MSRV
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -132,6 +171,8 @@ jobs:
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -153,6 +194,8 @@ jobs:
     # A different feature set rebuilds the crate, so it runs beside Test
     # instead of extending Test's critical path.
     name: Test without Typst fonts
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -169,6 +212,8 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -182,6 +227,8 @@ jobs:
     # One leg per browser feature: the two package builds share nothing but
     # dependencies, so running them side by side halves the job.
     name: WASM Check & Test (${{ matrix.feature }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -231,6 +278,8 @@ jobs:
 
   bulk-test:
     name: Bulk Third-Party Fixture Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
