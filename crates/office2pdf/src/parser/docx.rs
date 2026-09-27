@@ -1276,6 +1276,7 @@ fn convert_paragraph_blocks(
                             out,
                             para,
                             resolved_style,
+                            style_map,
                             flow,
                             &mut runs,
                             caption_identifier.as_deref(),
@@ -1305,6 +1306,7 @@ fn convert_paragraph_blocks(
                             out,
                             para,
                             resolved_style,
+                            style_map,
                             flow,
                             &mut runs,
                             caption_identifier.as_deref(),
@@ -1400,6 +1402,7 @@ fn convert_paragraph_blocks(
             out,
             para,
             resolved_style,
+            style_map,
             flow,
             &mut runs,
             caption_identifier.as_deref(),
@@ -1478,6 +1481,7 @@ fn push_paragraph_from_runs(
     out: &mut Vec<Block>,
     para: &docx_rs::Paragraph,
     resolved_style: Option<&ResolvedStyle>,
+    style_map: &StyleMap,
     flow: ParagraphFlow<'_>,
     runs: &mut Vec<Run>,
     caption_identifier: Option<&str>,
@@ -1539,6 +1543,21 @@ fn push_paragraph_from_runs(
     // (issue #1053).
     if flow.effective_style_is_defined {
         insert_east_asian_auto_space(runs);
+    }
+    // Word gives a `<w:p>` with no runs a full line of its own, sized from the
+    // paragraph mark's resolved run formatting — so a table row of nothing but
+    // empty paragraphs is as tall as a row of text (issue #1700). Nothing
+    // downstream can rebuild that resolution: the mark paints no glyph, so it
+    // reaches codegen as no run at all. Resolved through the same cascade a
+    // run takes, so `w:pPr/w:rPr` outranks the `w:pStyle` and both outrank
+    // `w:rPrDefault`.
+    if runs.is_empty() {
+        style.paragraph_mark_text_style = Some(Box::new(resolve_run_style(
+            &para.property.run_property,
+            false,
+            resolved_style,
+            style_map,
+        )));
     }
     let paragraph = Paragraph {
         style,

@@ -130,6 +130,20 @@ pub struct ParagraphStyle {
     /// separate the two. `None` for a format whose line box does not work that
     /// way, or a paragraph whose mark resolves to no family at all.
     pub paragraph_mark_font_family: Option<Box<str>>,
+    /// The run formatting Word resolves for a `<w:p>` that has no runs at
+    /// all — its `w:pPr/w:rPr` over the style chain over `w:rPrDefault`.
+    ///
+    /// Word gives such a paragraph's mark a full line of its own, sized from
+    /// this formatting, so a table row of nothing but empty paragraphs is as
+    /// tall as a row of text (issue #1700). The runs a codegen would measure
+    /// that line from do not exist, and neither does a sibling paragraph to
+    /// borrow from, so the resolution has to travel from the parser.
+    ///
+    /// Boxed for the same reason `border` is: `TextStyle` inline would push
+    /// the paragraph-carrying enum variants past clippy's size threshold.
+    /// `None` for a paragraph that has runs, and for every format whose blank
+    /// paragraphs are sized another way.
+    pub paragraph_mark_text_style: Option<Box<TextStyle>>,
     /// The glyphs a worksheet cell's selected number-format section reserves
     /// space for without painting them — e.g. the `)` a `_)`-padded positive
     /// section holds room for beside a parenthesised negative section.
