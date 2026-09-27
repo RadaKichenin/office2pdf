@@ -773,12 +773,41 @@ fn generate_flow_page(
     Ok(())
 }
 
-/// Generate Typst markup for multi-column content.
+/// Generate Typst markup for multi-column content, one page at a time.
+///
+/// Typst refuses `#pagebreak()` anywhere below the top level, so a section
+/// whose content carries one cannot be emitted as a single column wrapper: the
+/// engine rejects the whole document with "pagebreaks are not allowed inside of
+/// containers" and no PDF is produced at all (issue #1695). Word ends the page
+/// at such a break and restarts the section's columns in column 1 on the next
+/// page, which is one wrapper per page's slice of the content with a top-level
+/// break between the slices. A break at either end of the section leaves an
+/// empty slice, and an empty wrapper would paint nothing while still claiming
+/// vertical space, so only the break itself is emitted for those.
+fn generate_flow_page_columns(
+    out: &mut String,
+    content: &[Block],
+    cols: &ColumnLayout,
+    ctx: &mut GenCtx,
+) -> Result<(), ConvertError> {
+    for (index, segment) in split_at_page_breaks(content).into_iter().enumerate() {
+        if index > 0 {
+            out.push_str("#pagebreak()\n");
+        }
+        if segment.is_empty() {
+            continue;
+        }
+        generate_column_section_page(out, segment, cols, ctx)?;
+    }
+    Ok(())
+}
+
+/// Generate one page's worth of a multi-column section.
 ///
 /// Equal columns use `#columns(n, gutter: Xpt)[content]`.
 /// Unequal columns use `#grid(columns: (W1pt, W2pt, ...), gutter: Xpt)` with
 /// content split by `ColumnBreak` blocks into separate grid cells.
-fn generate_flow_page_columns(
+fn generate_column_section_page(
     out: &mut String,
     content: &[Block],
     cols: &ColumnLayout,
@@ -822,6 +851,23 @@ fn generate_flow_page_columns(
         out.push_str("\n]\n");
     }
     Ok(())
+}
+
+/// Split content blocks at `PageBreak` boundaries into contiguous slices.
+///
+/// One slice per page the section spans. A leading, trailing or repeated break
+/// yields an empty slice, which the caller emits as the bare break.
+fn split_at_page_breaks(content: &[Block]) -> Vec<&[Block]> {
+    let mut segments: Vec<&[Block]> = Vec::new();
+    let mut start: usize = 0;
+    for (index, block) in content.iter().enumerate() {
+        if matches!(block, Block::PageBreak) {
+            segments.push(&content[start..index]);
+            start = index + 1;
+        }
+    }
+    segments.push(&content[start..]);
+    segments
 }
 
 /// Split content blocks at ColumnBreak boundaries into segments.
