@@ -28,36 +28,20 @@
 //! XML like `w:wordWrap`, and adjacency is read off the same element tree.
 //!
 //! Paragraphs are counted in document order exactly as the converter reaches
-//! them: every `w:p` of the body, its table cells and its DrawingML text
-//! boxes, but none under `mc:Fallback` (docx-rs discards that branch) or VML
-//! `w:pict`/`w:object` (their text boxes are rebuilt from the raw XML without
-//! paragraph conversion). A `w:pStyle` that disagrees with the converted
-//! paragraph's means the two sequences drifted apart, and the context then
-//! stops applying anything rather than move a gap onto the wrong paragraph.
+//! them, using the skip set and the drift-guarded cursor of
+//! [`super::paragraph_cursor`] (issue #1689). The walk is this module's own
+//! because the flag also needs the flows a table opens, which no other
+//! paragraph property reads.
 
-use crate::parser::xml_util::OOXML_XML_VERSION;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use quick_xml::Reader;
 use quick_xml::events::{BytesStart, Event};
 
-fn attribute_value(
-    reader: &Reader<&[u8]>,
-    element: &BytesStart<'_>,
-    name: &[u8],
-) -> Option<String> {
-    element
-        .attributes()
-        .flatten()
-        .find(|attribute| attribute.key.local_name().as_ref() == name)
-        .and_then(|attribute| {
-            attribute
-                .decoded_and_normalized_value(OOXML_XML_VERSION, reader.decoder())
-                .ok()
-                .map(|value| value.into_owned())
-        })
-}
+use super::paragraph_cursor::{
+    ParagraphCursor, ScannedParagraph, attribute_value, is_skipped_subtree,
+};
 
 /// `w:contextualSpacing`'s ST_OnOff value; an absent `w:val` means on.
 fn contextual_spacing_value(reader: &Reader<&[u8]>, element: &BytesStart<'_>) -> bool {
@@ -65,12 +49,6 @@ fn contextual_spacing_value(reader: &Reader<&[u8]>, element: &BytesStart<'_>) ->
         attribute_value(reader, element, b"val").as_deref(),
         Some("0" | "false" | "off")
     )
-}
-
-/// Subtrees whose paragraphs never reach paragraph conversion (see the module
-/// comment), or whose properties are not the element's current ones.
-fn is_skipped_subtree(local_name: &[u8]) -> bool {
-    matches!(local_name, b"Fallback" | b"pict" | b"object" | b"pPrChange")
 }
 
 /// One paragraph style's own link in the flag's `w:basedOn` chain.
@@ -210,7 +188,7 @@ impl StyleSheet {
             .find_map(|definition| definition.contextual_spacing)
     }
 
-    fn paragraph_contextual_spacing(&self, paragraph: &ScannedParagraph) -> bool {
+    fn paragraph_contextual_spacing(&self, paragraph: &BodyParagraph) -> bool {
         paragraph
             .contextual_spacing
             .or_else(|| {
@@ -245,9 +223,9 @@ enum Above {
     TableEnd,
 }
 
-/// A `w:p` as the document scan saw it.
+/// A `w:p` as this module's flow-aware scan saw it.
 #[derive(Default)]
-struct ScannedParagraph {
+struct BodyParagraph {
     /// The paragraph's own `w:pStyle`, unresolved.
     style_id: Option<String>,
     /// The paragraph's own `w:contextualSpacing`, if it states one.
@@ -259,10 +237,10 @@ struct ScannedParagraph {
     next: Option<usize>,
 }
 
-fn scan_paragraphs(xml: &str) -> Vec<ScannedParagraph> {
+fn scan_paragraphs(xml: &str) -> Vec<BodyParagraph> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
-    let mut paragraphs: Vec<ScannedParagraph> = Vec::new();
+    let mut paragraphs: Vec<BodyParagraph> = Vec::new();
     // One cursor per open flow: the body, a table cell, a text box.
     let mut flows: Vec<FlowCursor> = Vec::new();
     let mut open_paragraphs: Vec<usize> = Vec::new();
@@ -272,7 +250,7 @@ fn scan_paragraphs(xml: &str) -> Vec<ScannedParagraph> {
     let mut in_paragraph_properties = false;
     let mut skipped_depth: usize = 0;
 
-    let open_paragraph = |paragraphs: &mut Vec<ScannedParagraph>,
+    let open_paragraph = |paragraphs: &mut Vec<BodyParagraph>,
                           flows: &[FlowCursor],
                           paragraph_above_table: &mut Option<usize>|
      -> usize {
@@ -289,9 +267,9 @@ fn scan_paragraphs(xml: &str) -> Vec<ScannedParagraph> {
             (None, Some(FlowCursor::TableEnd)) => Some(Above::TableEnd),
             (None, Some(FlowCursor::Start) | None) => None,
         };
-        paragraphs.push(ScannedParagraph {
+        paragraphs.push(BodyParagraph {
             above,
-            ..ScannedParagraph::default()
+            ..BodyParagraph::default()
         });
         index
     };
@@ -389,9 +367,6 @@ fn scan_paragraphs(xml: &str) -> Vec<ScannedParagraph> {
 /// What the flag does to one paragraph.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct ParagraphContextualRule {
-    /// The paragraph's own `w:pStyle`, to check the converter is on the same
-    /// paragraph as the scan.
-    style_id: Option<String>,
     drops_before: bool,
     drops_after: bool,
     /// The paragraph above, when it dropped its `w:after` toward this one.
@@ -399,9 +374,9 @@ struct ParagraphContextualRule {
 }
 
 fn resolve_rules(
-    paragraphs: Vec<ScannedParagraph>,
+    paragraphs: Vec<BodyParagraph>,
     sheet: &StyleSheet,
-) -> Vec<ParagraphContextualRule> {
+) -> Vec<ScannedParagraph<ParagraphContextualRule>> {
     let style_ids: Vec<Option<&str>> = paragraphs
         .iter()
         .map(|paragraph| sheet.effective_style_id(paragraph.style_id.as_deref()))
@@ -433,15 +408,17 @@ fn resolve_rules(
                 Some(Above::TableEnd) => style_ids[index] == row_end_style_id,
                 None => false,
             };
-            ParagraphContextualRule {
+            ScannedParagraph {
                 style_id: paragraph.style_id.clone(),
-                drops_before: flags[index] && has_same_style_above,
-                drops_after: drops_after[index],
-                // `drops_after[above]` already means the paragraph above
-                // shares this one's style, because this is its `next`.
-                after_dropped_above: match paragraph.above {
-                    Some(Above::Paragraph(above)) if drops_after[above] => Some(above),
-                    _ => None,
+                value: ParagraphContextualRule {
+                    drops_before: flags[index] && has_same_style_above,
+                    drops_after: drops_after[index],
+                    // `drops_after[above]` already means the paragraph above
+                    // shares this one's style, because this is its `next`.
+                    after_dropped_above: match paragraph.above {
+                        Some(Above::Paragraph(above)) if drops_after[above] => Some(above),
+                        _ => None,
+                    },
                 },
             }
         })
@@ -454,9 +431,7 @@ fn resolve_rules(
 /// TODO(header/footer parts): those parts convert through their own paragraph
 /// path with no cursor, so their flagged paragraphs still keep every gap.
 pub(in super::super) struct ContextualSpacingContext {
-    rules: Vec<ParagraphContextualRule>,
-    cursor: Cell<usize>,
-    has_drifted: Cell<bool>,
+    rules: ParagraphCursor<ParagraphContextualRule>,
     /// Each dropped `w:after` as it stood before the drop, for the offset it
     /// still applies to the `w:before` below it.
     dropped_space_after: RefCell<HashMap<usize, f64>>,
@@ -472,9 +447,7 @@ impl ContextualSpacingContext {
             None => Vec::new(),
         };
         Self {
-            rules,
-            cursor: Cell::new(0),
-            has_drifted: Cell::new(false),
+            rules: ParagraphCursor::new("w:contextualSpacing", rules),
             dropped_space_after: RefCell::new(HashMap::new()),
         }
     }
@@ -485,27 +458,9 @@ impl ContextualSpacingContext {
         &self,
         style_id: Option<&str>,
     ) -> ParagraphContextualSpacing<'_> {
-        let index = self.cursor.get();
-        self.cursor.set(index + 1);
-        let index = match self.rules.get(index) {
-            _ if self.has_drifted.get() => None,
-            Some(rule) if rule.style_id.as_deref() == style_id => Some(index),
-            Some(rule) => {
-                self.has_drifted.set(true);
-                tracing::warn!(
-                    paragraph_index = index,
-                    scanned_style = rule.style_id.as_deref().unwrap_or(""),
-                    converted_style = style_id.unwrap_or(""),
-                    "w:contextualSpacing scan drifted from the converted paragraphs; \
-                     leaving the remaining paragraph gaps as stated"
-                );
-                None
-            }
-            None => None,
-        };
         ParagraphContextualSpacing {
             context: self,
-            index,
+            index: self.rules.next(style_id).map(|(index, _)| index),
         }
     }
 }
@@ -528,7 +483,7 @@ impl ParagraphContextualSpacing<'_> {
         let Some(index) = self.index else {
             return;
         };
-        let rule: &ParagraphContextualRule = &self.context.rules[index];
+        let rule: &ParagraphContextualRule = self.context.rules.get(index);
         if rule.drops_after
             && let Some(after) = space_after.replace(0.0)
         {

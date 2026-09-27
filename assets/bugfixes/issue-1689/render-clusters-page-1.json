@@ -1,0 +1,151 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 6212.2752,
+      "bbox_pt": {
+        "height": 18.24,
+        "width": 470.88,
+        "x": 70.56,
+        "y": 120.48
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-6098d47e4518",
+      "region": "top"
+    },
+    {
+      "area_pt2": 6075.1872,
+      "bbox_pt": {
+        "height": 19.68,
+        "width": 470.88,
+        "x": 70.56,
+        "y": 139.2
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-9d0b56002947",
+      "region": "top"
+    },
+    {
+      "area_pt2": 40.0896,
+      "bbox_pt": {
+        "height": 12.48,
+        "width": 7.2,
+        "x": 72.0,
+        "y": 102.72
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-788e272b6568",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.0944,
+      "bbox_pt": {
+        "height": 20.16,
+        "width": 5.76,
+        "x": 108.0,
+        "y": 95.04
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-d3a6c79ed9dc",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 29.2608,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 241.44,
+        "y": 77.76
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-8d4c8e0d15d7",
+      "region": "top"
+    },
+    {
+      "area_pt2": 25.344,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.24,
+        "x": 72.48,
+        "y": 94.56
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-0426837e1a47",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.1136,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 6.72,
+        "x": 72.48,
+        "y": 161.76
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-5d9429a47a14",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 23.04,
+      "bbox_pt": {
+        "height": 12.96,
+        "width": 4.32,
+        "x": 147.36,
+        "y": 102.24
+      },
+      "disposition": {
+        "issue": "#1690",
+        "kind": "issue",
+        "note": "The inline DrawingML text box renders as a plain paragraph without its outline, so its line is 20.65pt instead of the box's 36pt. The GT box, its outline and its in-box 'Box text' have no counterpart, and every line below the box \u2014 including the yellow w:shd band, which this PR moved onto the paragraph that declares it \u2014 sits 13.02pt high. Same displacement, one root cause."
+      },
+      "id": "p1-98a99700e061",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 8,
+    "duplicate": 0,
+    "total": 8,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
