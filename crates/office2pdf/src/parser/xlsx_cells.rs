@@ -287,6 +287,80 @@ pub(crate) fn literal_number_format_text(format: &str, value: f64) -> Option<Str
     (!in_quotes).then_some(literal)
 }
 
+/// The ink a number-format section's bracketed colour control names.
+///
+/// Excel's number-format grammar lets each section name one of eight colours,
+/// and the name wins over the colour the cell's own font declares. Measured on
+/// a native Excel 16 for Mac export (2026-09-28) of a one-factor probe
+/// workbook — ten cells differing only in their selected section's colour
+/// control — whose traces print every name as the fully saturated primary and
+/// not a palette tint: Red `1 0 0`, Green `0 1 0`, Blue `0 0 1`, Cyan
+/// `0 1 1`, Magenta `1 0 1`, Yellow `1 1 0`, White `1 1 1`, Black `0 0 0`.
+/// The same probe prints `[Red]` over an explicit `FF0000FF` font as `1 0 0`
+/// and `[Black]` over it as `0 0 0`, so `[Black]` sets black outright rather
+/// than deferring to the font (issue #1776).
+///
+/// Quoted text and escaped/skip-width arguments are literal, matching
+/// [`number_format_skip_width_glyphs`]: a `"[Red]"` section prints the name
+/// and names no colour.
+///
+/// TODO(#1923): the indexed `[Color N]` form is a separate palette lookup —
+/// measured as `indexedColors[N + 7]` — and is not applied here, so such a
+/// section still paints the cell's own ink.
+fn number_format_section_color(section: &str) -> Option<Color> {
+    let mut chars = section.chars();
+    let mut in_quotes = false;
+    while let Some(ch) = chars.next() {
+        if in_quotes {
+            if ch == '"' {
+                in_quotes = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_quotes = true,
+            '\\' | '_' | '*' => {
+                chars.next();
+            }
+            '[' => {
+                let control: String = chars.by_ref().take_while(|ch| *ch != ']').collect();
+                if let Some(color) = named_number_format_color(&control) {
+                    return Some(color);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The primary a number-format colour name paints, or `None` for any other
+/// bracketed control (a locale, a condition, an elapsed-time unit).
+fn named_number_format_color(control: &str) -> Option<Color> {
+    match control.to_ascii_lowercase().as_str() {
+        "black" => Some(Color::new(0, 0, 0)),
+        "blue" => Some(Color::new(0, 0, 255)),
+        "cyan" => Some(Color::new(0, 255, 255)),
+        "green" => Some(Color::new(0, 255, 0)),
+        "magenta" => Some(Color::new(255, 0, 255)),
+        "red" => Some(Color::new(255, 0, 0)),
+        "white" => Some(Color::new(255, 255, 255)),
+        "yellow" => Some(Color::new(255, 255, 0)),
+        _ => None,
+    }
+}
+
+/// The ink the section Excel selects for `value` paints, or `None` when that
+/// section names no colour.
+///
+/// A format carrying a conditional section stays on the cell's own ink:
+/// [`selected_number_format_section`] cannot pick one without a complete
+/// predicate evaluator, and guessing the wrong section would paint the wrong
+/// colour rather than merely mis-measure a width.
+fn number_format_text_color(format_code: &str, value: f64) -> Option<Color> {
+    number_format_section_color(selected_number_format_section(format_code, value)?)
+}
+
 fn section_has_condition(section: &str) -> bool {
     let mut chars = section.chars();
     let mut in_quotes = false;
@@ -3089,6 +3163,19 @@ pub(super) fn build_rows_for_range(
             {
                 text_style.color = Some(header_ink);
             }
+            // A number format's selected section may name the ink it paints,
+            // and that name wins over the colour the cell's font declares —
+            // the `[Red]` negative section of built-in format 8 reddens a
+            // negative currency value whatever the font says (issue #1776).
+            // Conditional formatting below still overrides it, as Excel does.
+            if let Some(cell) = umya_cell
+                && let Some(number) = cell.get_value_number()
+                && let Some(number_format) = cell.get_style().get_number_format()
+                && let Some(section_ink) =
+                    number_format_text_color(number_format.get_format_code(), number)
+            {
+                text_style.color = Some(section_ink);
+            }
             // Excel prices both horizontal sides of the cell's text box from
             // the cell's own font. Read before the runs take the style, and
             // use the same box for the width the line has and where either
@@ -3644,10 +3731,51 @@ pub(super) fn prepare_sheet_context(
 #[cfg(test)]
 mod number_format_tests {
     use super::{
-        literal_zero_section_text, numeric_overflow_replacement,
+        literal_zero_section_text, number_format_text_color, numeric_overflow_replacement,
         right_aligned_number_format_reserve_glyphs,
     };
-    use crate::ir::{Insets, TextStyle};
+    use crate::ir::{Color, Insets, TextStyle};
+
+    /// A colour name only counts as a control where Excel reads one: outside
+    /// quotes and not consumed as an escape or skip-width argument. The
+    /// built-in currency formats put a locale control ahead of the colour, so
+    /// the scan must keep looking past a bracket it does not recognise
+    /// (issue #1776).
+    #[test]
+    fn a_colour_control_is_read_only_where_excel_reads_one() {
+        let red = Some(Color::new(255, 0, 0));
+        // The reported built-in format 8, and `picture.xlsx`'s locale-prefixed
+        // negative section.
+        assert_eq!(
+            number_format_text_color(r##""$"#,##0.00_);[Red]\("$"#,##0.00\)"##, -123.0),
+            red
+        );
+        assert_eq!(
+            number_format_text_color("[$$-409]#,##0.00;[$$-409][Red]-#,##0.00", -123.0),
+            red
+        );
+        // The same formats leave a positive value on the cell's own ink.
+        assert_eq!(
+            number_format_text_color(r##""$"#,##0.00_);[Red]\("$"#,##0.00\)"##, 123.0),
+            None
+        );
+        // A quoted name is literal text, and an escaped bracket is a literal
+        // bracket, so neither names a colour.
+        assert_eq!(
+            number_format_text_color(r#"0.00;"[Red]"0.00"#, -123.0),
+            None
+        );
+        assert_eq!(number_format_text_color(r"0.00;\[Red\]0.00", -123.0), None);
+        // A skip-width argument consumes the character after it, so the
+        // bracket it swallows opens no control.
+        assert_eq!(number_format_text_color("0.00;_[Red]0.00", -123.0), None);
+        // A conditional format stays on the cell's own ink: the section a
+        // predicate selects is not resolved here.
+        assert_eq!(
+            number_format_text_color("[>100][Red]0.00;0.00", -123.0),
+            None
+        );
+    }
 
     fn issue_1263_style() -> TextStyle {
         TextStyle {
