@@ -4942,3 +4942,300 @@ fn small_malgun_sheet_baselines_match_native_isolated_rows() {
     }
     assert!(differences.is_empty(), "{}", differences.join("\n"));
 }
+
+/// A table row whose cells hold nothing but an empty `<w:p>` is as tall as a
+/// row of text: Word gives each paragraph mark a full line of its own, sized
+/// from the run formatting the mark resolves. The cell path had no runs and no
+/// sibling paragraph to borrow metrics from, so it emitted nothing at all and
+/// the row collapsed onto its own rule — 0.500pt rule-to-rule against our
+/// 13.149pt text rows, where native Word for Mac 16.113.1 prints 13.200pt for
+/// both (issue #1700).
+#[test]
+fn a_blank_only_cell_paragraph_holds_the_line_its_mark_resolves() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 11.0;
+    let table = Table {
+        rows: vec![blank_mark_row("Libertinus Serif", font_size)],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * font_size)
+        )),
+        "a cell holding only an empty paragraph must still hold one full line \
+         box, sized from the mark's own formatting: {result}"
+    );
+}
+
+/// Triangulation, measured rather than assumed: the probe of issue #1700 with
+/// `<w:pPr><w:rPr><w:sz w:val="48"/></w:rPr></w:pPr>` on every blank cell —
+/// one factor changed — prints its blank row 28.080pt tall in Word for Mac
+/// 16.113.1 against 13.200pt for the inheriting package, which is 24pt of
+/// Arial's own line plus the 0.48pt rule. So the mark's size scales the line,
+/// and a fixed height or the neighbouring row's would both be wrong.
+#[test]
+fn a_blank_cell_line_scales_with_its_mark_size() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    for font_size in [11.0_f64, 24.0, 7.5] {
+        let table = Table {
+            rows: vec![blank_mark_row("Libertinus Serif", font_size)],
+            column_widths: vec![150.0],
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(&format!(
+                "#box(width: 0pt, height: {}pt)",
+                format_f64(word_pitch_em * font_size)
+            )),
+            "the blank line must scale with the mark's own size, {font_size}pt \
+             here: {result}"
+        );
+    }
+}
+
+/// The mark's *face* decides the line too, so two faces whose line metrics
+/// differ give two different blank rows. This is what keeps the fix from
+/// standing in one hardcoded family's metrics for every document.
+#[test]
+fn a_blank_cell_line_follows_its_mark_face() {
+    let faces: Vec<(&str, f64)> = ["Libertinus Serif", "DejaVu Sans", "Arial", "Helvetica"]
+        .into_iter()
+        .filter_map(|family| {
+            crate::render::pdf::font_line_metrics_em(family)
+                .map(|(_, _, word_pitch_em)| (family, word_pitch_em))
+        })
+        .collect();
+    let Some((first, first_pitch_em)) = faces.first().copied() else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let Some(&(second, second_pitch_em)) = faces
+        .iter()
+        .find(|(_, pitch_em)| (pitch_em - first_pitch_em).abs() > 1e-6)
+    else {
+        return; // this machine has no two faces with distinguishable lines
+    };
+    let font_size: f64 = 11.0;
+    for (family, pitch_em) in [(first, first_pitch_em), (second, second_pitch_em)] {
+        let table = Table {
+            rows: vec![blank_mark_row(family, font_size)],
+            column_widths: vec![150.0],
+            ..Table::default()
+        };
+        let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+        let result = generate_typst(&doc).unwrap().source;
+        assert!(
+            result.contains(&format!(
+                "#box(width: 0pt, height: {}pt)",
+                format_f64(pitch_em * font_size)
+            )),
+            "the blank line must take {family}'s own line: {result}"
+        );
+    }
+}
+
+/// The blank row and a text row of the same face and size take the same line,
+/// which is the whole observable claim of issue #1700: Word prints both at
+/// 13.200pt. The text row states its box as `top-edge`/`bottom-edge` over the
+/// font's em, the blank row as an absolute strut, so this compares the two
+/// models rather than two copies of one.
+#[test]
+fn a_blank_row_takes_the_same_line_as_a_text_row() {
+    let Some((ascender_em, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 11.0;
+    let text_row = TableRow {
+        minimum_height: None,
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "a".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                    inline_box: None,
+                }],
+            })],
+            ..TableCell::default()
+        }],
+        height: None,
+    };
+    let table = Table {
+        rows: vec![
+            text_row.clone(),
+            blank_mark_row("Libertinus Serif", font_size),
+            text_row,
+        ],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result
+            .matches(&format!(
+                "#set text(top-edge: {}em, bottom-edge: -{}em)",
+                format_f64(ascender_em),
+                format_f64(word_pitch_em - ascender_em)
+            ))
+            .count(),
+        2,
+        "both text rows keep Word's hhea line box: {result}"
+    );
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * font_size)
+        )),
+        "and the blank row between them holds the same line as a strut: {result}"
+    );
+}
+
+/// A blank paragraph that *does* have a sibling paragraph in its cell keeps
+/// borrowing that sibling's runs (issue #625). The mark resolution is the
+/// fallback for a cell with nothing to borrow from, not a replacement: Word's
+/// own rule is the mark's formatting either way, but no native export here
+/// measures a document whose runs and mark disagree, so the settled path stays
+/// as it is.
+#[test]
+fn a_blank_cell_paragraph_with_a_sibling_still_borrows_it() {
+    let Some((_ascender, _descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let sibling_size: f64 = 9.5;
+    let mark_size: f64 = 24.0;
+    let cell = TableCell {
+        content: vec![
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle::default(),
+                runs: vec![Run {
+                    text: "Hanbit Tech Co., Ltd.".to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(sibling_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                    inline_box: None,
+                }],
+            }),
+            Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    paragraph_mark_text_style: Some(Box::new(TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(mark_size),
+                        ..TextStyle::default()
+                    })),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![],
+            }),
+        ],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![225.65],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * sibling_size)
+        )),
+        "the sibling's line stays the spacer's height: {result}"
+    );
+    assert!(
+        !result.contains(&format!(
+            "#box(width: 0pt, height: {}pt)",
+            format_f64(word_pitch_em * mark_size)
+        )),
+        "the mark's own size must not take over a cell that has a sibling: {result}"
+    );
+}
+
+/// A blank cell whose mark resolves no formatting at all — every PowerPoint
+/// and Excel blank cell, and any DOCX paragraph whose face does not resolve —
+/// keeps the pre-fix emission, so nothing outside Word's flow gains a strut it
+/// was never measured to have.
+#[test]
+fn a_blank_cell_without_a_resolved_mark_emits_no_strut() {
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Paragraph(Paragraph {
+                    style: ParagraphStyle::default(),
+                    runs: vec![],
+                })],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![150.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert!(
+        !result.contains("#box(width: 0pt, height:"),
+        "a mark that resolves nothing must not invent a line: {result}"
+    );
+}
+
+/// One row of a single cell holding nothing but a run-less paragraph whose
+/// mark resolves to `family` at `font_size`.
+fn blank_mark_row(family: &str, font_size: f64) -> TableRow {
+    TableRow {
+        minimum_height: None,
+        cells: vec![TableCell {
+            content: vec![Block::Paragraph(Paragraph {
+                style: ParagraphStyle {
+                    paragraph_mark_text_style: Some(Box::new(TextStyle {
+                        font_family: Some(family.to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    })),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![],
+            })],
+            ..TableCell::default()
+        }],
+        height: None,
+    }
+}
