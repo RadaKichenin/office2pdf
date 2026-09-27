@@ -3702,3 +3702,172 @@ fn test_centred_sheet_line_seat_is_scoped_to_fitting_single_lines() {
         "Excel's whole-point seat must not leak into Word tables: {word_source}"
     );
 }
+
+// ── Page breaks inside a multi-column section (issue #1695) ───────
+
+/// Generate one flow page and report both its markup and the page count Typst
+/// lays it out to.
+///
+/// The page count is the observable these tests assert on: Typst refuses
+/// `#pagebreak()` below the top level, so a section that emits one inside its
+/// column wrapper fails to compile at all rather than producing a wrong count.
+#[cfg(not(target_arch = "wasm32"))]
+fn column_section_layout(content: Vec<Block>, columns: Option<ColumnLayout>) -> (String, u32) {
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content,
+        header: None,
+        footer: None,
+        columns,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+    let output = generate_typst(&doc).expect("codegen must succeed");
+    let pages =
+        crate::render::pdf::compile_page_count_with_fonts(&output.source, &output.images, &[], &[])
+            .unwrap_or_else(|error| {
+                panic!(
+                    "a page break in a column section must compile: {error}\n{}",
+                    output.source
+                )
+            });
+    (output.source, pages)
+}
+
+/// Two equal columns, and the same content laid out without any column
+/// section: the break has to move the page in both.
+#[cfg(not(target_arch = "wasm32"))]
+const EQUAL_TWO_COLUMNS: ColumnLayout = ColumnLayout {
+    num_columns: 2,
+    spacing: 36.0,
+    column_widths: None,
+};
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_page_break_inside_equal_columns_breaks_the_page() {
+    let content = || {
+        vec![
+            make_paragraph("Before the break"),
+            Block::PageBreak,
+            make_paragraph("After the break"),
+        ]
+    };
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "a page break has to move the page inside a column section exactly as it \
+         does outside one: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        2,
+        "each page's slice of the section keeps the section's columns: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_page_break_inside_unequal_columns_breaks_the_page() {
+    let unequal = ColumnLayout {
+        num_columns: 2,
+        spacing: 36.0,
+        column_widths: Some(vec![300.0, 150.0]),
+    };
+    // A column break moves to the next column and a page break to the next
+    // page, so this section spans exactly two pages. The plain-page baseline the
+    // other cases compare against cannot be used here: outside a column section
+    // Typst's `#colbreak()` breaks the page, so the same blocks would count a
+    // third page for a reason that has nothing to do with the page break.
+    let (source, columned_pages) = column_section_layout(
+        vec![
+            make_paragraph("Left column"),
+            Block::ColumnBreak,
+            make_paragraph("Right column"),
+            Block::PageBreak,
+            make_paragraph("Next page, left column"),
+        ],
+        Some(unequal),
+    );
+
+    assert_eq!(
+        columned_pages, 2,
+        "the page break is the only thing that moves the page: {source}"
+    );
+    assert_eq!(
+        source.matches("#grid(columns: (300pt, 150pt)").count(),
+        2,
+        "the declared column widths apply again after the break: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_leading_page_break_inside_columns_matches_the_plain_page() {
+    let content = || vec![Block::PageBreak, make_paragraph("First visible line")];
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "a break before any content behaves as it does outside a section: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        1,
+        "the empty slice before the break needs no column wrapper: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_trailing_page_break_inside_columns_matches_the_plain_page() {
+    let content = || vec![make_paragraph("Last visible line"), Block::PageBreak];
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "a break after the last block behaves as it does outside a section: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        1,
+        "the empty slice after the break needs no column wrapper: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_consecutive_page_breaks_inside_columns_match_the_plain_page() {
+    let content = || {
+        vec![
+            make_paragraph("First"),
+            Block::PageBreak,
+            Block::PageBreak,
+            make_paragraph("Fourth"),
+        ]
+    };
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "two breaks in a row skip a page inside a section too: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        2,
+        "only the two non-empty slices carry a column wrapper: {source}"
+    );
+}
