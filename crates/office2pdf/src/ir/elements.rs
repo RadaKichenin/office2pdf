@@ -1166,6 +1166,32 @@ pub struct FloatingTextBox {
     pub offset_y: f64,
 }
 
+/// A DrawingML text box anchored inline in a paragraph (`wp:inline`).
+///
+/// Word lays this out as one item on the anchor paragraph's line: the line
+/// grows to hold the box, the box's bottom edge sits on the baseline, and the
+/// box's own paragraphs flow inside it. Emitting those paragraphs into the
+/// body instead gives the box's text a line of its own, draws no outline, and
+/// moves every line below the anchor (issue #1690), so the box travels with
+/// the run it was anchored to.
+#[derive(Debug, Clone)]
+pub struct InlineTextBox {
+    /// The box's own paragraphs. Typed as paragraphs rather than blocks so the
+    /// renderer has no unreachable case to drop silently: the parser keeps a box
+    /// holding anything else on the flattened path instead.
+    pub content: Vec<Paragraph>,
+    /// On-page width in points, from `wp:extent`.
+    pub width: f64,
+    /// On-page height in points, from `wp:extent`.
+    pub height: f64,
+    /// Content insets from `wps:bodyPr` (`lIns`/`tIns`/`rIns`/`bIns`).
+    pub padding: Insets,
+    /// Outline from the shape's `a:ln`.
+    pub stroke: Option<BorderSide>,
+    /// Background fill from the shape's `a:solidFill`.
+    pub fill: Option<Color>,
+}
+
 /// A floating geometric shape (rectangle, line/arrow, ellipse, …) positioned
 /// with an anchor offset. Used for DrawingML word-processing shapes (`wps:wsp`)
 /// that carry geometry but no text box — these have no docx-rs representation
@@ -1282,6 +1308,9 @@ pub struct Run {
     /// Optional footnote/endnote content. When present, a footnote marker is emitted and
     /// the content is rendered at the bottom of the page.
     pub footnote: Option<Vec<Run>>,
+    /// A DrawingML text box anchored inline at this run (`wp:inline`). Boxed
+    /// because every run carries the field while almost none carries a box.
+    pub inline_box: Option<Box<InlineTextBox>>,
 }
 
 /// A table.

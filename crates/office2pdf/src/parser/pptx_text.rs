@@ -1126,6 +1126,7 @@ pub(super) fn push_pptx_soft_line_break(runs: &mut Vec<Run>, paragraph_default: 
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         },
     );
 }
@@ -1421,6 +1422,7 @@ fn preserve_blank_pptx_list_item(entry: &mut PptxParagraphEntry) {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     });
 }
 

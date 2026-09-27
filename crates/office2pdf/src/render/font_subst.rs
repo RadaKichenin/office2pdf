@@ -1526,8 +1526,20 @@ fn visit_paragraph_fonts(
     visitor: &mut impl FnMut(&str, &str) -> bool,
 ) -> bool {
     paragraph.runs.iter().all(|run| {
-        declared_family(run.style.font_family.as_deref())
+        if !declared_family(run.style.font_family.as_deref())
             .is_none_or(|family| visitor(family, &run.text))
+        {
+            return false;
+        }
+        // An inline text box's paragraphs declare their own faces. They are not
+        // in the body flow, so nothing else reaches them and the box's text
+        // would fall back to the engine default (issue #1690).
+        run.inline_box.as_ref().is_none_or(|inline_box| {
+            inline_box
+                .content
+                .iter()
+                .all(|paragraph| visit_paragraph_fonts(paragraph, visitor))
+        })
     })
 }
 

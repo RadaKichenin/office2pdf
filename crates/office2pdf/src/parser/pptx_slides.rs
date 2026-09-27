@@ -3098,6 +3098,7 @@ impl<'a> SlideXmlParser<'a> {
                             style: self.run_style.clone(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     );
                 }

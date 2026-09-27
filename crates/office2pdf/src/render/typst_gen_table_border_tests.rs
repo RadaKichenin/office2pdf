@@ -10,6 +10,7 @@ fn test_table_all_borders() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -80,6 +81,7 @@ fn test_table_dashed_border_codegen() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -133,6 +135,7 @@ fn test_table_double_borders_render_two_oriented_rules() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -351,6 +354,7 @@ fn test_solid_border_no_dash_param() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -409,6 +413,7 @@ fn bordered_text_cell(text: &str, border: CellBorder) -> TableCell {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(border),
@@ -926,6 +931,7 @@ fn test_borderless_word_cells_share_the_writer_x_origin_seat() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             ..TableCell::default()
@@ -1181,6 +1187,7 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
         &ParagraphStyle::default(),
         None,
@@ -1210,6 +1217,7 @@ fn test_boundary_band_auto_row_verticals_paint_concrete_twin_bands() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -1569,6 +1577,7 @@ fn plain_text_cell(text: &str) -> TableCell {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1845,6 +1854,7 @@ fn test_print_heading_boundary_keeps_both_coincident_bands() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         // Both rows declare the same rule at the boundary between them.
@@ -1935,6 +1945,7 @@ fn a_centered_merged_fill_uses_the_excel_background_band_for_its_text_seat() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             background,
@@ -2009,6 +2020,7 @@ fn a_wrapped_centered_merged_fill_keeps_its_nominal_track_origin() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             background,

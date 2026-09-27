@@ -64,6 +64,7 @@ fn test_generate_bold_text() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -86,6 +87,7 @@ fn test_generate_italic_text() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -108,6 +110,7 @@ fn test_generate_underline_text() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -137,6 +140,7 @@ fn test_generate_font_size() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -158,6 +162,7 @@ fn test_generate_font_color() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -182,6 +187,7 @@ fn test_generate_combined_text_styles() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -204,6 +210,7 @@ fn test_generate_alignment_center() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -225,6 +232,7 @@ fn test_generate_alignment_right() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -246,6 +254,7 @@ fn test_generate_alignment_justify() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -284,6 +293,7 @@ fn justified_paragraph_document(text: &str, mode: WordCompatibilityMode) -> Docu
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     doc.styles.word_compatibility_mode = Some(mode);
@@ -375,6 +385,7 @@ fn test_punctuation_never_hangs_regardless_of_alignment() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -402,6 +413,7 @@ fn test_generate_line_spacing_proportional() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -423,6 +435,7 @@ fn test_generate_line_spacing_exact() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -448,6 +461,7 @@ fn test_generate_word_default_line_box() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let source = generate_typst(&doc).unwrap().source;
@@ -478,6 +492,7 @@ fn test_generate_letter_spacing() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -499,6 +514,7 @@ fn test_generate_letter_spacing_negative() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -517,6 +533,7 @@ fn test_generate_tab_uses_measured_default_stops() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -563,6 +580,7 @@ fn test_generate_tab_uses_next_explicit_stop_and_alignment() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -598,6 +616,7 @@ fn test_generate_tab_falls_back_to_next_default_stop_after_explicit_tabs() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -623,6 +642,7 @@ fn test_generate_tab_uses_paragraph_default_stop_interval() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -651,6 +671,7 @@ fn test_generate_tab_leader_uses_repeat_fill() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -678,6 +699,7 @@ fn test_generate_decimal_tab_uses_decimal_separator_not_thousands_separator() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -705,6 +727,7 @@ fn test_generate_decimal_tab_handles_comma_decimal_locale() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -739,6 +762,7 @@ fn test_generate_paragraph_with_multiple_runs() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "bold".to_string(),
@@ -748,12 +772,14 @@ fn test_generate_paragraph_with_multiple_runs() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: " normal again".to_string(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -798,6 +824,7 @@ fn test_centered_paragraph_with_spacing_keeps_full_width_block() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -837,6 +864,7 @@ fn test_document_grid_pitch_snaps_line_height() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })]) {
         Page::Flow(flow) => flow,
@@ -876,6 +904,7 @@ fn test_latin_paragraph_ignores_document_grid() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })]) {
         Page::Flow(flow) => flow,
@@ -916,6 +945,7 @@ fn test_no_document_grid_uses_word_single_spacing() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -946,6 +976,7 @@ fn test_generate_paragraph_with_background_shading() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -982,6 +1013,7 @@ fn test_generate_paragraph_with_bottom_border_rule() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1021,6 +1053,7 @@ fn test_generate_paragraph_with_double_bottom_border() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1043,6 +1076,7 @@ fn make_tab_paragraph() -> Block {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -1109,6 +1143,7 @@ fn test_latin_paragraph_space_after_stays_raw_gap() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1151,6 +1186,7 @@ fn test_consecutive_paragraphs_each_advance_by_the_full_font_line() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })
     };
@@ -1207,6 +1243,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "--font-path".to_string(),
@@ -1217,6 +1254,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "\nfiles. Missing fonts fall back to substitutes.".to_string(),
@@ -1227,6 +1265,7 @@ fn a_mixed_font_line_uses_the_declared_runs_deeper_descent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -1288,6 +1327,7 @@ fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "\nsecond Courier run ".to_string(),
@@ -1298,6 +1338,7 @@ fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "with taller Arial ascent".to_string(),
@@ -1308,6 +1349,7 @@ fn a_mixed_font_line_uses_the_following_lines_taller_ascent() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -1350,6 +1392,7 @@ fn uniform_font_runs_keep_only_the_paragraph_level_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "second Arial run".to_string(),
@@ -1360,6 +1403,7 @@ fn uniform_font_runs_keep_only_the_paragraph_level_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -1413,6 +1457,7 @@ fn test_grid_paragraph_space_after_stays_raw_gap() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })]) {
         Page::Flow(flow) => flow,
@@ -1444,6 +1489,7 @@ fn test_paragraph_left_indent_offsets_the_text_column() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1466,6 +1512,7 @@ fn test_paragraph_right_indent_narrows_the_text_column() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1494,6 +1541,7 @@ fn test_indented_paragraph_shading_starts_at_the_indent() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1523,6 +1571,7 @@ fn test_unindented_paragraph_keeps_a_single_block() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1594,6 +1643,7 @@ fn line_box_for_text_in_context(
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     emitted_line_box_em(
@@ -1785,6 +1835,7 @@ fn a_header_or_footer_east_asian_line_leaves_the_line_gap_out() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }];
     let bare_line_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + NOTO_SANS_CJK_DESCENDER_EM;
     let context = noto_sans_cjk_context_with_line_gap(300);
@@ -1838,6 +1889,7 @@ fn bordered_paragraph_source(width: f64, style: BorderLineStyle, space: f64) -> 
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     generate_typst(&doc).unwrap().source
@@ -1932,6 +1984,7 @@ fn test_generate_heading_with_style_border_rule() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     });
     let heading = Block::Paragraph(Paragraph {
@@ -1956,6 +2009,7 @@ fn test_generate_heading_with_style_border_rule() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     });
     let doc = make_doc(vec![make_flow_page(vec![body, heading])]);
@@ -1990,6 +2044,7 @@ fn heading_source(style: ParagraphStyle) -> String {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
@@ -2082,6 +2137,7 @@ fn theme_heading_source(family: &str) -> String {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
@@ -2130,6 +2186,7 @@ fn test_generate_undecorated_heading_keeps_its_bare_form() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2158,6 +2215,7 @@ fn placement_probe_paragraph(style: ParagraphStyle, text: &str) -> Block {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -2303,6 +2361,7 @@ fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterP
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }));
         }
         elements.push(HFInline::Run(Run {
@@ -2310,6 +2369,7 @@ fn running_head(texts: &[&str], stops: Vec<TabStop>) -> crate::ir::HeaderFooterP
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }));
     }
     crate::ir::HeaderFooterParagraph {
@@ -2347,6 +2407,7 @@ fn tabbed_body_paragraph(texts: &[&str], stops: Option<Vec<TabStop>>) -> Block {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -2466,6 +2527,7 @@ fn test_letter_spacing_disables_ligatures() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2486,6 +2548,7 @@ fn test_untracked_text_keeps_ligatures() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2508,6 +2571,7 @@ fn test_zero_letter_spacing_keeps_ligatures() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2567,6 +2631,7 @@ fn test_letter_spacing_disables_kerning() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2587,6 +2652,7 @@ fn test_untracked_text_keeps_kerning() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -2610,6 +2676,7 @@ fn test_zero_letter_spacing_keeps_kerning() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;

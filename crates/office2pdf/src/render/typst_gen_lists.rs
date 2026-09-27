@@ -1376,6 +1376,7 @@ fn prepend_marker_run(
         style: marker_style,
         href: None,
         footnote: None,
+        inline_box: None,
     });
     combined_runs.extend_from_slice(runs);
     combined_runs
@@ -1438,6 +1439,7 @@ fn fixed_text_list_marker_run(
         style: marker_style,
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 

@@ -22,6 +22,7 @@ fn test_generate_flow_page_with_text_header() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -63,6 +64,7 @@ fn test_generate_flow_page_with_page_number_footer() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(TextStyle::default()),
                 ],
@@ -113,6 +115,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PositionedTab(PositionedTab {
                         alignment: PositionedTabAlignment::Right,
@@ -124,6 +127,7 @@ fn test_generate_footer_with_compound_border_and_right_positioned_tab() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(TextStyle::default()),
                 ],
@@ -180,6 +184,7 @@ fn a_page_anchored_footer_frame_paints_below_body_content() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -305,6 +310,7 @@ fn test_generate_flow_page_with_header_and_footer() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -427,6 +433,7 @@ fn test_fixed_page_table_element() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()
@@ -439,6 +446,7 @@ fn test_fixed_page_table_element() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })],
                     ..TableCell::default()
@@ -489,6 +497,7 @@ fn test_hyperlink_generates_typst_link() {
             style: TextStyle::default(),
             href: Some("https://example.com".to_string()),
             footnote: None,
+            inline_box: None,
         }],
     })])]);
 
@@ -512,6 +521,7 @@ fn test_hyperlink_with_styled_text() {
             },
             href: Some("https://example.com".to_string()),
             footnote: None,
+            inline_box: None,
         }],
     })])]);
 
@@ -530,18 +540,21 @@ fn test_hyperlink_mixed_with_plain_text() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "Rust".to_string(),
                 style: TextStyle::default(),
                 href: Some("https://rust-lang.org".to_string()),
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: " for more.".to_string(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -565,6 +578,7 @@ fn test_hyperlink_url_with_special_chars_escaped() {
             style: TextStyle::default(),
             href: Some("https://example.com/path?q=1&r=2".to_string()),
             footnote: None,
+            inline_box: None,
         }],
     })])]);
 
@@ -583,6 +597,7 @@ fn note_run(text: &str) -> Run {
         style: TextStyle::default(),
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -596,12 +611,14 @@ fn test_footnote_generates_typst_footnote() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: String::new(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: Some(vec![note_run("This is a footnote.")]),
+                inline_box: None,
             },
         ],
     })])]);
@@ -619,6 +636,7 @@ fn test_footnote_with_special_chars() {
             style: TextStyle::default(),
             href: None,
             footnote: Some(vec![note_run("Note with #special *chars*")]),
+            inline_box: None,
         }],
     })])]);
 
@@ -651,6 +669,7 @@ fn test_table_page_with_header() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -693,6 +712,7 @@ fn test_table_page_with_page_number_footer() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(TextStyle::default()),
                     HFInline::Run(Run {
@@ -700,6 +720,7 @@ fn test_table_page_with_page_number_footer() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::TotalPages(TextStyle::default()),
                 ],
@@ -760,6 +781,7 @@ fn hf_run(text: &str, family: Option<&str>, size_pt: f64) -> Run {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -2316,6 +2338,7 @@ fn test_generate_header_with_bottom_border_draws_rule_below_text() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -2406,6 +2429,7 @@ fn a_right_aligned_header_does_not_drag_its_rule_left() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -2470,6 +2494,7 @@ fn test_generate_header_with_top_and_bottom_borders_draws_both_rules() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: rule(1.0),
@@ -2527,6 +2552,7 @@ fn test_flow_page_footer_is_pinned_to_the_word_edge_distance() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2590,6 +2616,7 @@ fn test_flow_page_footer_without_edge_distance_keeps_default_placement() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2637,6 +2664,7 @@ fn test_flow_page_footer_distance_beyond_margin_falls_back() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2758,6 +2786,7 @@ fn test_generate_header_border_uses_declared_pbdr_space() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -2822,6 +2851,7 @@ fn a_header_border_without_space_leaves_no_gap() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: Some(CellBorder {
                     top: None,
@@ -2889,6 +2919,7 @@ fn test_flow_page_header_is_pinned_to_the_word_edge_distance() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2943,6 +2974,7 @@ fn test_flow_page_header_without_edge_distance_keeps_default_placement() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -3043,6 +3075,7 @@ fn header_text_paragraph(text: &str, style: TextStyle) -> crate::ir::HeaderFoote
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         })],
         border: None,
         border_space: None,
@@ -3689,6 +3722,7 @@ fn test_page_number_field_uses_its_run_style() {
                         style: field_style.clone(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }),
                     HFInline::PageNumber(field_style.clone()),
                 ],
@@ -3826,6 +3860,7 @@ fn test_contents_block_emits_an_outline_at_its_declared_depth() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
@@ -3865,6 +3900,7 @@ fn test_caption_list_queries_the_captions_it_collects() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             },
         }),
@@ -3942,6 +3978,7 @@ fn test_contents_entries_number_in_the_target_sections_format() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }),
         ],
@@ -3970,6 +4007,7 @@ fn test_contents_entries_number_in_the_target_sections_format() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         header: None,
@@ -4034,6 +4072,7 @@ fn test_caption_list_numbers_in_the_target_sections_format() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 },
             }),
@@ -4259,6 +4298,7 @@ fn a_header_rule_is_spaced_from_the_line_box_bottom() {
         style: TextStyle::default(),
         href: None,
         footnote: None,
+        inline_box: None,
     };
     let paragraph = HeaderFooterParagraph {
         style: ParagraphStyle::default(),
@@ -4438,6 +4478,7 @@ fn a_header_line_advances_by_words_pitch() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }];
     let Some(expected) = crate::render::typst_gen::text::word_hf_line_leading_pt(&runs, 0.0) else {
         return; // the face is unavailable on this runner
@@ -4618,6 +4659,7 @@ fn a_non_wrapping_anchored_frame_sizes_to_its_content() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     })],
                     border: None,
                     border_space: None,
@@ -4676,6 +4718,7 @@ fn a_bottom_seated_anchored_frame_keeps_one_em_above_its_bottom_inset() {
                         style: declared_size.map_or_else(TextStyle::default, arial),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     })],
                     border: None,
                     border_space: None,
@@ -4742,6 +4785,7 @@ fn a_page_left_aligned_wps_footer_uses_the_writer_text_origin_seat() {
                     style: arial(8.0),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -4969,6 +5013,7 @@ fn test_centered_sheet_moves_its_drawings_with_the_grid() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         fill: None,

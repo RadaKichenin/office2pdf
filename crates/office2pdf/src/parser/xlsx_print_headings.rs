@@ -115,6 +115,7 @@ fn heading_cell(text: String, text_style: TextStyle, border: CellBorder) -> Tabl
                 style: text_style,
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(border),

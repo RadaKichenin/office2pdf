@@ -1287,6 +1287,7 @@ pub(super) fn parse_drawing_text_boxes(
                             style,
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         });
                     }
                 } else if let (Some(is_from), Some(field)) = (corner_target, current_field)

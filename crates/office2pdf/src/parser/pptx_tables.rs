@@ -667,6 +667,7 @@ impl<'a> PptxTableParser<'a> {
                     style,
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
             );
         }

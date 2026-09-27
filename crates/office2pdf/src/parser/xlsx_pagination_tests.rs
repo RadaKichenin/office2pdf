@@ -15,6 +15,7 @@ fn cell(text: &str) -> TableCell {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         col_span: 1,
@@ -1159,6 +1160,7 @@ fn a_scaled_sheet_scales_its_footer_with_it() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         },
         Run {
             text: " Sensitivity: Internal".to_string(),
@@ -1168,6 +1170,7 @@ fn a_scaled_sheet_scales_its_footer_with_it() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         },
     ]));
     let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
@@ -1212,6 +1215,7 @@ fn a_scaled_sheet_that_opts_out_leaves_its_footer_coordinate_box_alone() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }]));
 
     let pages = split_sheet_page_by_width(page, None, fit_to_width(1), false);
@@ -1247,6 +1251,7 @@ fn an_unscaled_sheet_leaves_its_footer_alone() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }]));
     let pages = split_sheet_page_by_width(page, None, fit_to_width(1), true);
 

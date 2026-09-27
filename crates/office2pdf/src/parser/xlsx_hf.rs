@@ -457,6 +457,7 @@ fn build_segment_elements(elements: &mut Vec<HFInline>, section: &str, style: &T
                         style: style.clone(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }));
                 }
                 elements.push(HFInline::PageNumber(style.clone()));
@@ -469,6 +470,7 @@ fn build_segment_elements(elements: &mut Vec<HFInline>, section: &str, style: &T
                         style: style.clone(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }));
                 }
                 elements.push(HFInline::TotalPages(style.clone()));
@@ -485,6 +487,7 @@ fn build_segment_elements(elements: &mut Vec<HFInline>, section: &str, style: &T
             style: style.clone(),
             href: None,
             footnote: None,
+            inline_box: None,
         }));
     }
 }

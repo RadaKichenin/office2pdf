@@ -15,6 +15,7 @@ pub(super) fn make_simple_document(text: &str) -> Document {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             header: None,

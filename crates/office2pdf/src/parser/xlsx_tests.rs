@@ -483,6 +483,7 @@ fn test_sheet_line_extent_prices_every_glyph_on_a_whole_point() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }]
     }
 

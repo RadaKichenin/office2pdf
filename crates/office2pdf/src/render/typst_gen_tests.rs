@@ -41,6 +41,7 @@ fn make_paragraph(text: &str) -> Block {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -155,6 +156,7 @@ fn make_text_box(x: f64, y: f64, w: f64, h: f64, text: &str) -> FixedElement {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             padding: Insets::default(),
@@ -300,6 +302,7 @@ fn make_simple_table(rows: Vec<Vec<&str>>) -> Table {
                                 style: TextStyle::default(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         })],
                         ..TableCell::default()
@@ -348,6 +351,7 @@ fn test_generate_run_superscript() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -369,6 +373,7 @@ fn test_generate_run_subscript() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -392,6 +397,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "1".to_string(),
@@ -402,6 +408,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "B".to_string(),
@@ -411,6 +418,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "2".to_string(),
@@ -421,6 +429,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -466,6 +475,7 @@ fn test_generate_run_small_caps() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -487,6 +497,7 @@ fn test_generate_run_all_caps() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -509,6 +520,7 @@ fn test_generate_run_superscript_with_bold() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -530,6 +542,7 @@ fn test_generate_run_highlight_yellow() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -594,6 +607,7 @@ fn generated_source_for_run_style(style: TextStyle) -> String {
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     generate_typst(&doc).unwrap().source
@@ -612,6 +626,7 @@ fn test_table_cell_vertical_align_center() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Center),
@@ -643,6 +658,7 @@ fn test_generate_run_highlight_with_bold() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -669,6 +685,7 @@ fn test_table_cell_vertical_align_bottom() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Bottom),
@@ -776,6 +793,7 @@ fn test_inferred_weight_not_emitted_when_font_unavailable() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst_with_options_and_font_context(
@@ -807,6 +825,7 @@ fn test_inferred_weight_emitted_when_font_available_via_alias() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst_with_options_and_font_context(
@@ -839,6 +858,7 @@ fn test_explicit_bold_still_emitted_when_font_unavailable() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst_with_options_and_font_context(
@@ -936,6 +956,7 @@ fn a_latin_line_set_in_a_cjk_face_keeps_the_east_asian_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         emitted_line_box_em(&generate_typst(&doc).unwrap().source)

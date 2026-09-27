@@ -324,6 +324,7 @@ impl AnchorState {
                     style,
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 });
             }
             return;

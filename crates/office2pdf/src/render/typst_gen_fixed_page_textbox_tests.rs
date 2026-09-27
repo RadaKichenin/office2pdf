@@ -22,6 +22,7 @@ fn wrapped_mixed_sizes_round_each_physical_lines_own_seat() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "by Grade Level ".into(),
@@ -33,6 +34,7 @@ fn wrapped_mixed_sizes_round_each_physical_lines_own_seat() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
             ];
             if small_first {
@@ -113,6 +115,7 @@ fn wrapped_slide_lines_share_the_story_baseline_grid() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })
                     .collect();
@@ -203,6 +206,7 @@ fn top_anchored_slide_text_preserves_fractional_origin() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })
                     .collect();
@@ -334,6 +338,7 @@ fn compile_paragraph_mark_probe(
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     };
     let document = make_doc(vec![make_fixed_page(
@@ -498,6 +503,7 @@ fn a_subscript_is_not_a_separate_powerpoint_line() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         };
         normal.style.font_family = Some("Arial".to_string());
         normal.style.font_size = Some(17.0);
@@ -589,6 +595,7 @@ fn test_fixed_page_text_box_uses_padding_and_center_vertical_align() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -626,6 +633,7 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     }),
                     Block::Paragraph(Paragraph {
@@ -635,6 +643,7 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     }),
                 ],
@@ -691,6 +700,7 @@ fn test_fixed_page_bulletless_paragraph_keeps_resolved_hanging_indent() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -740,6 +750,7 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -759,6 +770,7 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -841,6 +853,7 @@ fn test_fixed_page_empty_pptx_list_paragraph_keeps_line_without_marker_or_number
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     };
     let doc = make_doc(vec![make_fixed_page(
@@ -934,6 +947,7 @@ fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -950,6 +964,7 @@ fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1023,6 +1038,7 @@ fn test_fixed_page_text_box_compact_list_preserves_hanging_indent() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1096,6 +1112,7 @@ fn test_fixed_page_text_box_compact_list_preserves_marker_origin_offset() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1180,6 +1197,7 @@ fn test_fixed_page_text_box_compact_bulleted_list_uses_custom_marker_style() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1258,6 +1276,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1279,6 +1298,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1300,6 +1320,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1374,6 +1395,7 @@ fn test_fixed_page_text_box_compact_list_preserves_soft_line_breaks() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1436,6 +1458,7 @@ fn test_fixed_page_text_box_soft_line_break_before_parenthesis_compiles() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1485,12 +1508,14 @@ fn test_fixed_page_text_box_grid_word_before_parenthesised_run_compiles() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "(2) 둘째 줄".to_string(),
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -1549,6 +1574,7 @@ fn test_fixed_page_text_box_with_solid_fill() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1594,6 +1620,7 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1652,6 +1679,7 @@ fn test_fixed_page_text_box_with_fill_and_opacity() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1697,6 +1725,7 @@ fn test_fixed_page_text_box_with_polygon_shape_kind() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets {
@@ -1803,6 +1832,7 @@ fn test_fixed_page_text_box_no_wrap_centered_text_uses_inline_box() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1863,6 +1893,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_latin_cjk_searchable() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1913,6 +1944,7 @@ fn test_fixed_page_text_box_no_wrap_still_strips_the_kinsoku_marker() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1965,6 +1997,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_cjk_title_extractable() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2031,6 +2064,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_latin_text_extractable() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2088,6 +2122,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_script_titles_unbroken() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2148,6 +2183,7 @@ fn test_fixed_page_text_box_no_wrap_preserves_mixed_script_titles_across_runs() 
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: " 기술부문".to_string(),
@@ -2157,6 +2193,7 @@ fn test_fixed_page_text_box_no_wrap_preserves_mixed_script_titles_across_runs() 
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2213,6 +2250,7 @@ fn test_fixed_page_text_box_auto_fit_short_text_uses_scale_to_fit() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2282,6 +2320,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "목 차 ".to_string(),
@@ -2291,6 +2330,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "-".to_string(),
@@ -2300,6 +2340,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2363,6 +2404,7 @@ fn test_fixed_page_text_box_mixed_font_header_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "| 클라우드 기반 업무 시스템 연동".to_string(),
@@ -2372,6 +2414,7 @@ fn test_fixed_page_text_box_mixed_font_header_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2428,6 +2471,7 @@ fn test_fixed_page_text_box_mixed_font_header_with_tight_leading_uses_scale_to_f
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "|  클라우드 기반 업무 시스템 연동".to_string(),
@@ -2437,6 +2481,7 @@ fn test_fixed_page_text_box_mixed_font_header_with_tight_leading_uses_scale_to_f
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2499,6 +2544,7 @@ fn test_fixed_page_text_box_wrapped_centered_paragraph_scales_to_fit_height() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets {
@@ -2579,6 +2625,7 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -2599,6 +2646,7 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -2692,6 +2740,7 @@ fn slide_text_box_source(family: &str, size: f64, style: ParagraphStyle) -> Opti
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -3484,6 +3533,7 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })
             })
@@ -3565,6 +3615,7 @@ fn consecutive_fractional_slide_paragraph_tops_snap_within_story() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })
         })
@@ -3688,6 +3739,7 @@ fn flat_slide_list_with_different_baseline_seats_declines_a_shared_snap() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -3982,6 +4034,7 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Small\u{000B}".to_string(),
@@ -3992,6 +4045,7 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Large".to_string(),
@@ -4002,6 +4056,7 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4087,6 +4142,7 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Small".to_string(),
@@ -4097,6 +4153,7 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4161,6 +4218,7 @@ fn powerpoint_hard_break_keeps_normal_edges_when_the_segment_soft_wraps() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Small".to_string(),
@@ -4171,6 +4229,7 @@ fn powerpoint_hard_break_keeps_normal_edges_when_the_segment_soft_wraps() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4251,6 +4310,7 @@ fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "by Grade Level".to_string(),
@@ -4262,6 +4322,7 @@ fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4361,6 +4422,7 @@ fn slide_latin_math_symbols_keep_powerpoints_advance_grid() {
                                 style: style.clone(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             },
                             Run {
                                 text: "END".to_string(),
@@ -4370,6 +4432,7 @@ fn slide_latin_math_symbols_keep_powerpoints_advance_grid() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             },
                         ],
                     })],
@@ -4420,6 +4483,7 @@ fn slide_latin_math_symbols_preserve_word_and_hyphen_breaks() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
             )],
@@ -4492,6 +4556,7 @@ fn slide_text_wraps_on_powerpoints_one_eighth_point_advance_grid() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -4571,6 +4636,7 @@ fn a_short_box_without_autofit_does_not_scale_its_text() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -4636,6 +4702,7 @@ fn tracked_slide_line_source(
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -4760,6 +4827,7 @@ fn tracked_two_line_title_source(
         },
         href: None,
         footnote: None,
+        inline_box: None,
     };
     let paragraph = |runs: Vec<Run>| {
         Block::Paragraph(Paragraph {
@@ -4956,6 +5024,7 @@ fn turned_slide_text_box(
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
     );
@@ -5128,6 +5197,7 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             });
         }
         runs.push(Run {
@@ -5139,6 +5209,7 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
             },
             href: None,
             footnote: None,
+            inline_box: None,
         });
     }
 
@@ -5301,6 +5372,7 @@ fn a_zero_baseline_shift_keeps_wrapped_lines_on_the_story_grid() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })
             })

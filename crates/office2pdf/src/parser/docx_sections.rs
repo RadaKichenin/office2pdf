@@ -1457,6 +1457,7 @@ fn extract_hf_run_elements(
                             style: style.clone(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         });
                     }
                     continue;
@@ -1467,6 +1468,7 @@ fn extract_hf_run_elements(
                         style: style.clone(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }));
                 }
             }
@@ -1476,6 +1478,7 @@ fn extract_hf_run_elements(
                     style: style.clone(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }));
             }
             docx_rs::RunChild::PTab(tab) if !*in_field => {

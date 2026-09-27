@@ -10222,6 +10222,7 @@ fn cash_flow_caption() -> crate::ir::ChartUserShape {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         text_insets: crate::ir::Insets {

@@ -11,6 +11,7 @@ pub(super) fn make_text_cell(text: &str) -> TableCell {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -95,6 +96,7 @@ fn test_table_cell_with_padding_override() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         padding: Some(Insets {
@@ -219,6 +221,7 @@ fn test_repeating_header_expands_to_cover_rowspan() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         row_span: 3,
@@ -332,6 +335,7 @@ fn test_table_with_colspan() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         col_span: 2,
@@ -372,6 +376,7 @@ fn test_table_with_rowspan() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         row_span: 2,
@@ -412,6 +417,7 @@ fn test_table_with_explicit_row_sizes_and_cell_vertical_align() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         vertical_align: Some(CellVerticalAlign::Center),
@@ -485,6 +491,7 @@ fn test_table_with_colspan_and_rowspan() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         col_span: 2,
@@ -539,6 +546,7 @@ fn test_table_with_background_color() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         background: Some(Color::new(200, 200, 200)),
@@ -595,6 +603,7 @@ fn test_table_with_cell_borders() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -645,6 +654,7 @@ fn test_table_with_partial_cell_borders_does_not_fill_missing_grid_lines() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         border: Some(CellBorder {
@@ -704,6 +714,7 @@ fn test_table_with_styled_text_in_cell() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -742,6 +753,7 @@ fn test_table_cell_paragraph_preserves_right_alignment() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -778,6 +790,7 @@ fn test_table_cell_paragraph_preserves_spacing() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -817,6 +830,7 @@ fn test_table_cell_word_line_box() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -952,6 +966,7 @@ fn test_generate_space_before_after() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -999,6 +1014,7 @@ fn bottom_aligned_spill_cell_anchors_its_line_box_at_the_bottom() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         spill_width: Some(200.0),
@@ -1070,6 +1086,7 @@ fn center_aligned_spill_cell_sizes_its_clip_box_from_its_own_font() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             spill_width: Some(200.0),
@@ -1166,6 +1183,7 @@ fn a_spill_clip_box_stops_at_the_cell_edge_its_anchor_faces() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             spill_width: Some(200.0),
@@ -1562,6 +1580,7 @@ fn test_slide_table_cell_uses_the_powerpoint_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1637,6 +1656,7 @@ fn tracked_slide_table_cell_source(
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1765,6 +1785,7 @@ fn slide_table_hard_break_clears_the_taller_line_above_it() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "Word".to_string(),
@@ -1775,6 +1796,7 @@ fn slide_table_hard_break_clears_the_taller_line_above_it() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
             ],
         })],
@@ -1864,6 +1886,7 @@ fn test_slide_table_empty_cell_blank_line_uses_the_powerpoint_line_box() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     };
     // A cell stacking a text paragraph and an empty one: the empty paragraph
     // takes its metrics from the neighbour.
@@ -1941,6 +1964,7 @@ fn spill_cell_text_is_not_wrapped_by_its_clip_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         // Far narrower than the text, which is the whole point of a spill.
@@ -2132,6 +2156,7 @@ fn test_body_table_pins_its_own_block_spacing() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
     ])]);
