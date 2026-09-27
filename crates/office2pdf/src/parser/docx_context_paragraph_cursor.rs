@@ -2,9 +2,10 @@
 //!
 //! Several paragraph properties reach the IR through a scan of the raw
 //! `document.xml` rather than through docx-rs: `w:shd`, `w:wordWrap`
-//! (issue #1041), `w:bidi` and `w:contextualSpacing` (issue #1684). Each scan
-//! records one entry per paragraph and hands them out through a cursor the
-//! converter advances once per `w:p`, so the two sequences have to agree.
+//! (issue #1041), `w:bidi`, `w:contextualSpacing` (issue #1684), and the
+//! paragraph mark's own revision state (issue #1710). Each scan records one
+//! entry per paragraph and hands them out through a cursor the converter
+//! advances once per `w:p`, so the two sequences have to agree.
 //!
 //! `document.xml` holds `w:p` elements the converter never reaches. docx-rs
 //! reads and discards `mc:Fallback`, which is where Word puts the VML copy of
@@ -13,9 +14,10 @@
 //! every later one onto its predecessor's entry, which is how a yellow `w:shd`
 //! band landed on the paragraph below the shaded one.
 //!
-//! One walk and one cursor serve all four properties so they cannot count the
-//! document differently again. `w:contextualSpacing` also needs the flows a
-//! table opens, so it keeps its own walk and shares the skip set and cursor.
+//! One walk and one cursor serve every one of those properties so they cannot
+//! count the document differently again. `w:contextualSpacing` also needs the
+//! flows a table opens, so it keeps its own walk and shares the skip set and
+//! cursor.
 
 use std::cell::Cell;
 
@@ -43,10 +45,14 @@ pub(in super::super) fn attribute_value(
 }
 
 /// Subtrees a paragraph scan walks past: those whose `w:p` never reaches
-/// paragraph conversion, plus `w:pPrChange`, whose `w:pPr` states the
-/// properties a revision replaced rather than the paragraph's current ones.
+/// paragraph conversion, plus `w:pPrChange` and `w:rPrChange`, whose `w:pPr`
+/// and `w:rPr` state the properties a revision replaced rather than the
+/// paragraph's current ones.
 pub(in super::super) fn is_skipped_subtree(local_name: &[u8]) -> bool {
-    matches!(local_name, b"Fallback" | b"pict" | b"object" | b"pPrChange")
+    matches!(
+        local_name,
+        b"Fallback" | b"pict" | b"object" | b"pPrChange" | b"rPrChange"
+    )
 }
 
 /// A `w:p` as a paragraph scan saw it.

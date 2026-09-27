@@ -2,7 +2,7 @@ use super::contexts::DocxConversionContext;
 use super::{
     Block, DrawingTextBoxInfo, FloatingImage, FloatingTextBox, HyperlinkMap, ImageData, ImageMap,
     InlineTextBox, Paragraph, StyleMap, VmlTextBoxInfo, WrapContext, convert_paragraph_blocks,
-    convert_table,
+    convert_table, withheld_paragraph_block,
 };
 use crate::parser::units::emu_to_pt;
 
@@ -261,6 +261,9 @@ pub(super) fn extract_drawing_text_box_blocks(
             }
         }
     }
+    // The box carries its own flow, so a paragraph a removed mark withheld has
+    // no later paragraph of this box to merge into (issue #1710).
+    blocks.extend(withheld_paragraph_block(ctx));
 
     if text_box.position_type != docx_rs::DrawingPositionType::Anchor {
         let (width, height) = resolve_drawing_text_box_size(text_box, &layout);
