@@ -324,6 +324,57 @@ fn test_east_asian_table_cell_snaps_to_the_document_grid() {
     );
 }
 
+/// A Word table cell takes the same gap-free East Asian line as the body: the
+/// row pitch of a Batang table would otherwise grow by 1.3 x its 152/1024
+/// line gap per line (issue #1638).
+#[test]
+fn east_asian_table_cell_leaves_the_faces_line_gap_out_of_its_box() {
+    let bare_line_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + NOTO_SANS_CJK_DESCENDER_EM;
+    let top_em: f64 = NOTO_SANS_CJK_ASCENDER_EM + 0.15 * bare_line_em;
+    let bottom_em: f64 = 1.3 * bare_line_em - top_em;
+    let cell = TableCell {
+        content: vec![Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "会议议程".to_string(),
+                style: TextStyle {
+                    font_family: Some(NOTO_SANS_CJK_SC.to_string()),
+                    font_size: Some(10.5),
+                    ..TextStyle::default()
+                },
+                href: None,
+                footnote: None,
+            }],
+        })],
+        ..TableCell::default()
+    };
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![cell],
+            height: None,
+        }],
+        column_widths: vec![200.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let context = noto_sans_cjk_context_with_line_gap(300);
+    let result: String = crate::render::typst_gen::generate_typst_with_options_and_font_context(
+        &doc,
+        &ConvertOptions::default(),
+        Some(&context),
+    )
+    .unwrap()
+    .source;
+
+    let (top, bottom) =
+        emitted_line_box_em(&result).unwrap_or_else(|| panic!("no cell line box in: {result}"));
+    assert!(
+        (top - top_em).abs() < 0.001 && (bottom - bottom_em).abs() < 0.001,
+        "the cell box should be {top_em}/{bottom_em}em, got {top}/{bottom}em: {result}"
+    );
+}
+
 #[test]
 fn test_latin_table_cell_uses_natural_line_height() {
     // Latin cells likewise fill the font's full hhea line box (Word single
@@ -1056,12 +1107,14 @@ fn cell_border_width_joins_the_inset() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         bottom: Some(BorderSide {
             width: 0.5,
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         left: None,
         right: None,
@@ -1736,6 +1789,14 @@ fn stacked_cell_paragraphs_without_w_after_stack_flush() {
     );
 }
 
+/// The table's own emission, with the body-flow wrapper that pins a table's
+/// vertical gaps (issue #1688) cut away. These tests assert about what a *cell*
+/// emits, so the wrapper's own `above: 0pt, below: 0pt` must not be counted.
+fn table_emission(source: &str) -> &str {
+    let start: usize = source.find("#table(").expect("table emission");
+    &source[start..]
+}
+
 /// A single-paragraph cell has no sibling block to leak spacing against, so
 /// its emission must stay byte-identical to before the #625 fix: the plain
 /// `#block()` wrapper, the fixed line box, and the trailing `#v(w:after)`
@@ -1782,7 +1843,7 @@ fn single_paragraph_cell_emission_is_unchanged() {
         "a lone cell paragraph keeps its exact pre-fix wrapper: {result}"
     );
     assert!(
-        !result.contains("above: 0pt"),
+        !table_emission(&result).contains("above: 0pt"),
         "a lone cell paragraph gains no spacing parameters: {result}"
     );
     assert!(
@@ -1853,7 +1914,9 @@ fn line_spaced_stacked_cell_paragraphs_take_a_scaled_line_box() {
         "each paragraph takes a box 1.5 x Word's line: {result}"
     );
     assert_eq!(
-        result.matches("above: 0pt, below: 0pt").count(),
+        table_emission(&result)
+            .matches("above: 0pt, below: 0pt")
+            .count(),
         2,
         "and the box carrying the advance means the wrapper contributes none: {result}"
     );
@@ -2455,6 +2518,7 @@ fn boundary_rule_does_not_make_a_roomy_sheet_row_tight() {
             color: Color::white(),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     };
     let make_cell = |text: &str, ruled: bool| TableCell {
@@ -2556,6 +2620,7 @@ fn boundary_rule_leaves_a_tight_sheet_row_tight() {
                         color: Color::white(),
                         style: BorderLineStyle::Solid,
                         join: LineJoin::Round,
+                        cap: LineCap::Flat,
                     }),
                     left: None,
                     right: None,
@@ -3787,6 +3852,7 @@ fn a_descender_seat_inside_the_border_inset_still_lands_on_the_row_boundary() {
             color: Color::black(),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         ..CellBorder::default()
     };
@@ -4778,4 +4844,46 @@ fn test_generic_table_cell_hangul_run_keeps_bold_when_font_needs_substitution() 
         "a generic (non-sheet) table cell must keep the run's declared bold \
          even under an unavailable font:\n{source}"
     );
+}
+
+/// Isolated native rows expose the small Malgun seats hidden by the older
+/// four-point workbook floor. Each size is independently observed (#1815).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn small_malgun_sheet_baselines_match_native_isolated_rows() {
+    if crate::render::pdf::font_line_metrics_em("Malgun Gothic").is_none() {
+        return;
+    }
+    let data = include_bytes!("../../../../tests/visual_audits/issue-1815/source.xlsx");
+    let (document, _) = crate::parser::Parser::parse(
+        &crate::parser::xlsx::XlsxParser,
+        data,
+        &ConvertOptions::default(),
+    )
+    .unwrap();
+    let source = generate_typst(&document).unwrap().source;
+    let runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+    let mut differences: Vec<String> = Vec::new();
+    for (size, expected_baseline) in [
+        (8, 104.0),
+        (9, 179.0),
+        (10, 254.0),
+        (11, 328.0),
+        (12, 403.0),
+        (13, 478.0),
+        (14, 553.0),
+    ] {
+        let label = format!("Malgun size {size}");
+        let run = runs
+            .iter()
+            .find(|run| run.text == label)
+            .expect("each native label remains present");
+        if (run.baseline_pt - expected_baseline).abs() > 0.01 {
+            differences.push(format!(
+                "{label}: expected {expected_baseline}, got {}",
+                run.baseline_pt
+            ));
+        }
+    }
+    assert!(differences.is_empty(), "{}", differences.join("\n"));
 }

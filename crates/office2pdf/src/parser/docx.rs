@@ -11,9 +11,10 @@ const MAX_TABLE_DEPTH: usize = 64;
 use crate::ir::{
     Alignment, Block, BorderLineStyle, BorderSide, Caption, CellBorder, CellVerticalAlign, Color,
     ColumnLayout, Document, FloatingImage, FloatingTextBox, ImageData, ImageFormat,
-    ImageParagraphSpacing, Insets, LineJoin, LineSpacing, Page, PageNumbering, PairKerning,
-    Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableCell,
-    TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign, WordCompatibilityMode,
+    ImageParagraphSpacing, Insets, LineCap, LineJoin, LineSpacing, Page, PageNumbering,
+    PairKerning, Paragraph, ParagraphStyle, Run, StyleSheet, TabAlignment, TabLeader, TabStop,
+    Table, TableCell, TableOfContents, TableRow, TextDirection, TextStyle, VerticalTextAlign,
+    WordCompatibilityMode,
 };
 use crate::parser::Parser;
 
@@ -715,6 +716,26 @@ fn build_text_run(
     if text.is_empty() {
         return None;
     }
+    Some(Run {
+        text,
+        style: resolve_run_style(run_property, is_small_caps, resolved_style, style_map),
+        href,
+        footnote: None,
+    })
+}
+
+/// A run's formatting with everything it inherits already folded in: the
+/// referenced character style beneath its explicit properties, then the
+/// paragraph style beneath both.
+///
+/// Header and footer runs resolve through here too, so a `w:pStyle`'s `w:sz`
+/// reaches a running head exactly as it reaches body copy (issue #1822).
+fn resolve_run_style(
+    run_property: &docx_rs::RunProperty,
+    is_small_caps: bool,
+    resolved_style: Option<&ResolvedStyle>,
+    style_map: &StyleMap,
+) -> TextStyle {
     let mut explicit_style: TextStyle = extract_run_style(run_property);
     if is_small_caps {
         explicit_style.small_caps = Some(true);
@@ -727,12 +748,7 @@ fn build_text_run(
         combined.merge_from(&explicit_style);
         explicit_style = combined;
     }
-    Some(Run {
-        text,
-        style: merge_text_style(&explicit_style, resolved_style),
-        href,
-        footnote: None,
-    })
+    merge_text_style(&explicit_style, resolved_style)
 }
 
 /// Intermediate results from scanning a run's children for media, text boxes,
@@ -1135,17 +1151,18 @@ fn convert_paragraph_blocks(
     style_map: &StyleMap,
     ctx: &DocxConversionContext,
 ) {
-    // Check bidi direction for this paragraph (must be called once per XML <w:p>)
+    // Every paragraph cursor advances here, exactly once per XML <w:p>, and
+    // each checks this paragraph's `w:pStyle` against the one its scan
+    // recorded at the same index (issue #1689).
+    let style_id: Option<&str> = get_paragraph_style_id(&para.property);
     let flow = ParagraphFlow {
-        is_rtl: ctx.bidi.next_is_bidi(),
-        background: ctx.paragraph_shading.next_background(),
-        word_wrap: ctx.word_wraps.next_word_wrap(),
-        contextual_spacing: ctx
-            .contextual_spacing
-            .next_paragraph(get_paragraph_style_id(&para.property)),
+        is_rtl: ctx.bidi.next_is_bidi(style_id),
+        background: ctx.paragraph_shading.next_background(style_id),
+        word_wrap: ctx.word_wraps.next_word_wrap(style_id),
+        contextual_spacing: ctx.contextual_spacing.next_paragraph(style_id),
         // A `w:pStyle` naming a style the document never defines falls back
         // to the default style, the same as carrying no `w:pStyle` at all.
-        effective_style_is_defined: match get_paragraph_style_id(&para.property) {
+        effective_style_is_defined: match style_id {
             Some(id) if style_map.contains_key(id) => true,
             _ => ctx.default_paragraph_style_is_defined,
         },

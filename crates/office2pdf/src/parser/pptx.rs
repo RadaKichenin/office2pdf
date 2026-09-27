@@ -13,8 +13,8 @@ use crate::error::{ConvertError, ConvertWarning};
 use crate::ir::{
     Alignment, ArrowHead, BaselineShiftEm, Block, BorderLineStyle, BorderSide, CellBorder,
     CellVerticalAlign, Chart, Color, Document, FixedElement, FixedElementKind, FixedPage,
-    GradientFill, ImageClipShape, ImageCrop, ImageData, ImageFormat, Insets, LineJoin, LineSpacing,
-    List, ListItem, ListKind, ListLevelStyle, Page, PageSize, PairKerning, Paragraph,
+    GradientFill, ImageClipShape, ImageCrop, ImageData, ImageFormat, Insets, LineCap, LineJoin,
+    LineSpacing, List, ListItem, ListKind, ListLevelStyle, Page, PageSize, PairKerning, Paragraph,
     ParagraphStyle, PatternFill, PatternPreset, Run, Shadow, Shape, ShapeKind, SmartArt,
     SmartArtNode, StyleSheet, TabAlignment, TabLeader, TabStop, Table, TableBorderPaintModel,
     TableCell, TableRow, TextBoxData, TextBoxVerticalAlign, TextDirection, TextStyle, TopBevel,

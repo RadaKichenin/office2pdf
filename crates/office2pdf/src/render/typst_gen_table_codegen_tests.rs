@@ -1,5 +1,5 @@
 use super::*;
-use crate::ir::{BorderSide, CellBorder, Insets, LineJoin, Table, TableCell, TableRow};
+use crate::ir::{BorderSide, CellBorder, Insets, LineCap, LineJoin, Table, TableCell, TableRow};
 
 /// Helper to create a table cell with plain text.
 pub(super) fn make_text_cell(text: &str) -> TableCell {
@@ -603,12 +603,14 @@ fn test_table_with_cell_borders() {
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             bottom: Some(BorderSide {
                 width: 2.0,
                 color: Color::new(255, 0, 0),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             left: None,
             right: None,
@@ -652,6 +654,7 @@ fn test_table_with_partial_cell_borders_does_not_fill_missing_grid_lines() {
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             left: None,
             right: None,
@@ -1365,6 +1368,7 @@ fn solid_side(width: f64, color: crate::ir::Color) -> BorderSide {
         color,
         style: crate::ir::BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 
@@ -2098,4 +2102,119 @@ fn a_row_minimum_height_emits_a_strut_rather_than_a_fixed_row() {
     // The floor must not become a stated row length, which would pin the row
     // and stop it growing for taller content.
     assert!(!result.contains("rows: (110.75pt"), "{result}");
+}
+
+/// A table in the document body pins both of its own vertical gaps.
+///
+/// Word gives a table no spacing of its own, so the paragraph after it starts
+/// one line below the last row unless it states `w:spacing w:before`. Typst
+/// resolves the gap between two blocks by weakness, and an unstated gap falls
+/// back to `par.spacing` — 1.2em — at a *weaker* level than a stated one, so a
+/// bare `#table` beside a paragraph that also states nothing opened 1.2em of
+/// engine whitespace (issue #1688).
+#[test]
+fn test_body_table_pins_its_own_block_spacing() {
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![make_text_cell("Warehouse lease")],
+            height: None,
+        }],
+        column_widths: vec![468.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![
+        Block::Table(table),
+        Block::Paragraph(Paragraph {
+            style: ParagraphStyle::default(),
+            runs: vec![Run {
+                text: "Questions go to the shared tracker.".to_string(),
+                style: TextStyle::default(),
+                href: None,
+                footnote: None,
+            }],
+        }),
+    ])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let wrapper: usize = result
+        .find("#block(width: 100%, above: 0pt, below: 0pt)[")
+        .unwrap_or_else(|| panic!("table is not wrapped in a spacing-pinned block: {result}"));
+    let table_start: usize = result.find("#table(").expect("table");
+    assert!(
+        wrapper < table_start,
+        "the pinned block must open before the table: {result}"
+    );
+}
+
+/// Triangulation for the rule above: the wrapper belongs to the body flow, so
+/// a table nested inside a cell does not gain a second one. A cell's own
+/// content already pins what Word's cell margins say, and Typst trims weak
+/// spacing at a container's edges anyway.
+#[test]
+fn test_nested_table_does_not_gain_a_second_spacing_block() {
+    let inner = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![make_text_cell("Inner")],
+            height: None,
+        }],
+        column_widths: vec![80.0],
+        ..Table::default()
+    };
+    let outer = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![TableCell {
+                content: vec![Block::Table(inner)],
+                ..TableCell::default()
+            }],
+            height: None,
+        }],
+        column_widths: vec![200.0],
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(outer)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    assert_eq!(
+        result.matches("#table(").count(),
+        2,
+        "expected the nested table to be emitted: {result}"
+    );
+    assert_eq!(
+        result
+            .matches("#block(width: 100%, above: 0pt, below: 0pt)[")
+            .count(),
+        1,
+        "only the body-flow table takes the wrapper: {result}"
+    );
+}
+
+/// A centred table keeps its `w:tblPr/w:jc` placement inside the wrapper: the
+/// block spans the text column, so `#align(center)` still has the full measure
+/// to centre the table box in (issue #843).
+#[test]
+fn test_centered_body_table_keeps_its_alignment_inside_the_wrapper() {
+    let table = Table {
+        rows: vec![TableRow {
+            minimum_height: None,
+            cells: vec![make_text_cell("Centred")],
+            height: None,
+        }],
+        column_widths: vec![120.0],
+        alignment: Some(Alignment::Center),
+        ..Table::default()
+    };
+    let doc = make_doc(vec![make_flow_page(vec![Block::Table(table)])]);
+    let result = generate_typst(&doc).unwrap().source;
+
+    let wrapper: usize = result
+        .find("#block(width: 100%, above: 0pt, below: 0pt)[")
+        .unwrap_or_else(|| panic!("table is not wrapped in a spacing-pinned block: {result}"));
+    let align: usize = result.find("#align(center)[").expect("alignment");
+    assert!(
+        wrapper < align,
+        "the wrapper must span the text column the table centres in: {result}"
+    );
 }

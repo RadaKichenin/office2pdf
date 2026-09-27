@@ -18,6 +18,8 @@ mod math;
 mod notes;
 #[path = "docx_context_page_numbers.rs"]
 mod page_numbers;
+#[path = "docx_context_paragraph_cursor.rs"]
+mod paragraph_cursor;
 #[path = "docx_context_paragraph_shading.rs"]
 mod paragraph_shading;
 #[path = "docx_context_small_caps.rs"]

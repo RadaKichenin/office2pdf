@@ -11,12 +11,12 @@ use crate::ir::{
     ColumnLayout, Document, FixedElement, FixedElementKind, FixedPage, FloatingImage,
     FloatingShape, FloatingTextBox, FlowPage, FrameAnchor, GradientFill, HFInline, HeaderFooter,
     HeaderFooterFrame, IconShading, ImageCrop, ImageData, ImageFormat, ImageParagraphSpacing,
-    Insets, LegendPosition, LineBox, LineJoin, LineSpacing, List, ListKind, Margins, MathEquation,
-    Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph, ParagraphStyle,
-    PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo, Run, Shadow,
-    Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader, TabStop, Table,
-    TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData, TextBoxVerticalAlign,
-    TextDirection, TextStyle, VerticalTextAlign, WrapMode,
+    Insets, LegendPosition, LineBox, LineCap, LineJoin, LineSpacing, List, ListKind, Margins,
+    MathEquation, Metadata, Page, PageNumberFormat, PageSize, PairKerning, Paragraph,
+    ParagraphStyle, PatternFill, PatternPreset, PositionedTabAlignment, PositionedTabRelativeTo,
+    Run, Shadow, Shape, ShapeKind, SheetPage, SmartArt, SparklineInfo, TabAlignment, TabLeader,
+    TabStop, Table, TableBorderPaintModel, TableCell, TableOfContents, TableRow, TextBoxData,
+    TextBoxVerticalAlign, TextDirection, TextStyle, VerticalTextAlign, WrapMode,
 };
 
 use self::diagrams::{
@@ -689,6 +689,18 @@ fn generate_flow_page(
     // left and right margins.
     ctx.available_measure_pt =
         Some(size.width - page.margins.left - page.margins.right).filter(|measure| *measure > 0.0);
+    // Absent w:defaultTabStop: East Asian Word editions (signalled by the
+    // section's w:docGrid) default to 800 twips = 40pt where Western
+    // editions use the ECMA 720 twips = 36pt (issue #393). Set before the
+    // page setup, whose header and footer tabs use the same default stops
+    // (issue #1821).
+    ctx.default_tab_width_pt =
+        ctx.document_default_tab_stop_pt
+            .unwrap_or(if page.line_grid_pitch.is_some() {
+                EAST_ASIAN_DEFAULT_TAB_WIDTH_PT
+            } else {
+                DEFAULT_TAB_WIDTH_PT
+            });
     write_flow_page_setup(out, page, &size, ctx);
     out.push('\n');
     // The marker sits at the section's first page, so a first-page header can
@@ -723,16 +735,6 @@ fn generate_flow_page(
     // presence of the element still marks an East Asian edition for the tab
     // default below, which is a different question.
     ctx.line_grid_pitch = page.line_grid_pitch.filter(|_| page.line_grid_snaps_lines);
-    // Absent w:defaultTabStop: East Asian Word editions (signalled by the
-    // section's w:docGrid) default to 800 twips = 40pt where Western
-    // editions use the ECMA 720 twips = 36pt (issue #393).
-    ctx.default_tab_width_pt =
-        ctx.document_default_tab_stop_pt
-            .unwrap_or(if page.line_grid_pitch.is_some() {
-                EAST_ASIAN_DEFAULT_TAB_WIDTH_PT
-            } else {
-                DEFAULT_TAB_WIDTH_PT
-            });
 
     // Word keeps `w:spacing w:before` on the document's first body paragraph,
     // but Typst collapses leading block spacing at a page boundary, pulling the
@@ -2269,19 +2271,32 @@ fn flow_page_top_margin_pt(page: &FlowPage) -> f64 {
 fn hf_content_height_pt(hf: &HeaderFooter) -> Option<f64> {
     let mut total: f64 = 0.0;
     for paragraph in &hf.paragraphs {
-        let runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
-        total += text::word_line_advance_pt(&runs)?;
-        if let Some(border) = paragraph.border.as_ref() {
-            for (side, space) in [
-                (border.top.as_ref(), paragraph.border_space.map(|i| i.top)),
-                (
-                    border.bottom.as_ref(),
-                    paragraph.border_space.map(|i| i.bottom),
-                ),
-            ] {
-                if let Some(side) = side {
-                    total += side.width + space.filter(|gap| *gap > 0.0).unwrap_or(0.5);
-                }
+        total += hf_paragraph_height_pt(paragraph)?;
+    }
+    Some(total)
+}
+
+/// The height one header or footer paragraph takes: Word's line for its face,
+/// plus whatever its `w:pBdr` rules and their `w:space` gaps reserve.
+///
+/// Shared with [`generate_stacked_hf_paragraphs`], which states it on the
+/// paragraph's block, so the height a ruled story reserves in the band is the
+/// height it actually lays out (issue #1824).
+fn hf_paragraph_height_pt(paragraph: &crate::ir::HeaderFooterParagraph) -> Option<f64> {
+    let runs: Vec<Run> = hf_paragraph_metric_runs(paragraph);
+    let mut total: f64 = text::word_line_advance_pt(&runs)?;
+    if let Some(border) = paragraph.border.as_ref() {
+        for (side, space) in [
+            (border.top.as_ref(), paragraph.border_space.map(|i| i.top)),
+            (
+                border.bottom.as_ref(),
+                paragraph.border_space.map(|i| i.bottom),
+            ),
+        ] {
+            if let Some(side) = side {
+                // An absent `w:space` is the schema's zero, which is what the
+                // rules themselves are drawn with (issue #1824).
+                total += side.width + space.unwrap_or(0.0);
             }
         }
     }
@@ -2589,6 +2604,17 @@ fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCt
     // Set once for the story rather than per paragraph: wrapping each paragraph
     // in its own content block makes it a block, and Typst then puts
     // `par(spacing:)` between them — a different and much larger gap.
+    // A ruled paragraph is block-level, which splits the joined story into
+    // separate Typst paragraphs with the default paragraph gap between them —
+    // the second line of a ruled header landed 20pt low, over the first body
+    // line, and the taller measured story clamped the band shift away and
+    // lifted the first line 2.49pt (issue #1824). Such a story is laid out as
+    // the stack of blocks it already is, each carrying Word's own line box, so
+    // the flow advances by Word's line and needs no shift to seat it.
+    if hf_story_rules_a_paragraph(hf) {
+        generate_stacked_hf_paragraphs(out, hf, ctx);
+        return;
+    }
     if let Some(leading) = hf
         .paragraphs
         .iter()
@@ -2610,6 +2636,43 @@ fn generate_flow_hf_content(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCt
         }
         generate_hf_styled_paragraph(out, paragraph, ctx);
         is_first = false;
+    }
+}
+
+/// Whether any paragraph this story emits rules itself off with a `w:pBdr`.
+fn hf_story_rules_a_paragraph(hf: &HeaderFooter) -> bool {
+    hf.paragraphs
+        .iter()
+        .filter(|paragraph| hf_paragraph_is_emitted(paragraph))
+        .any(|paragraph| paragraph.border.is_some())
+}
+
+/// Emit the story as one block per paragraph, each as tall as Word's line.
+///
+/// Word seats a ruled paragraph's own line exactly where an unruled one sits,
+/// hangs the rule `w:pBdr w:space` below the line's bottom edge, and starts
+/// the next paragraph under the rule, so the story advances by the line plus
+/// whatever the rules and their gaps reserve. Measured on native Word 16.113.1
+/// at `w:space` 0, 1 and 8, and with a `w:bottom` stating none (issue #1824).
+///
+/// The height is stated rather than left to the content because the text cell
+/// carries Typst's cap-height top edge, which is shorter than Word's line by
+/// the seat the band shift already corrects for the story's first baseline.
+/// Stating it keeps every baseline exactly where the joined story form puts
+/// it — [`hf_content_height_pt`] measures the band against these same terms —
+/// and only moves what the rule adds.
+fn generate_stacked_hf_paragraphs(out: &mut String, hf: &HeaderFooter, ctx: &mut GenCtx) {
+    for paragraph in &hf.paragraphs {
+        if !hf_paragraph_is_emitted(paragraph) {
+            continue;
+        }
+        out.push_str("#block(width: 100%, above: 0pt, below: 0pt");
+        if let Some(height) = hf_paragraph_height_pt(paragraph) {
+            let _ = write!(out, ", height: {}pt", format_f64(height));
+        }
+        out.push_str(")[");
+        generate_hf_styled_paragraph(out, paragraph, ctx);
+        out.push_str("]\n");
     }
 }
 
@@ -3386,52 +3449,6 @@ fn generate_hf_styled_paragraph(
     }
 }
 
-/// Where a header or footer paragraph's `<w:tab/>` runs place their segments.
-///
-/// Word's running-head idiom declares a right-aligned tab stop at the text
-/// edge, or a centre stop and a right stop, and separates the segments with
-/// tabs. Those two shapes are what `w:tabs` is used for in a header; anything
-/// else keeps the plain advance below.
-enum HeaderFooterTabLayout {
-    /// `left`, tab, `right`.
-    LeftRight(usize),
-    /// `left`, tab, `centre`, tab, `right`.
-    LeftCenterRight(usize, usize),
-}
-
-/// Resolve a header or footer paragraph's tabs against its own tab stops.
-///
-/// `generate_hf_elements` passed every `<w:tab/>` straight to `generate_run`,
-/// which writes the tab into the Typst source as a literal tab character.
-/// Typst's markup lexer treats that exactly as it treats a space, so the two
-/// segments ended up one space apart and the one a right stop should have
-/// pushed to the right margin sat beside the left one — on every page of a
-/// document that uses the idiom (issue #579).
-///
-/// The `#h(1em)` advance below is a different element: `w:ptab`, which states
-/// its own alignment rather than referring to a stop.
-fn header_footer_tab_layout(
-    paragraph: &crate::ir::HeaderFooterParagraph,
-) -> Option<HeaderFooterTabLayout> {
-    let tabs: Vec<usize> = paragraph
-        .elements
-        .iter()
-        .enumerate()
-        .filter(|(_, element)| matches!(element, HFInline::Run(run) if run.text == "\t"))
-        .map(|(index, _)| index)
-        .collect();
-    let stops = paragraph.style.tab_stops.as_deref()?;
-    let alignments: Vec<TabAlignment> = stops.iter().map(|stop| stop.alignment).collect();
-
-    match (tabs.as_slice(), alignments.as_slice()) {
-        ([tab], [.., TabAlignment::Right]) => Some(HeaderFooterTabLayout::LeftRight(*tab)),
-        ([first, second], [TabAlignment::Center, .., TabAlignment::Right]) => {
-            Some(HeaderFooterTabLayout::LeftCenterRight(*first, *second))
-        }
-        _ => None,
-    }
-}
-
 fn generate_hf_paragraph(
     out: &mut String,
     paragraph: &crate::ir::HeaderFooterParagraph,
@@ -3456,11 +3473,13 @@ fn generate_hf_paragraph(
         .as_ref()
         .and_then(|border| border.bottom.as_ref());
     let stacks_rules: bool = top_border.is_some() || bottom_border.is_some();
-    // `w:pBdr` sides declare their own `w:space` gap in points. Without one,
-    // Word still leaves a hairline of clearance, which the 0.5 pt fallback
-    // reproduces. Word measures the gap from the text's descender line, so the
-    // stack pins the text bottom edge there.
-    let space = |declared: Option<f64>| -> f64 { declared.filter(|gap| *gap > 0.0).unwrap_or(0.5) };
+    // `w:pBdr` sides declare their own `w:space` gap in points, measured from
+    // the text's bottom edge, which is why the stack pins it there. An absent
+    // `w:space` is the schema's zero, not a hairline: native Word 16.113.1
+    // seats the following header line at 65.28pt both for `w:space="0"` and
+    // for a `w:bottom` stating no `w:space` at all, where the 0.5pt fallback
+    // this used to apply put it 0.44pt low (issue #1824).
+    let space = |declared: Option<f64>| -> f64 { declared.unwrap_or(0.0) };
     let top_space: f64 = space(paragraph.border_space.map(|insets| insets.top));
     let bottom_space: f64 = space(paragraph.border_space.map(|insets| insets.bottom));
 
@@ -3495,26 +3514,36 @@ fn generate_hf_paragraph(
         out.push_str("], [");
         generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
         out.push_str("])");
+    } else if paragraph.elements.iter().any(is_hf_tab) {
+        // `generate_run` would write a `<w:tab/>` into the source as a literal
+        // tab, which Typst's markup lexer treats as a space, so the segment a
+        // stop should place sat beside the one before it (issue #579). The
+        // `#h(1em)` of `generate_hf_elements` is a different element: `w:ptab`,
+        // which states its own alignment rather than referring to a stop.
+        let segments: Vec<&[HFInline]> = paragraph.elements.split(is_hf_tab).collect();
+        let segment_runs: Vec<Vec<Run>> = segments
+            .iter()
+            .map(|segment| {
+                segment
+                    .iter()
+                    .filter_map(|element| match element {
+                        HFInline::Run(run) => Some(run.clone()),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .collect();
+        let default_tab_width_pt: f64 =
+            paragraph_default_tab_width_pt(&paragraph.style, ctx.default_tab_width_pt);
+        write_measured_tab_segments(
+            out,
+            &segment_runs,
+            paragraph.style.tab_stops.as_deref(),
+            default_tab_width_pt,
+            |out, index| generate_hf_elements(out, segments[index], ctx),
+        );
     } else {
-        match header_footer_tab_layout(paragraph) {
-            Some(HeaderFooterTabLayout::LeftRight(index)) => {
-                out.push_str("#grid(columns: (1fr, auto), [");
-                generate_hf_elements(out, &paragraph.elements[..index], ctx);
-                out.push_str("], [");
-                generate_hf_elements(out, &paragraph.elements[index + 1..], ctx);
-                out.push_str("])");
-            }
-            Some(HeaderFooterTabLayout::LeftCenterRight(first, second)) => {
-                out.push_str("#grid(columns: (1fr, auto, 1fr), align: (left, center, right), [");
-                generate_hf_elements(out, &paragraph.elements[..first], ctx);
-                out.push_str("], [");
-                generate_hf_elements(out, &paragraph.elements[first + 1..second], ctx);
-                out.push_str("], [");
-                generate_hf_elements(out, &paragraph.elements[second + 1..], ctx);
-                out.push_str("])");
-            }
-            None => generate_hf_elements(out, &paragraph.elements, ctx),
-        }
+        generate_hf_elements(out, &paragraph.elements, ctx);
     }
 
     if stacks_rules {
@@ -3593,6 +3622,11 @@ fn write_hf_field(out: &mut String, style: &TextStyle, field: &str) {
     } else {
         out.push_str(field);
     }
+}
+
+/// A `<w:tab/>`: the parser gives each one a run of its own.
+fn is_hf_tab(element: &HFInline) -> bool {
+    matches!(element, HFInline::Run(run) if run.text == "\t")
 }
 
 fn generate_hf_elements(out: &mut String, elements: &[HFInline], ctx: &mut GenCtx) {
@@ -3891,7 +3925,34 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             out.push_str("#pagebreak()\n");
             Ok(())
         }
-        Block::Table(table) => generate_table(out, table, ctx),
+        Block::Table(table) => {
+            // Word gives a table no vertical spacing of its own: the gap above
+            // it is the preceding paragraph's `w:after` and the gap below it is
+            // the following paragraph's `w:before`. Typst resolves the gap
+            // between two blocks by weakness rather than by plain maximum.
+            // `typst-layout`'s flow collector tags an `auto` gap with the
+            // `par.spacing` fallback — 1.2em — at weakness 4 and a stated one
+            // at weakness 3, and `keep_weak_rel_spacing` replaces the standing
+            // gap only when the arriving one is strictly stronger or equally
+            // weak and larger. A stated gap therefore always wins, and the
+            // fallback survives only when neither neighbour states anything. A
+            // bare `#table` beside a paragraph that states no `w:before` hit
+            // exactly that case and opened 1.2em of engine whitespace: 13.2pt
+            // at 11pt, under every table in a document written from Word's
+            // default template (issue #1688). Stating both gaps leaves the
+            // neighbour's own `w:spacing` as the only thing between them, the
+            // way `write_image_block_open` already states both of a flow
+            // picture's gaps instead of letting the fallback apply (issues
+            // #463, #491, #499); a table differs only in having no `w:spacing`
+            // of its own to state, so both are zero. The wrapper spans the text
+            // column so a `w:tblPr/w:jc` table still centres in it, and the
+            // table's own `auto` gaps vanish against the wrapper's edges, where
+            // the same routine drops weak spacing that no frame precedes.
+            out.push_str("#block(width: 100%, above: 0pt, below: 0pt)[\n");
+            let result = generate_table(out, table, ctx);
+            out.push_str("]\n");
+            result
+        }
         Block::Image(img) => {
             // Word advances a picture paragraph by the picture plus its own
             // `w:spacing`. Leaving the element bare let Typst's 1.2em default

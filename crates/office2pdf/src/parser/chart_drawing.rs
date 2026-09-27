@@ -29,7 +29,7 @@ use super::xlsx::xlsx_drawing::{apply_run_properties, parse_rels_targets, resolv
 use super::xml_util;
 use crate::ir::{
     Alignment, BorderLineStyle, BorderSide, ChartUserShape, ChartUserShapeExtent, Color, Insets,
-    LineJoin, Paragraph, ParagraphStyle, Run, TextStyle,
+    LineCap, LineJoin, Paragraph, ParagraphStyle, Run, TextStyle,
 };
 
 /// EMU per point.
@@ -438,6 +438,7 @@ impl AnchorState {
                 color,
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
         })
     }

@@ -990,6 +990,81 @@ fn test_generate_list_metric_spacing_is_the_raw_paragraph_gap() {
 }
 
 #[test]
+fn test_list_spacing_stays_the_paragraph_gap_when_items_state_proportional_line_spacing() {
+    // Word's default template writes `w:spacing w:line="259" w:lineRule="auto"`
+    // into `w:pPrDefault`, so nearly every authored list states a line
+    // multiple. That multiple is folded into the wrapper's line box, exactly
+    // as a bare single-spaced list's advance is, so the gap between two items
+    // is still the raw `w:after` — office2pdf added a whole scaled line on top
+    // of it, opening every item gap and the gap below the list by roughly one
+    // line per item (issue #1685).
+    //
+    // Two multiples pin the rule: a gap that were hardcoded to one of them
+    // would have to grow with the other.
+    use crate::ir::List;
+
+    let Some((ascender, descender, word_pitch_em)) =
+        crate::render::pdf::font_line_metrics_em("Libertinus Serif")
+    else {
+        return; // no font book available (e.g. exotic CI sandbox)
+    };
+    let font_size: f64 = 10.0;
+    let gap_pt: f64 = 8.0;
+    let single_advance_pt: f64 =
+        (word_pitch_em * font_size).max((ascender + descender) * font_size);
+
+    for factor in [259.0 / 240.0, 1.5] {
+        let make_item = |text: &str| ListItem {
+            content: vec![Paragraph {
+                style: ParagraphStyle {
+                    space_after: Some(gap_pt),
+                    line_spacing: Some(LineSpacing::Proportional(factor)),
+                    ..ParagraphStyle::default()
+                },
+                runs: vec![Run {
+                    text: text.to_string(),
+                    style: TextStyle {
+                        font_family: Some("Libertinus Serif".to_string()),
+                        font_size: Some(font_size),
+                        ..TextStyle::default()
+                    },
+                    href: None,
+                    footnote: None,
+                }],
+            }],
+            level: 0,
+            start_at: None,
+        };
+        let list = List {
+            kind: ListKind::Unordered,
+            items: vec![make_item("First"), make_item("Second"), make_item("Third")],
+            level_styles: BTreeMap::new(),
+        };
+
+        let source = generate_typst(&make_doc(vec![make_flow_page(vec![Block::List(list)])]))
+            .unwrap()
+            .source;
+
+        // The multiple belongs to the line box, not to the item gap.
+        assert_line_advance(
+            &source,
+            "Libertinus Serif",
+            font_size,
+            single_advance_pt * factor,
+            0.0,
+        );
+        assert!(
+            source.contains(&format!("spacing: {}pt", format_f64(gap_pt))),
+            "item gap at line multiple {factor} should stay the raw {gap_pt}pt in: {source}"
+        );
+        assert!(
+            source.contains(&format!("below: {}pt", format_f64(gap_pt))),
+            "gap below the list at line multiple {factor} should stay the raw {gap_pt}pt in: {source}"
+        );
+    }
+}
+
+#[test]
 fn test_list_wrapper_block_carries_the_edge_spacing() {
     // The line-height wrapper used to leave `above`/`below` unset, so
     // Typst's own 1.2em default block spacing governed the gap between a

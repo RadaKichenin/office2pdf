@@ -1630,3 +1630,370 @@ fn an_explicit_word_wrap_keeps_eojeol_frames_on_a_bare_paragraph() {
         "an explicit word-level wrap request keeps the frames: {source}"
     );
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_header_tab_before_a_centre_stop_centres_its_text_on_that_stop() {
+    // Word's Header style declares a centre and a right stop, and a centred
+    // running head is typed as `<tab>Title`, which Word saves as one run. The
+    // tab advances to the centre stop, the first one past the pen. Header
+    // tabs were matched against running-head shapes instead, and a lone tab
+    // with a right stop last went to the right margin (issue #1821). The same
+    // paragraph in the body is the reference: both must land on one x.
+    let centred_head = || {
+        docx_rs::Paragraph::new()
+            .add_tab(
+                docx_rs::Tab::new()
+                    .val(docx_rs::TabValueType::Center)
+                    .pos(4153),
+            )
+            .add_tab(
+                docx_rs::Tab::new()
+                    .val(docx_rs::TabValueType::Right)
+                    .pos(8306),
+            )
+            .add_run(docx_rs::Run::new().add_tab().add_text("{Title}"))
+    };
+    let docx = docx_rs::Docx::new()
+        .header(docx_rs::Header::new().add_paragraph(centred_head()))
+        .add_paragraph(centred_head());
+    let mut cursor = Cursor::new(Vec::new());
+    docx.build().pack(&mut cursor).unwrap();
+    let data: Vec<u8> = cursor.into_inner();
+
+    let left_margin: f64 = parse_flow_page(&data).margins.left;
+    let (document, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("document parses");
+    let source: String = crate::internal::generate_typst(&document)
+        .expect("document generates")
+        .source;
+    let mut placed: Vec<(f64, f64)> = crate::render::pdf::compiled_text_runs(&source, 0)
+        .unwrap()
+        .into_iter()
+        .filter(|run| run.text == "{Title}")
+        .map(|run| (run.baseline_pt, run.left_pt))
+        .collect();
+    placed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let [(_, header_x), (_, body_x)] = placed[..] else {
+        panic!("expected the title in the header and in the body, got {placed:?}");
+    };
+
+    let centre_stop: f64 = left_margin + 4153.0 / 20.0;
+    assert!(
+        (centre_stop - 40.0..centre_stop).contains(&body_x),
+        "the body centres the title on the {centre_stop}pt stop: {body_x}pt"
+    );
+    assert!(
+        (header_x - body_x).abs() < 0.01,
+        "the header title starts at {header_x}pt, the body's at {body_x}pt"
+    );
+}
+
+/// A package whose section references one header part, with both the styles
+/// part and the header part written out verbatim.
+fn build_docx_with_raw_header_styles(styles_xml: &str, header_xml: &str) -> Vec<u8> {
+    use std::io::Write;
+    use zip::ZipWriter;
+    use zip::write::FileOptions;
+
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let opts = FileOptions::default();
+
+    zip.start_file("[Content_Types].xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>"#,
+    )
+    .unwrap();
+
+    zip.start_file("_rels/.rels", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.start_file("word/_rels/document.xml.rels", opts)
+        .unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+</Relationships>"#,
+    )
+    .unwrap();
+
+    zip.start_file("word/styles.xml", opts).unwrap();
+    zip.write_all(styles_xml.as_bytes()).unwrap();
+
+    zip.start_file("word/header1.xml", opts).unwrap();
+    zip.write_all(
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{header_xml}</w:hdr>"#
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+
+    zip.start_file("word/document.xml", opts).unwrap();
+    zip.write_all(
+        br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:r><w:t>Body text under the running head.</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:headerReference w:type="default" r:id="rId9"/>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800" w:header="851" w:footer="992" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>"#,
+    )
+    .unwrap();
+
+    zip.finish().unwrap().into_inner()
+}
+
+/// zh-CN Word's built-in Header style: centred, ruled off with a bottom
+/// border, centre and right stops, 9pt.
+const ZH_HEADER_STYLE_STYLES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="21"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="a"><w:name w:val="Normal"/></w:style>
+  <w:style w:type="paragraph" w:styleId="a3"><w:name w:val="header"/><w:basedOn w:val="a"/>
+    <w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>
+      <w:tabs><w:tab w:val="center" w:pos="4153"/><w:tab w:val="right" w:pos="8306"/></w:tabs>
+      <w:jc w:val="center"/></w:pPr>
+    <w:rPr><w:sz w:val="18"/></w:rPr></w:style>
+</w:styles>"#;
+
+/// The same document with no Header style: the paragraph states every one of
+/// those properties itself.
+const NO_HEADER_STYLE_STYLES: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="21"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="a"><w:name w:val="Normal"/></w:style>
+</w:styles>"#;
+
+#[test]
+fn a_header_paragraph_resolves_its_paragraph_style() {
+    // zh-CN Word's built-in Header style carries the centring, the rule, the
+    // running-head stops and the 9pt size. A header paragraph that states
+    // only `w:pStyle` was given none of them, because `convert_hf_paragraph`
+    // resolved no style at all (issue #1822).
+    let data = build_docx_with_raw_header_styles(
+        ZH_HEADER_STYLE_STYLES,
+        r#"<w:p><w:pPr><w:pStyle w:val="a3"/></w:pPr><w:r><w:t>Quarterly Report</w:t></w:r></w:p>"#,
+    );
+    let page = parse_flow_page(&data);
+    let header = page.header.as_ref().expect("default header");
+    let paragraph = &header.paragraphs[0];
+
+    assert_eq!(
+        paragraph.style.alignment,
+        Some(Alignment::Center),
+        "the Header style's w:jc must reach the paragraph"
+    );
+    assert_eq!(
+        paragraph.style.tab_stops.as_deref().map(<[_]>::len),
+        Some(2),
+        "the Header style's centre and right stops must reach the paragraph"
+    );
+    assert!(
+        paragraph
+            .border
+            .as_ref()
+            .and_then(|border| border.bottom.as_ref())
+            .is_some(),
+        "the Header style's bottom rule must reach the paragraph"
+    );
+    let size: Option<f64> = paragraph.elements.iter().find_map(|element| match element {
+        HFInline::Run(run) => run.style.font_size,
+        _ => None,
+    });
+    assert_eq!(
+        size,
+        Some(9.0),
+        "the Header style's w:sz must reach the run"
+    );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_style_defined_header_renders_like_the_same_header_stated_directly() {
+    // Whatever a header paragraph inherits has to place its text where the
+    // same properties place it when stated on the paragraph, or the style is
+    // being resolved somewhere other than the body's merge (issue #1822).
+    let styled: Vec<u8> = build_docx_with_raw_header_styles(
+        ZH_HEADER_STYLE_STYLES,
+        r#"<w:p><w:pPr><w:pStyle w:val="a3"/></w:pPr><w:r><w:tab/><w:t>Quarterly Report</w:t></w:r></w:p>"#,
+    );
+    let direct: Vec<u8> = build_docx_with_raw_header_styles(
+        NO_HEADER_STYLE_STYLES,
+        r#"<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>
+             <w:tabs><w:tab w:val="center" w:pos="4153"/><w:tab w:val="right" w:pos="8306"/></w:tabs>
+             <w:jc w:val="center"/></w:pPr>
+           <w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:tab/><w:t>Quarterly Report</w:t></w:r></w:p>"#,
+    );
+
+    let placement = |data: &[u8]| -> (f64, usize) {
+        let (document, _warnings) = DocxParser
+            .parse(data, &ConvertOptions::default())
+            .expect("document parses");
+        let source: String = crate::internal::generate_typst(&document)
+            .expect("document generates")
+            .source;
+        let left: f64 = crate::render::pdf::compiled_text_runs(&source, 0)
+            .unwrap()
+            .into_iter()
+            .filter(|run| run.text.contains("Quarterly"))
+            .map(|run| run.left_pt)
+            .fold(f64::INFINITY, f64::min);
+        (left, source.matches("line(length: 100%").count())
+    };
+    let (styled_x, styled_rules) = placement(&styled);
+    let (direct_x, direct_rules) = placement(&direct);
+
+    assert!(
+        direct_x.is_finite() && styled_x.is_finite(),
+        "both headers must render their text"
+    );
+    assert!(
+        (styled_x - direct_x).abs() < 0.01,
+        "the style-defined header starts at {styled_x}pt, the direct one at {direct_x}pt"
+    );
+    assert_eq!(
+        styled_rules, direct_rules,
+        "both headers must draw the same number of rules"
+    );
+}
+
+#[test]
+fn a_multi_line_footer_border_keeps_its_double_rule() {
+    // `FancyFoot.docx` rules its footer off with `thinThickSmallGap`, one of
+    // Word's multi-line border types. Header and footer borders used to be
+    // read by a second extractor that mapped those types to the double rule
+    // while the paragraph one did not; both now share the paragraph
+    // extractor, so the list has to live there (issue #1822).
+    let data = include_bytes!("../../../../tests/fixtures/docx/FancyFoot.docx");
+    let page = parse_flow_page(data);
+    let footer = page.footer.as_ref().expect("default footer");
+    let top = footer
+        .paragraphs
+        .iter()
+        .find_map(|paragraph| paragraph.border.as_ref().and_then(|b| b.top.as_ref()))
+        .expect("the footer paragraph rules itself off along its top edge");
+
+    assert_eq!(top.style, BorderLineStyle::Double);
+    assert_eq!(top.width, 3.0, "w:sz=24 eighths of a point");
+    assert_eq!(top.color, Color::new(0x62, 0x24, 0x23));
+}
+
+/// A package whose header holds two paragraphs, the first optionally ruled off
+/// with `w:pBdr/w:bottom` at `space` points. `w:header` is 851 twips (42.55pt)
+/// under a 72pt top margin, and everything is Arial 10.5pt.
+fn build_docx_with_ruled_header(space: Option<usize>) -> Vec<u8> {
+    let border = space.map_or(String::new(), |space| {
+        format!(
+            r#"<w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="{space}" w:color="auto"/></w:pBdr></w:pPr>"#
+        )
+    });
+    build_docx_with_raw_header_styles(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="21"/></w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="a"><w:name w:val="Normal"/></w:style>
+</w:styles>"#,
+        &format!(
+            r#"<w:p>{border}<w:r><w:t>Header line one</w:t></w:r></w:p>
+               <w:p><w:r><w:t>Header line two</w:t></w:r></w:p>"#
+        ),
+    )
+}
+
+/// The baselines of the two header lines, in points from the page top.
+#[cfg(not(target_arch = "wasm32"))]
+fn ruled_header_baselines(space: Option<usize>) -> (f64, f64) {
+    let data: Vec<u8> = build_docx_with_ruled_header(space);
+    let (document, _warnings) = DocxParser
+        .parse(&data, &ConvertOptions::default())
+        .expect("document parses");
+    let source: String = crate::internal::generate_typst(&document)
+        .expect("document generates")
+        .source;
+    let runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+    let find = |needle: &str| -> f64 {
+        runs.iter()
+            .find(|run| run.text.contains(needle))
+            .unwrap_or_else(|| panic!("header line {needle} must render: {runs:?}"))
+            .baseline_pt
+    };
+    (find("one"), find("two"))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_header_rule_hangs_below_its_line_without_moving_it() {
+    // Measured on native Word 16.113.1 with this package (issue #1824). Word
+    // seats the ruled line where an unruled one sits, hangs the rule below the
+    // line's bottom edge, and starts the next paragraph under the rule, so the
+    // story advances by the line plus the rule and its `w:space`. Word's
+    // second baseline: 64.56pt bare, 65.28pt at `w:space="0"` and with no
+    // `w:space` at all, 66.24pt at `w:space="1"`, 73.20pt at `w:space="8"` —
+    // the bare line plus the rule's own 0.75pt (`w:sz="6"`) plus the gap.
+    //
+    // The story used to join its paragraphs with a line break, which a ruled
+    // paragraph's block-level stack split into two Typst paragraphs with the
+    // default paragraph gap between them: the second line landed 20.32pt low,
+    // on the first body line, while the taller measured story clamped away the
+    // band shift and lifted the first line 2.49pt.
+    let (bare_first, bare_second) = ruled_header_baselines(None);
+    let (zero_first, zero_second) = ruled_header_baselines(Some(0));
+    let (ruled_first, ruled_second) = ruled_header_baselines(Some(1));
+    let (wide_first, wide_second) = ruled_header_baselines(Some(8));
+    let thickness: f64 = 0.75;
+
+    for (label, first) in [
+        ("w:space=0", zero_first),
+        ("w:space=1", ruled_first),
+        ("w:space=8", wide_first),
+    ] {
+        assert!(
+            (first - bare_first).abs() < 0.01,
+            "{label}: the rule must not move the line it belongs to, {first}pt against an unruled {bare_first}pt"
+        );
+    }
+    for (label, second, reserved) in [
+        ("no w:space", zero_second, thickness),
+        ("w:space=1", ruled_second, thickness + 1.0),
+        ("w:space=8", wide_second, thickness + 8.0),
+    ] {
+        assert!(
+            ((second - bare_second) - reserved).abs() < 0.05,
+            "{label}: the rule pushes the next line down {}pt, Word reserves {reserved}pt",
+            second - bare_second
+        );
+    }
+    // Both stories land on Word's own seat: 52.40pt against 52.56pt and
+    // 66.22pt against 66.24pt, inside the 0.24pt grid the export quantises to.
+    // They used to sit a whole line gap high — 52.06pt at this 10.5pt Arial —
+    // because the header seat omitted it (issue #1640).
+    let export_grid_pt: f64 = 0.24;
+    assert!(
+        (ruled_first - 52.56).abs() < export_grid_pt
+            && (ruled_second - 66.24).abs() < export_grid_pt,
+        "the ruled header lines sit at {ruled_first}pt and {ruled_second}pt, native Word at 52.56pt and 66.24pt"
+    );
+}

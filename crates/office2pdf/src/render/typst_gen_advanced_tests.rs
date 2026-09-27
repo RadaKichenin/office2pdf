@@ -653,6 +653,7 @@ fn test_polygon_with_stroke_codegen() {
                 color: Color::new(0, 0, 0),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
         )],
     )]);

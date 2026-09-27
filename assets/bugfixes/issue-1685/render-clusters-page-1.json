@@ -1,0 +1,33 @@
+{
+  "clusters": [],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [
+    {
+      "bbox_pt": {
+        "height": 115.0,
+        "width": 240.0,
+        "x": 70.0,
+        "y": 68.0
+      },
+      "class": "glyph-edge-rasterization",
+      "note": "Inspected the intro paragraph, the three bullet items and the closing paragraph at 300 DPI: hollow glyph-outline fragments from sub-pixel advance and baseline differences, every one below the material-cluster floor; the five baselines match within 0.10pt."
+    }
+  ],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 0,
+    "duplicate": 0,
+    "total": 0,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}

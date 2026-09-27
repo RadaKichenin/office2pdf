@@ -1609,6 +1609,7 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
                     color: Color { r: 0, g: 0, b: 0 },
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 shape_kind: None,
                 no_wrap: false,
@@ -2522,6 +2523,7 @@ fn test_fixed_page_text_box_wrapped_centered_paragraph_scales_to_fit_height() {
                     width: 1.0,
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 shape_kind: None,
                 no_wrap: false,
@@ -2976,19 +2978,18 @@ fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
 /// `tests/fixtures/pptx/run-fill-alpha.pptx` seats its `txBox="1"` frame at
 /// `a:off y="2133600"` under the default `tIns` of 45720 EMU, putting the
 /// content top on 171.60pt, and sets all three of its paragraphs in 32pt Arial
-/// at a width none of them wraps at. None writes an `<a:endParaRPr>`, so each
-/// mark resolves through `presentation.xml`'s `<a:defaultTextStyle>`, whose
-/// `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin font — here
-/// `Calisto MT` — and shares the line box with the run. A native PowerPoint
-/// 16.112 export puts the first baseline on 202.56pt.
+/// at a width none of them wraps at. None writes an `<a:endParaRPr>`, so no
+/// mark face joins the line and each is measured from its Arial run alone
+/// (issue #1645). A native PowerPoint 16.112 export puts the first baseline on
+/// 202.56pt.
 ///
-/// The two faces settle on 0.963654em, a 31pt seat at this size, which is also
-/// where Arial's own 0.972378em share rounds: a frame this shallow cannot tell
-/// the mark's contribution apart, and no claim about it is made here. What it
-/// does separate is the **metric source**. Folding Arial's 67/2048 hhea line
-/// gap into the descent gives 0.944713em and a 30pt seat, landing the line on
-/// 201.60pt — 0.96pt high, four times the export's 0.24pt position grid
-/// (issue #1179).
+/// Arial's own 0.972378em share rounds to a 31pt seat at this size, and so
+/// does the 0.963654em it used to share with the theme's minor Latin
+/// `Calisto MT`: a frame this shallow cannot tell the mark's contribution
+/// apart, and no claim about it is made here. What it does separate is the
+/// **metric source**. Folding Arial's 67/2048 hhea line gap into the descent
+/// gives 0.944713em and a 30pt seat, landing the line on 201.60pt — 0.96pt
+/// high, four times the export's 0.24pt position grid (issue #1179).
 #[test]
 fn the_unwrapped_label_lands_on_its_native_first_baseline() {
     const EMU_PER_PT: f64 = 12700.0;
@@ -5114,11 +5115,17 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
     let mut runs: Vec<Run> = Vec::new();
     for (index, size_pt) in sizes_pt.iter().enumerate() {
         if index > 0 {
-            // What the parser emits for `<a:br/>`: the break marker on its
-            // own run, with no run properties of its own.
+            // What the parser emits for `<a:br/>`: the break marker typed as
+            // the run it follows (issue #1666). The sizes still differ from
+            // line to line, so the paragraph states no size every run agrees
+            // on — which is the case this helper is here to build.
             runs.push(Run {
                 text: "\u{000B}".to_string(),
-                style: TextStyle::default(),
+                style: TextStyle {
+                    font_size: Some(sizes_pt[index - 1]),
+                    font_family: Some(family.to_string()),
+                    ..TextStyle::default()
+                },
                 href: None,
                 footnote: None,
             });
@@ -5174,8 +5181,10 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
 /// A slide's hard-broken lines advance by the run's own 1.2em box, whatever
 /// the size — in a box that wraps and in one that does not.
 ///
-/// `<a:br/>` reaches the IR as a run carrying no size of its own, so the
-/// paragraph has no size every run agrees on and emits no `#set text(size:)`.
+/// Each line here declares its own size, so the paragraph has no size every
+/// run agrees on and emits no `#set text(size:)` — a `<a:br/>` cannot create
+/// that state by itself any more, since it is typed as the run it follows
+/// (issue #1666), but a mixed-size column still reaches it.
 /// The line box's `em` edges then resolved against Typst's 11pt default rather
 /// than against the size they were computed from, pinning every hard-broken
 /// line under 11pt to a flat `1.2 x 11pt` = 13.20pt — 89% too far apart for a

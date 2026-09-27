@@ -63,7 +63,11 @@ fn generate_table_inner(
                 .sheet_print_scale()
                 .filter(|s| *s > 0.0 && *s < 1.0)
                 .unwrap_or(1.0);
-            format!("o2p-excel-fill-{id}-{}", format_f64(scale))
+            format!(
+                "{}{id}-{}",
+                crate::render::excel_fill_paint::SHEET_TABLE_LABEL_PREFIX,
+                format_f64(scale)
+            )
         });
     out.push_str("#table(\n");
 
@@ -1317,6 +1321,15 @@ fn generate_table_cell(
         // inset content edge instead would have cut two glyphs earlier than
         // the export does, so the gridline is the boundary, not the inset.
         //
+        // What overhangs is painted *cut*, not whole: the native export
+        // carries its own gridline clip. On the blocked column of
+        // `customers_overflow_strip.xlsx` it records `201 .. 275` against our
+        // `203 .. 275` from the content edge, and its `Brice_Tromp@` ends
+        // mid-bowl on that same 275. Issue #1660 read `mutool -F stext`'s
+        // `quad`, which is the pen-to-pen advance box rather than the ink, and
+        // asked for the clip to admit the whole glyph; widening it would paint
+        // ink Excel does not.
+        //
         // Nothing is lost on the anchored side: the line starts at that same
         // content edge, so the width given up is width the text never occupies.
         let spill_inset: Insets = cell.padding.unwrap_or(default_cell_padding);
@@ -1887,6 +1900,7 @@ fn printed_gridline_side() -> BorderSide {
         color: Color::black(),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 
@@ -1904,6 +1918,7 @@ fn print_heading_frame_side() -> BorderSide {
         color: Color::black(),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 

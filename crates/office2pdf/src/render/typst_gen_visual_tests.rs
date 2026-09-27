@@ -828,6 +828,7 @@ fn test_open_subpath_casts_an_offset_copy_of_its_stroke() {
                 color: Color::new(138, 180, 226),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -888,6 +889,7 @@ fn test_blurred_open_subpath_filters_its_stroke_without_filling_it() {
                 color: Color::new(138, 180, 226),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1219,6 +1221,7 @@ fn test_shadow_silhouette_outsets_by_half_the_outline_width() {
                 color: Color::new(255, 255, 255),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1346,6 +1349,7 @@ fn banner_outline(join: LineJoin) -> Option<BorderSide> {
         color: Color::new(255, 255, 255),
         style: BorderLineStyle::Solid,
         join,
+        cap: LineCap::Flat,
     })
 }
 
@@ -1512,6 +1516,7 @@ fn test_polygon_shadow_offsets_its_outline_instead_of_scaling_it() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Miter,
+            cap: LineCap::Flat,
         }),
         0.0,
     );
@@ -1601,6 +1606,7 @@ fn test_path_shadow_shrinks_a_hole_while_it_grows_the_outline() {
                 color: Color::new(0, 0, 0),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Miter,
+                cap: LineCap::Flat,
             }),
             rotation_deg: None,
             opacity: None,
@@ -1648,6 +1654,7 @@ fn test_blurred_polygon_shadow_compiles_to_pdf() {
             color: Color::new(0, 0, 0),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         }),
         24.0,
     );

@@ -215,6 +215,7 @@ fn test_fixed_page_line_shape() {
                 color: Color::black(),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
         )],
     )]);
@@ -239,6 +240,7 @@ fn test_fixed_page_shape_with_stroke() {
                 color: Color::new(0, 0, 255),
                 style: BorderLineStyle::Solid,
                 join: LineJoin::Round,
+                cap: LineCap::Flat,
             }),
         )],
     )]);
@@ -439,6 +441,7 @@ fn test_line_arrowhead_uses_place_overlay() {
                     color: Color::black(),
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 rotation_deg: None,
                 opacity: None,
@@ -481,6 +484,7 @@ fn test_polyline_segments_use_place_overlay() {
                     color: Color::new(0, 0, 255),
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 rotation_deg: None,
                 opacity: None,
@@ -530,6 +534,7 @@ fn test_rotated_polyline_pre_rotates_points_without_typst_rotate_wrapper() {
                     color: Color::new(67, 113, 187),
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 rotation_deg: Some(270.0),
                 opacity: None,
@@ -578,4 +583,60 @@ fn test_fixed_page_multiple_text_boxes() {
     assert!(output.source.contains("First"));
     assert!(output.source.contains("Second"));
     assert!(output.source.contains("Third"));
+}
+
+/// A stated `a:ln/@cap` has to survive compilation, not merely appear in the
+/// generated Typst: `cap: "round"` and `cap: "square"` must reach the drawn
+/// stroke as PDF's round and projecting-square caps, which is what extends each
+/// end by half the line width. A native macOS PowerPoint export of a 3.5pt
+/// straight connector traces `linecap="1,1,1"` for `cap="rnd"` and
+/// `linecap="2,2,2"` for `cap="sq"`, against `0,0,0` when the attribute is
+/// absent (issue #1682).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_stated_line_cap_reaches_the_compiled_stroke() {
+    use crate::render::pdf::{PaintedKind, compiled_paint_sequence};
+    use typst::visualize::LineCap as CompiledLineCap;
+
+    for (cap, expected) in [
+        (LineCap::Flat, CompiledLineCap::Butt),
+        (LineCap::Round, CompiledLineCap::Round),
+        (LineCap::Square, CompiledLineCap::Square),
+    ] {
+        let doc = make_doc(vec![make_fixed_page(
+            960.0,
+            540.0,
+            vec![make_shape_element(
+                20.0,
+                100.0,
+                300.0,
+                0.0,
+                ShapeKind::Line {
+                    x1: 0.0,
+                    y1: 0.0,
+                    x2: 300.0,
+                    y2: 0.0,
+                    head_end: ArrowHead::None,
+                    tail_end: ArrowHead::None,
+                },
+                None,
+                Some(BorderSide {
+                    width: 3.5,
+                    color: Color::black(),
+                    style: BorderLineStyle::Solid,
+                    join: LineJoin::Round,
+                    cap,
+                }),
+            )],
+        )]);
+        let output = generate_typst(&doc).unwrap();
+        let painted =
+            compiled_paint_sequence(&output.source, &output.images, 0).expect("the slide compiles");
+        let stroke = painted
+            .iter()
+            .filter(|item| item.kind == PaintedKind::Shape)
+            .find_map(|item| item.stroke.as_ref())
+            .unwrap_or_else(|| panic!("the line is stroked: {painted:?}"));
+        assert_eq!(stroke.cap, expected, "IR cap {cap:?}");
+    }
 }

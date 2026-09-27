@@ -1,5 +1,10 @@
-use crate::parser::xml_util::OOXML_XML_VERSION;
-use std::cell::Cell;
+//! Per-paragraph `w:shd`, the fill Word paints across the paragraph's full
+//! width, recovered from the raw document XML.
+//!
+//! The scan counts the paragraph sequence of [`super::paragraph_cursor`], so a
+//! text box's `mc:Fallback` copy cannot shift the fill onto the paragraph below
+//! (issue #1689).
+
 use std::collections::HashMap;
 
 use quick_xml::Reader;
@@ -8,90 +13,39 @@ use quick_xml::events::{BytesStart, Event};
 use crate::ir::Color;
 use crate::parser::xml_util;
 
-fn attr_value(reader: &Reader<&[u8]>, element: &BytesStart<'_>, name: &[u8]) -> Option<String> {
-    element
-        .attributes()
-        .flatten()
-        .find(|attribute| attribute.key.local_name().as_ref() == name)
-        .and_then(|attribute| {
-            attribute
-                .decoded_and_normalized_value(OOXML_XML_VERSION, reader.decoder())
-                .ok()
-                .map(|value| value.into_owned())
-        })
-}
+use super::paragraph_cursor::{
+    ParagraphCursor, ScannedParagraph, attribute_value, scan_body_paragraphs,
+};
 
 fn shading_fill(reader: &Reader<&[u8]>, element: &BytesStart<'_>) -> Option<Color> {
-    attr_value(reader, element, b"fill").and_then(|fill| xml_util::parse_hex_color(&fill))
+    attribute_value(reader, element, b"fill").and_then(|fill| xml_util::parse_hex_color(&fill))
 }
 
 pub(in super::super) struct ParagraphShadingContext {
-    backgrounds: Vec<Option<Color>>,
-    cursor: Cell<usize>,
+    backgrounds: ParagraphCursor<Option<Color>>,
 }
 
 impl ParagraphShadingContext {
     pub(in super::super) fn from_xml(xml: Option<&str>) -> Self {
         Self {
-            backgrounds: xml.map(Self::scan).unwrap_or_default(),
-            cursor: Cell::new(0),
+            backgrounds: ParagraphCursor::new("w:shd", xml.map(Self::scan).unwrap_or_default()),
         }
     }
 
-    pub(in super::super) fn next_background(&self) -> Option<Color> {
-        let index = self.cursor.get();
-        self.cursor.set(index + 1);
-        self.backgrounds.get(index).copied().flatten()
+    /// The next paragraph's shading fill. Must be called exactly once per
+    /// converted `w:p`, with that paragraph's `w:pStyle`.
+    pub(in super::super) fn next_background(&self, style_id: Option<&str>) -> Option<Color> {
+        self.backgrounds
+            .next(style_id)
+            .and_then(|(_, background)| *background)
     }
 
-    fn scan(xml: &str) -> Vec<Option<Color>> {
-        let mut reader = Reader::from_str(xml);
-        reader.config_mut().trim_text(true);
-        let mut backgrounds = Vec::new();
-        let mut paragraph_stack = Vec::new();
-        let mut in_body = false;
-        let mut in_paragraph_properties = false;
-
-        loop {
-            match reader.read_event() {
-                Ok(Event::Start(element)) => match element.local_name().as_ref() {
-                    b"body" => in_body = true,
-                    b"p" if in_body => {
-                        backgrounds.push(None);
-                        paragraph_stack.push(backgrounds.len() - 1);
-                    }
-                    b"pPr" if !paragraph_stack.is_empty() => in_paragraph_properties = true,
-                    b"shd" if in_paragraph_properties => {
-                        if let Some(index) = paragraph_stack.last().copied() {
-                            backgrounds[index] = shading_fill(&reader, &element);
-                        }
-                    }
-                    _ => {}
-                },
-                Ok(Event::Empty(element)) => match element.local_name().as_ref() {
-                    b"p" if in_body => backgrounds.push(None),
-                    b"shd" if in_paragraph_properties => {
-                        if let Some(index) = paragraph_stack.last().copied() {
-                            backgrounds[index] = shading_fill(&reader, &element);
-                        }
-                    }
-                    _ => {}
-                },
-                Ok(Event::End(element)) => match element.local_name().as_ref() {
-                    b"body" => in_body = false,
-                    b"p" if in_body => {
-                        paragraph_stack.pop();
-                        in_paragraph_properties = false;
-                    }
-                    b"pPr" => in_paragraph_properties = false,
-                    _ => {}
-                },
-                Ok(Event::Eof) | Err(_) => break,
-                _ => {}
+    fn scan(xml: &str) -> Vec<ScannedParagraph<Option<Color>>> {
+        scan_body_paragraphs(xml, |reader, element, background| {
+            if element.local_name().as_ref() == b"shd" {
+                *background = shading_fill(reader, element);
             }
-        }
-
-        backgrounds
+        })
     }
 }
 
@@ -109,9 +63,9 @@ pub(in super::super) fn scan_style_paragraph_shading(xml: Option<&str>) -> HashM
         match reader.read_event() {
             Ok(Event::Start(element)) => match element.local_name().as_ref() {
                 b"style" => {
-                    let style_type = attr_value(&reader, &element, b"type");
+                    let style_type = attribute_value(&reader, &element, b"type");
                     paragraph_style_id = (style_type.as_deref() == Some("paragraph"))
-                        .then(|| attr_value(&reader, &element, b"styleId"))
+                        .then(|| attribute_value(&reader, &element, b"styleId"))
                         .flatten();
                 }
                 b"pPr" if paragraph_style_id.is_some() => in_paragraph_properties = true,
@@ -161,10 +115,32 @@ mod tests {
         let context = ParagraphShadingContext::from_xml(Some(xml));
 
         assert_eq!(
-            context.next_background(),
+            context.next_background(None),
             Some(Color::new(0xF4, 0xF4, 0xF4))
         );
-        assert_eq!(context.next_background(), None);
+        assert_eq!(context.next_background(None), None);
+    }
+
+    /// The fallback copy of a text box holds paragraphs docx-rs discards, so
+    /// counting them would paint the fill one paragraph low (issue #1689).
+    #[test]
+    fn skips_the_fallback_copy_of_a_text_box() {
+        let xml = r#"<w:document xmlns:w="urn:w" xmlns:mc="urn:mc" xmlns:v="urn:v"><w:body>
+          <w:p><w:r><mc:AlternateContent>
+            <mc:Choice Requires="wps"><w:txbxContent><w:p/></w:txbxContent></mc:Choice>
+            <mc:Fallback><w:pict><v:textbox><w:txbxContent><w:p/></w:txbxContent></v:textbox></w:pict></mc:Fallback>
+          </mc:AlternateContent></w:r></w:p>
+          <w:p><w:pPr><w:shd w:fill="FFFF00"/></w:pPr></w:p>
+        </w:body></w:document>"#;
+        let context = ParagraphShadingContext::from_xml(Some(xml));
+
+        assert_eq!(context.next_background(None), None, "the anchor paragraph");
+        assert_eq!(context.next_background(None), None, "the text box's own");
+        assert_eq!(
+            context.next_background(None),
+            Some(Color::new(0xFF, 0xFF, 0x00)),
+            "the shaded paragraph itself"
+        );
     }
 
     #[test]

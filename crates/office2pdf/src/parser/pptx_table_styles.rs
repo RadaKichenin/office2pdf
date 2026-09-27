@@ -367,6 +367,7 @@ fn set_region_border(borders: &mut RegionBorders, side: &[u8], width: f64, color
         color,
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     });
     match side {
         b"left" => borders.left = border,
@@ -683,6 +684,7 @@ fn solid_border(color: Color) -> Option<BorderSide> {
         color,
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     })
 }
 

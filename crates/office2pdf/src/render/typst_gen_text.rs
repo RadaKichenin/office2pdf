@@ -208,109 +208,16 @@ pub(super) fn generate_paragraph(
     let style = &para.style;
     let paragraph_tab_width_pt: f64 = paragraph_default_tab_width_pt(style, default_tab_width_pt);
 
-    if let Some(level) = style.heading_level {
-        // A heading is still a paragraph: Word paints its `w:pBdr` and `w:shd`
-        // around it exactly as it does around body copy, and a chapter-rule
-        // heading style is the commonest place a `w:pBdr` appears at all.
-        // Returning here before any decoration was emitted dropped every one
-        // of them — 22 chapter rules in the technical-brief fixture, while the
-        // header rule on the same page, declared directly rather than through
-        // a style, survived (issue #581).
-        //
-        // Word spaces and measures it as one too. While the wrapper opened
-        // only for decoration, both the block spacing and the line box were
-        // Typst's own `#set heading` defaults — numbers no `w:spacing`, no
-        // style definition and no Word rule produced — and since Typst
-        // collapses adjacent block spacing to the larger of the two, that
-        // default swallowed the neighbouring paragraph's declared gap as well
-        // (issue #1132).
-        //
-        // A heading resolves `w:spacing` exactly as body copy does, so
-        // `style` already holds the answer and no heading-specific fallback
-        // exists to add. Measured on native Word exports of a package whose
-        // `Heading1` paragraphs state no `w:spacing`: with
-        // `w:docDefaults/w:pPrDefault` declared the export is layout-identical
-        // to one stating `w:before="0" w:after="0"`, and without it identical
-        // to `w:before="0" w:after="160"` — Word's built-in `Normal`, the same
-        // fallback #1085 measured for body paragraphs. Word's built-in
-        // `Heading N` spacing takes no part.
-        let decorated = style.background.is_some() || style.border.is_some();
-        let line_height_settings: Option<String> =
-            word_line_height_settings(&para.runs, style, line_grid_pitch);
-        // The gaps measure from the line box's edges, so the box has to come
-        // with them: on Typst's glyph-tight default the block ends at the
-        // baseline, and the heading's own descender goes missing from the gap
-        // below it.
-        let wrapped: bool = decorated
-            || style.space_before.is_some()
-            || style.space_after.is_some()
-            || style.line_box.is_some()
-            || line_height_settings.is_some();
-        if wrapped {
-            out.push_str("#block(width: 100%");
-            write_block_spacing_params(out, style);
-            write_block_decoration_params(out, style);
-            out.push_str(")[\n");
-            write_paragraph_double_border_overlays(
-                out,
-                &style.border,
-                style.border_space.as_deref().copied().unwrap_or_default(),
-            );
-            write_line_box_settings(out, style.line_box);
-            if let Some(ref settings) = line_height_settings {
-                out.push_str(settings);
-            }
-        }
-        // A contents entry is laid out as body text, not as a copy of the
-        // heading, so it cannot be built from the heading's rendered content —
-        // the size and weight are inline markup inside it and no enclosing set
-        // rule beats them. Drop the heading's plain text under a label instead
-        // and let the list style it (issue #610), the same shape the caption
-        // lists already use.
-        let plain: String = paragraph_plain_text(&para.runs);
-        let _ = writeln!(
-            out,
-            "#metadata((level: {level}, text: \"{}\", font: {}))<{}>",
-            escape_typst_string(&plain),
-            crate::render::font_subst::font_with_fallbacks_for_text(
-                first_run_family(&para.runs).unwrap_or("Calibri"),
-                &plain,
-            ),
-            TOC_ENTRY_LABEL
-        );
-        // Whichever fixed line box the wrapper just put in force is what a
-        // framed eojeol has to restore inside itself (issue #626); an
-        // unwrapped heading still emits no fixed edges and needs no
-        // correction.
-        let line_box_em: Option<(f64, f64)> = wrapped
-            .then(|| {
-                word_line_box_em(&para.runs, style, line_grid_pitch).or_else(|| {
-                    style
-                        .line_box
-                        .map(|line_box| (line_box.ascent_em, line_box.descent_em))
-                })
-            })
-            .flatten();
-        let _ = write!(out, "#heading(level: {level})[");
-        generate_runs_with_tabs(
-            out,
-            &para.runs,
-            style.tab_stops.as_deref(),
-            paragraph_tab_width_pt,
-            paragraph_eojeol_wrap(
-                breaks_hangul_at_eojeol,
-                style,
-                line_box_em,
-                available_measure_pt,
-            ),
-        );
-        out.push_str("]\n");
-        if wrapped {
-            out.push_str("]\n");
-        }
-        return Ok(());
-    }
-
+    // A heading is a paragraph that also feeds the outline, and Word lays it
+    // out as one. It paints the heading's `w:pBdr` and `w:shd` (issue #581),
+    // spaces and measures it from the same `w:spacing` and line box — no
+    // built-in `Heading N` gap takes part, measured on native exports whose
+    // `Heading1` states no `w:spacing` (issue #1132) — and seats it across the
+    // line by the same `w:jc`, `w:ind` and `w:bidi` (issue #1820). So a heading
+    // takes this path too, and only its inline content differs. It used to
+    // have a copy of this path that gained those settings one issue at a time;
+    // the horizontal ones never arrived, and a centred zh-CN Word "Title",
+    // which carries `w:outlineLvl 0`, printed flush left.
     let line_height_settings: Option<String> =
         word_line_height_settings(&para.runs, style, line_grid_pitch);
     let has_para_style = needs_block_wrapper(style) || line_height_settings.is_some();
@@ -351,7 +258,7 @@ pub(super) fn generate_paragraph(
         }
     }
 
-    if para.runs.is_empty() {
+    if para.runs.is_empty() && style.heading_level.is_none() {
         out.push_str("#v(12pt)");
         if has_para_style {
             out.push_str("\n]");
@@ -361,6 +268,10 @@ pub(super) fn generate_paragraph(
         }
         out.push('\n');
         return Ok(());
+    }
+
+    if let Some(level) = style.heading_level {
+        write_heading_contents_entry(out, level, &para.runs);
     }
 
     let alignment = style.alignment;
@@ -393,20 +304,36 @@ pub(super) fn generate_paragraph(
         })
         .flatten();
 
-    generate_word_runs_with_tabs(
-        out,
-        &para.runs,
-        style.tab_stops.as_deref(),
-        paragraph_tab_width_pt,
-        paragraph_eojeol_wrap(
-            breaks_hangul_at_eojeol,
-            style,
-            line_box_em,
-            available_measure_pt,
-        ),
+    let eojeol_wrap: EojeolWrap = paragraph_eojeol_wrap(
+        breaks_hangul_at_eojeol,
         style,
-        line_grid_pitch,
+        line_box_em,
+        available_measure_pt,
     );
+    match style.heading_level {
+        // The runs keep the plain emitter: the per-run line boxes of issue
+        // #638 were measured on mixed-face body paragraphs only.
+        Some(level) => {
+            let _ = write!(out, "#heading(level: {level})[");
+            generate_runs_with_tabs(
+                out,
+                &para.runs,
+                style.tab_stops.as_deref(),
+                paragraph_tab_width_pt,
+                eojeol_wrap,
+            );
+            out.push(']');
+        }
+        None => generate_word_runs_with_tabs(
+            out,
+            &para.runs,
+            style.tab_stops.as_deref(),
+            paragraph_tab_width_pt,
+            eojeol_wrap,
+            style,
+            line_grid_pitch,
+        ),
+    }
 
     if use_align {
         out.push(']');
@@ -421,6 +348,27 @@ pub(super) fn generate_paragraph(
 
     out.push('\n');
     Ok(())
+}
+
+/// Drop a heading's plain text under the contents label.
+///
+/// A contents entry is laid out as body text, not as a copy of the heading,
+/// so it cannot be built from the heading's rendered content — the size and
+/// weight are inline markup inside it and no enclosing set rule beats them.
+/// The list styles this instead (issue #610), the same shape the caption
+/// lists already use.
+fn write_heading_contents_entry(out: &mut String, level: u8, runs: &[Run]) {
+    let plain: String = paragraph_plain_text(runs);
+    let _ = writeln!(
+        out,
+        "#metadata((level: {level}, text: \"{}\", font: {}))<{}>",
+        escape_typst_string(&plain),
+        crate::render::font_subst::font_with_fallbacks_for_text(
+            first_run_family(runs).unwrap_or("Calibri"),
+            &plain,
+        ),
+        TOC_ENTRY_LABEL
+    );
 }
 
 /// The letter-space PowerPoint counts after a slide line's last glyph, when
@@ -503,16 +451,18 @@ pub(super) fn needs_block_wrapper(style: &ParagraphStyle) -> bool {
 }
 
 /// Line-box settings for a body paragraph: a fixed box spanning Word's full
-/// line advance — the font's hhea line, 1.3 times it when the line carries
-/// East Asian text, or a snapping document grid's pitch — with zero leading.
+/// line advance — the font's hhea line, 1.3 times its gap-free part when the
+/// line carries East Asian text, or a snapping document grid's pitch — with
+/// zero leading.
 /// Typst's glyph-tight default renders such documents 20-30% shorter and
 /// shifts every page break (issue #354).
 ///
 /// The baseline sits at a constant `hhea ascender + lineGap` below the box
-/// top, never at the font's ascender/descender proportion of it: whatever
-/// height the line gains over the font's own — the East Asian bonus's lower
-/// half, or a grid slot's slack — accrues below the baseline, not around it
-/// (issues #508, #518).
+/// top — bare `hhea ascender` for an East Asian line, which leaves the gap out
+/// entirely (issue #1638) — never at the font's ascender/descender proportion
+/// of it: whatever height the line gains over the font's own — the East Asian
+/// bonus's lower half, or a grid slot's slack — accrues below the baseline,
+/// not around it (issues #508, #518).
 ///
 /// Carrying the advance inside the box, rather than recovering the
 /// remainder as `par(leading:)`, is what makes a paragraph's height match
@@ -939,11 +889,15 @@ fn powerpoint_line_box_from_seat_em(
 /// An `em` in a `#set text` edge resolves against whatever size is in force
 /// where the rule applies, not against the size the box was derived from. The
 /// paragraph emits a `#set text(size:)` of its own only when every one of its
-/// runs declares the same size, and a `<a:br/>` reaches the IR as a run with no
-/// run properties at all — so one hard break is enough to strip that rule and
-/// leave the edges resolving against Typst's 11pt default. Every hard-broken
-/// line under 11pt then advanced a flat `1.2 x 11pt` = 13.20pt, 89% too far for
-/// a 6pt caption (issue #1115).
+/// runs declares the same size, and a `<a:br/>` used to reach the IR as a run
+/// with no run properties at all — so one hard break was enough to strip that
+/// rule and leave the edges resolving against Typst's 11pt default. Every
+/// hard-broken line under 11pt then advanced a flat `1.2 x 11pt` = 13.20pt, 89%
+/// too far for a 6pt caption (issue #1115). The break now carries the style of
+/// the run it follows (issue #1666), so it no longer strips the rule on its
+/// own; a column whose lines declare different sizes still states no agreed
+/// size, and a break that opens its paragraph still falls back to the
+/// paragraph's default run style.
 ///
 /// Restating the box in points pins it to the size it was computed from — the
 /// paragraph's largest declared size, which is the one PowerPoint's line keys
@@ -1186,13 +1140,14 @@ fn word_line_box_and_leading(
     let leading_pt: f64 = word_line_leading_pt(runs, style, line_grid_pitch)?;
     let family: &str = east_asian_aware_metric_family(runs)?;
     let (ascender_em, descender_em, _word_pitch_em) =
-        crate::render::pdf::font_line_metrics_em(family)?;
+        word_line_metrics_em(family, line_takes_east_asian_metrics(runs))?;
     let font_size: f64 = paragraph_font_size_pt(runs);
     Some((ascender_em, descender_em, leading_pt / font_size))
 }
 
-/// Word gives a line set in an East Asian face 130% of the font's own hhea
-/// line, and centres the bonus on the baseline: half above, half below.
+/// Word gives a line set in an East Asian face 130% of the font's own
+/// ascender-plus-descender, and centres the bonus on the baseline: half above,
+/// half below.
 ///
 /// The face decides, not the line's characters — see
 /// [`line_takes_east_asian_metrics`] (issue #643).
@@ -1200,16 +1155,67 @@ fn word_line_box_and_leading(
 /// Both halves are measured, not assumed. Against native Word exports an Arial
 /// first baseline sits at `hhea ascender + lineGap` = 0.937988em below the text
 /// top while a Malgun Gothic one at the same settings sits at 1.28786em, and
-/// the difference is exactly `0.15 x` Malgun's 1.330078em hhea pitch — the term
-/// #508 could not attribute to any font table. The matching lower half shows up
+/// the difference is exactly `0.15 x` Malgun's 1.330078em line — the term #508
+/// could not attribute to any font table. The matching lower half shows up
 /// as the advance: every Korean fixture in the business corpus paces its
-/// wrapped lines at `1.3 x` the hhea pitch (10.5pt Malgun measures 18.00-18.24
+/// wrapped lines at `1.3 x` that line (10.5pt Malgun measures 18.00-18.24
 /// against 18.156 predicted), and 06_official_letter_ko's 9.5pt paragraphs
-/// advance 16.43pt where the font's bare hhea line is 12.64pt (issue #518).
+/// advance 16.43pt where the font's bare line is 12.64pt (issue #518).
+///
+/// The line the factor multiplies excludes the face's `hhea` line gap, which
+/// Malgun Gothic and Meiryo could not show because theirs is zero — see
+/// [`word_line_metrics_em`] (issue #1638).
 const EAST_ASIAN_LINE_HEIGHT_FACTOR: f64 = 1.3;
 
 /// The half of that bonus which lands above the baseline.
 const EAST_ASIAN_ASCENT_EXCESS: f64 = (EAST_ASIAN_LINE_HEIGHT_FACTOR - 1.0) / 2.0;
+
+/// The line metrics Word measures a line set in `family` by, in em units:
+/// `(above baseline, below baseline, single-line pitch)`.
+///
+/// A Latin line is [`crate::render::pdf::font_line_metrics_em`] unchanged: the
+/// face's `hhea` line gap belongs to the pitch, and Word puts it above the
+/// baseline (Arial 67/2048 in issue #508, the system Times New Roman's 87/2048
+/// in #1284).
+///
+/// **An East Asian line leaves the gap out of both.** Its box is
+/// [`EAST_ASIAN_LINE_HEIGHT_FACTOR`] times the bare `hhea` ascender-plus-
+/// descender, and its baseline sits [`EAST_ASIAN_ASCENT_EXCESS`] of that same
+/// bare line below the ascender. Malgun Gothic and Meiryo hid this for as long
+/// as they were the only faces measured, because their gap is zero; Batang,
+/// Gulim, Dotum and Gungsuh declare 152/1024, and carrying it advanced a 10.5pt
+/// Batang paragraph 15.68pt per line where a native Word for Mac export
+/// advances 13.65pt = `1.3 x (879 + 145)/1024`, and seated its first baseline
+/// 1.77pt low (issue #1638).
+///
+/// The gap-free reading is `hhea`'s, not `OS/2`'s `usWin` pair, which those
+/// faces cannot tell apart because the two are equal for every one of them.
+/// Three native Word for Mac exports of Japanese probe paragraphs in faces
+/// where they differ settle it: Yu Gothic (`hhea` 1802/-455/1024, `usWin`
+/// 2017/619) advances 15.03pt at 10.5pt against 15.04 predicted from `hhea`
+/// and 17.57 from `usWin`, Hiragino Sans GB (880/-120/500 against 951/211)
+/// advances 13.65 against 13.65 and 15.86, and Yu Mincho — same `hhea` as Yu
+/// Gothic, different `usWin` — exports baselines identical to Yu Gothic's.
+///
+/// The rule is not Korean-specific: a SimSun probe (`hhea` 220/-36/36 per 256)
+/// advances 13.60pt and seats its first baseline 10.61pt below the margin,
+/// against 13.65 and 10.59 gap-free (15.57 and 12.38 with the gap), and a
+/// Microsoft YaHei one — a CJK face that declares no gap — keeps the plain
+/// 1.3 factor at 18.00pt against 18.02 predicted.
+fn word_line_metrics_em(family: &str, takes_east_asian_metrics: bool) -> Option<(f64, f64, f64)> {
+    let (ascender_em, descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    if !takes_east_asian_metrics {
+        return Some((ascender_em, descender_em, pitch_em));
+    }
+    // `font_line_metrics_em` folds the gap into its first element, so removing
+    // it from the ascent and the pitch keeps the triple summing to itself.
+    let line_gap_em: f64 = crate::render::pdf::font_line_gap_em(family).unwrap_or(0.0);
+    Some((
+        ascender_em - line_gap_em,
+        descender_em,
+        pitch_em - line_gap_em,
+    ))
+}
 
 /// The family whose metrics pace these runs' lines.
 ///
@@ -1315,9 +1321,10 @@ pub(super) fn line_takes_east_asian_metrics(runs: &[Run]) -> bool {
 
 /// The extra ascent, in em, that Word gives a line set in an East Asian face.
 ///
-/// `pitch_em` is the font's own hhea pitch, never the line's advance: under a
-/// document grid the slot's extra height accrues entirely below the baseline,
-/// so this term must not scale with the slot (issue #518).
+/// `pitch_em` is the font's own gap-free line ([`word_line_metrics_em`]), never
+/// the line's advance: under a document grid the slot's extra height accrues
+/// entirely below the baseline, so this term must not scale with the slot
+/// (issues #518, #1638).
 fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
     if line_takes_east_asian_metrics(runs) {
         EAST_ASIAN_ASCENT_EXCESS * pitch_em
@@ -1358,7 +1365,8 @@ fn east_asian_ascent_excess_em(runs: &[Run], pitch_em: f64) -> f64 {
 /// renderer's own seat.
 pub(super) fn word_line_box_descent_em(runs: &[Run]) -> Option<f64> {
     let family: &str = east_asian_aware_metric_family(runs)?;
-    let (ascender_em, descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    let (ascender_em, descender_em, pitch_em) =
+        word_line_metrics_em(family, line_takes_east_asian_metrics(runs))?;
     if ascender_em + descender_em <= 0.0 || pitch_em <= 0.0 {
         return None;
     }
@@ -1413,30 +1421,44 @@ pub(super) fn sheet_line_deepest_descent_pt(runs: &[Run], scale: f64) -> Option<
 /// Where Word seats a header story's first baseline, in em below the
 /// `w:pgMar/@w:header` line the header is measured from.
 ///
-/// That origin is the top of the first line's *ascent*, so the term is the
-/// face's bare hhea ascender — not [`word_line_box_em`]'s top edge, which folds
-/// in the hhea line gap Word keeps above the origin — plus the upper half of
-/// the East Asian bonus when the line carries East Asian text.
+/// That origin is the top of the first line's box, so a Latin header gets the
+/// very edge [`crate::render::pdf::font_line_metrics_em`] gives every body
+/// line: the face's `hhea` ascender **plus** its `hhea` line gap. An East Asian
+/// line adds the upper half of its bonus to a gap-free ascender instead,
+/// because its box leaves the gap out at both ends ([`word_line_metrics_em`],
+/// issue #1638).
 ///
-/// Measured against native Word exports of the business corpus, all at
-/// `w:header="708"` = 35.40pt: an 8pt Arial header baseline lands at 42.72pt
-/// against 42.64pt predicted (`0.9053em`), and an 8pt Malgun Gothic one at
-/// 45.60pt against 45.70pt predicted (`1.2879em`), both within the 0.24pt grid
-/// those exports quantise positions to. Taking the gap-inclusive body ascent
-/// instead would predict 42.90pt for the Arial case, a whole grid step past
-/// what Word wrote (issue #629).
+/// The Latin seat is four one-factor native Word 16.112 exports of
+/// `unit_test_headers.docx` at `w:header="720"` = 36pt, the header run given an
+/// explicit `w:rFonts` and `w:sz`: Arial 24pt lands at 58.56pt against 58.51
+/// predicted, Times New Roman 24pt at 58.32 against 58.41, and Times New Roman
+/// 12pt at 47.28 against 47.20, each inside the 0.24pt grid those exports
+/// quantise positions to and each 0.59 to 0.93pt away from the bare-ascender
+/// seat. Georgia 24pt, which declares no gap, is the control: it measures
+/// 58.08pt where both models predict 58.01 (issue #1640).
 ///
-/// The bonus keys on the resolved face, not on the header's characters, like
-/// every other line box (issues #643, #814): a one-factor native export of
-/// `10_research_report_ko` with its header text swapped to `Monthly Customer
-/// Satisfaction Trend Report` keeps the baseline at 45.60pt — exactly the
-/// Korean control's seat — where the bare ascender would put it at 44.11pt.
+/// That supersedes the bare-ascender reading of issues #508 and #629, which was
+/// calibrated on an 8pt Arial header at `w:header="708"` = 35.40pt — a size
+/// whose 0.26pt gap and an origin sitting half a device pixel off the grid
+/// leave the two models one pixel apart, too close for that export to separate.
+///
+/// The East Asian bonus keys on the resolved face, not on the header's
+/// characters, like every other line box (issues #643, #814): a one-factor
+/// native export of `10_research_report_ko` with its header text swapped to
+/// `Monthly Customer Satisfaction Trend Report` keeps the baseline at 45.60pt —
+/// exactly the Korean control's seat — where the bare ascender would put it at
+/// 44.11pt. Malgun Gothic declares no line gap, so those Korean measurements
+/// bind the gap-free branch unchanged.
 fn word_header_line_ascent_em(runs: &[Run], family: &str) -> Option<f64> {
+    // Read the ascender explicitly rather than through `font_line_metrics_em`,
+    // whose `ttf_parser` alias answers with OS/2 `sTypoAscender` on the faces
+    // that set `USE_TYPO_METRICS` (see `font_hhea_ascender_em`).
     let ascender_em: f64 = crate::render::pdf::font_hhea_ascender_em(family)?;
     if !line_takes_east_asian_metrics(runs) {
-        return Some(ascender_em);
+        let line_gap_em: f64 = crate::render::pdf::font_line_gap_em(family).unwrap_or(0.0);
+        return Some(ascender_em + line_gap_em);
     }
-    let (_, _, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    let (_, _, pitch_em) = word_line_metrics_em(family, true)?;
     Some(ascender_em + EAST_ASIAN_ASCENT_EXCESS * pitch_em)
 }
 
@@ -1483,7 +1505,8 @@ pub(super) fn word_header_band_shift_pt(runs: &[Run]) -> Option<f64> {
 /// exceed Word's pitch and no leading could shrink the advance to it.
 pub(super) fn word_hf_line_leading_pt(runs: &[Run], bottom_edge_em: f64) -> Option<f64> {
     let family: &str = east_asian_aware_metric_family(runs)?;
-    let (_ascender_em, _descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    let (_ascender_em, _descender_em, pitch_em) =
+        word_line_metrics_em(family, line_takes_east_asian_metrics(runs))?;
     if pitch_em <= 0.0 {
         return None;
     }
@@ -1498,7 +1521,7 @@ pub(super) fn word_hf_line_leading_pt(runs: &[Run], bottom_edge_em: f64) -> Opti
 /// The height one header or footer line takes, in points.
 ///
 /// Word's natural line for the paragraph's resolved face and size — the hhea
-/// line, or 1.3 times it for an East Asian one. A header taller than the band
+/// line, or 1.3 times its gap-free part for an East Asian one. A header taller than the band
 /// `w:top - w:header` leaves has to grow the top margin, and this is the term
 /// that measures it (issue #736).
 ///
@@ -1506,7 +1529,8 @@ pub(super) fn word_hf_line_leading_pt(runs: &[Run], bottom_edge_em: f64) -> Opti
 /// declared size rather than guessing at a growth.
 pub(super) fn word_line_advance_pt(runs: &[Run]) -> Option<f64> {
     let family: &str = east_asian_aware_metric_family(runs)?;
-    let (_ascender_em, _descender_em, pitch_em) = crate::render::pdf::font_line_metrics_em(family)?;
+    let (_ascender_em, _descender_em, pitch_em) =
+        word_line_metrics_em(family, line_takes_east_asian_metrics(runs))?;
     if pitch_em <= 0.0 {
         return None;
     }
@@ -1514,8 +1538,10 @@ pub(super) fn word_line_advance_pt(runs: &[Run]) -> Option<f64> {
 }
 
 /// The line advance Word gives this paragraph before any grid is consulted:
-/// the font's hhea line, or 1.3 times it when the line is set in an East Asian
-/// face (issues #518, #643).
+/// the font's hhea line, or 1.3 times its gap-free part when the line is set in
+/// an East Asian face (issues #518, #643, #1638). `word_pitch_em` must come
+/// from [`word_line_metrics_em`], which has already dropped the gap for such a
+/// line.
 fn word_natural_line_em(runs: &[Run], word_pitch_em: f64) -> f64 {
     if line_takes_east_asian_metrics(runs) {
         EAST_ASIAN_LINE_HEIGHT_FACTOR * word_pitch_em
@@ -2059,12 +2085,13 @@ pub(super) fn sheet_cell_thick_bottom_lift_pt(
 /// those samples. MS Gothic conforming is why the exception cannot be stated
 /// as "an East Asian face".
 ///
-/// `None` below each series' first entry, because the probe workbook floors at
-/// [`SHEET_CELL_MIN_DESCENT_SEAT_PT`] and so cannot tell a face value of 4pt
-/// from a floored one — and the floor is exactly what differs between the two
-/// workbook families (issue #1199). The rounded descent stands in there, and
-/// on all three faces it lands at or under both floors (3pt at the largest
-/// such size on each), so the family's own floor decides as it did before.
+/// The original sweep left values at or below its four-point workbook floor
+/// unmeasured. Issue #1815 isolates Malgun Gothic sizes 8–14 in separate ruled
+/// rows under an Arial default style: sizes 8–10 seat at 3pt, and 11–14 at 4pt.
+/// An independent Arial 4pt control seats at 2pt, below every measured Malgun
+/// value; default-style Arial sizes 4, 8 and 11 preserve those positions.
+/// Gulim/Batang values still masked by the workbook floor remain `None`, with
+/// rounded descent as the fallback; their unfloored small seats are unverified.
 ///
 /// **Nothing here interpolates**, and no family may be lent another's column:
 /// Gulim and Batang share their `hhea` metrics but were each swept in full
@@ -2101,7 +2128,7 @@ struct SheetCellSeats {
 #[rustfmt::skip]
 const SHEET_CELL_SEATS: [SheetCellSeats; 3] = [
     SheetCellSeats { families: &["Malgun Gothic", "맑은 고딕"], seats_pt:
-        [None, None, None, None, None, None, None, Some(5.0), Some(5.0), Some(6.0), Some(6.0), Some(7.0), Some(7.0), Some(8.0), Some(8.0), Some(9.0), Some(10.0), Some(11.0), Some(12.0), Some(14.0), Some(16.0)] },
+        [Some(3.0), Some(3.0), Some(3.0), Some(4.0), Some(4.0), Some(4.0), Some(4.0), Some(5.0), Some(5.0), Some(6.0), Some(6.0), Some(7.0), Some(7.0), Some(8.0), Some(8.0), Some(9.0), Some(10.0), Some(11.0), Some(12.0), Some(14.0), Some(16.0)] },
     SheetCellSeats { families: &["Gulim", "굴림"], seats_pt:
         [None, None, None, None, None, None, None, None, None, None, None, None, None, None, Some(5.0), Some(5.0), Some(5.0), Some(7.0), Some(7.0), Some(8.0), Some(10.0)] },
     SheetCellSeats { families: &["Batang", "바탕"], seats_pt:
@@ -2268,7 +2295,7 @@ pub(super) fn word_cell_line_box(
         ),
     };
     let (ascender_em, descender_em, word_pitch_em) =
-        crate::render::pdf::font_line_metrics_em(family)?;
+        word_line_metrics_em(family, row_east_asian.takes_east_asian_metrics)?;
     let metric_em: f64 = ascender_em + descender_em;
     if metric_em <= 0.0 || word_pitch_em <= 0.0 {
         return None;
@@ -2588,7 +2615,7 @@ pub(super) fn word_line_leading_pt(
     };
     let family: &str = east_asian_aware_metric_family(runs)?;
     let (ascender_em, descender_em, word_pitch_em) =
-        crate::render::pdf::font_line_metrics_em(family)?;
+        word_line_metrics_em(family, line_takes_east_asian_metrics(runs))?;
     let font_size: f64 = runs
         .iter()
         .filter_map(|run| run.style.font_size)
@@ -3354,11 +3381,41 @@ fn generate_runs_with_tabs_and_metrics(
     }
 
     let segments: Vec<Vec<Run>> = split_runs_on_tabs(runs);
+    write_measured_tab_segments(
+        out,
+        &segments,
+        tab_stops,
+        default_tab_width_pt,
+        |out, index| {
+            generate_runs_with_metrics(out, &segments[index], eojeol_wrap, run_line_metrics)
+        },
+    );
+}
+
+/// Lay tab-separated segments out on the paragraph's stops: each tab advances
+/// to the first stop past the measured width of everything before it, and the
+/// segment after it is aligned by that stop, or starts at the next default
+/// stop when none is left.
+///
+/// `segment_runs[index]` is segment `index`'s text, read for its decimal
+/// anchor; `write_segment` emits its content. Header and footer paragraphs
+/// come through here as well as body copy, so a tab lands in the same place in
+/// both. Their segments used to be matched against two running-head shapes
+/// instead, which sent a lone tab to the right margin whenever the last stop
+/// was a right stop, so a header centred on the Header style's centre stop
+/// printed right-aligned (issue #1821).
+pub(super) fn write_measured_tab_segments(
+    out: &mut String,
+    segment_runs: &[Vec<Run>],
+    tab_stops: Option<&[TabStop]>,
+    default_tab_width_pt: f64,
+    mut write_segment: impl FnMut(&mut String, usize),
+) {
     out.push_str("#context {\n");
 
-    for (index, segment) in segments.iter().enumerate() {
+    for (index, segment) in segment_runs.iter().enumerate() {
         let _ = write!(out, "  let tab_segment_{index} = [");
-        generate_runs_with_metrics(out, segment, eojeol_wrap, run_line_metrics);
+        write_segment(out, index);
         out.push_str("]\n");
 
         if index == 0 {
@@ -3369,7 +3426,7 @@ fn generate_runs_with_tabs_and_metrics(
         write_tab_segment_bindings(out, index, segment, tab_stops, default_tab_width_pt);
     }
 
-    let _ = writeln!(out, "  tab_prefix_{}", segments.len() - 1);
+    let _ = writeln!(out, "  tab_prefix_{}", segment_runs.len() - 1);
     out.push('}');
 }
 
@@ -5322,12 +5379,19 @@ pub(super) fn sheet_advance_grid_scale() -> Option<f64> {
 /// the grid applies to. A fitted cell rounds at its declared size and scales
 /// that grid onto the page (issue #1238).
 ///
-/// Typst lays a run out on the face's exact advances, and offers no per-glyph
-/// override; `tracking` is the one lever, and it is uniform. Spreading the
-/// run's rounding delta over its gaps stops the 5% deficit accumulating and
-/// leaves each glyph within the rounding noise: measured against the ten
-/// golden-mock exports, the worst origin lands 1.35pt from the native one and
-/// the median 0.13pt, where the unquantized line reached 19.5pt.
+/// Typst lays a run out on the face's exact advances, and its source language
+/// offers no per-glyph override; `tracking` is the one lever there, and it is
+/// uniform. What it buys is the *reservation*: spreading the run's rounding
+/// delta over its gaps makes the run measure the width Excel gives it, so
+/// wrapping, the spill clip and every seat placed from that width are the
+/// quantized ones, and the 5% deficit stops accumulating.
+///
+/// Where each glyph then lands inside that width is settled on the completed
+/// frame, which does carry one advance per glyph — see `excel_glyph_pacing`.
+/// The spread alone got the average right but not the individual origin:
+/// measured against the ten golden-mock exports, the worst landed 1.35pt from
+/// the native one and the median 0.13pt, where the unquantized line reached
+/// 19.5pt (issue #1659).
 ///
 /// The delta is summed over the advances that *carry a gap* — every glyph but
 /// the last — so the run's last origin lands exactly where Excel puts it. The
