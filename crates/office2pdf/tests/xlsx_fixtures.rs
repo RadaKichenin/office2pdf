@@ -3080,3 +3080,30 @@ fn out_of_grid_xlsx_fixture_is_rejected_before_layout_allocation() {
     assert!(streaming.is_err());
     assert!(streaming.unwrap_err().to_string().contains("Excel grid"));
 }
+
+#[test]
+fn shared_string_bomb_fixture_is_rejected_before_it_is_copied_into_cells() {
+    // POI's shared-string bomb points 12,000 cells at one 1 MiB string. The
+    // reader gives every cell its own copy, so it needed about 12 GiB before
+    // layout began; rejecting the table caps the work at reading the table
+    // itself (issue #1702).
+    let data = load_fixture("poi/poc-shared-strings.xlsx");
+    let error = office2pdf::convert_bytes(
+        &data,
+        office2pdf::config::Format::Xlsx,
+        &ConvertOptions::default(),
+    )
+    .expect_err("the shared-string bomb must fail before the table is copied into cells");
+    let message: String = error.to_string();
+    assert!(
+        message.contains("Excel's 32767-character cell limit"),
+        "{message}"
+    );
+    let streaming = XlsxParser.parse_streaming(&data, &ConvertOptions::default(), 100);
+    assert!(
+        streaming
+            .expect_err("streaming rejects it too")
+            .to_string()
+            .contains("Excel's 32767-character cell limit")
+    );
+}
