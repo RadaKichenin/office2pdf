@@ -19,6 +19,10 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# Every rust-cache step saves only on main. The repository's Actions cache is
+# capped at 10 GB; when each PR also saved its own ~1 GB entries, they evicted
+# main's and most jobs restored nothing. PRs restore main's entries instead.
+
 permissions:
   contents: read
 
@@ -167,6 +171,8 @@ jobs:
         with:
           toolchain: "1.92"
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --locked --workspace
 
   test:
@@ -183,10 +189,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install qpdf
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y qpdf
-      - run: cargo test --locked --workspace
+      - run: cargo test --locked --workspace --profile ci
         env:
           OFFICE2PDF_VALIDATE_PDF: "1"
 
@@ -204,10 +212,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test native conversion without Typst fonts
         run: |
-          cargo test --locked -p office2pdf --no-default-features --lib font_feature
-          cargo test --locked -p office2pdf --no-default-features --test font_features
+          cargo test --locked -p office2pdf --no-default-features --profile ci --lib font_feature
+          cargo test --locked -p office2pdf --no-default-features --profile ci --test font_features
           cargo check --locked -p office2pdf-cli --no-default-features
 
   clippy:
@@ -221,6 +231,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   wasm-check:
@@ -241,6 +253,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.feature }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check wasm32 feature combinations
         if: matrix.feature == 'wasm'
         run: |
@@ -287,6 +300,8 @@ jobs:
       - uses: ./.github/actions/bulk-fixtures
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Compare fixture outcomes with baseline
         run: cargo test --locked --release -p office2pdf --test bulk_conversion test_bulk_regression_gate -- --ignored --nocapture --exact
         env:
