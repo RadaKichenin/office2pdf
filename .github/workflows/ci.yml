@@ -5,7 +5,16 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, edited]
+    # `edited` is deliberately absent: only the PR body contract reads the body,
+    # and it lives in pr-contract.yml so a description edit does not re-run
+    # every Rust job on an unchanged head.
+    types: [opened, synchronize, reopened]
+
+# A new push to a PR supersedes its running checks. Pushes to main key on the
+# commit, so every merge commit keeps its own complete run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -105,67 +114,19 @@ jobs:
       - name: Validate business golden corpus
         run: python3 scripts/validate_business_golden_mocks.py
 
-  visual-pr-contract:
-    name: Visual PR Contract
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-      - name: Test visual PR validator
-        run: python3 -m unittest discover -s scripts/tests -p 'test_check_visual_pr.py'
-      - name: Test layout differ
-        run: |
-          python3 -m unittest discover -s scripts/tests -p 'test_compare_layout.py'
-          python3 -m unittest discover -s scripts/tests -p 'test_spatial_match.py'
-      - name: Test render comparison
-        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_render.py'
-      - name: Test text-layer census
-        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_text_layer.py'
-      - name: Test GT integrity gate
-        run: python3 -m unittest discover -s scripts/tests -p 'test_check_gt_integrity.py'
-      - name: Test probe harness
-        run: python3 -m unittest discover -s scripts/tests -p 'test_probe_harness.py'
-      - name: Test PowerPoint chart-axis harness
-        run: python3 -m unittest discover -s scripts/tests -p 'test_measure_powerpoint_chart_axis.py'
-      - name: Test Excel row-height sweep
-        run: python3 -m unittest discover -s scripts/tests -p 'test_measure_excel_row_height.py'
-      - name: Test issue-loop viewer
-        run: python3 -m unittest discover -s scripts/tests -p 'test_issue_loop_watch.py'
-      - name: Test issue-loop usage-limit detector
-        run: python3 -m unittest discover -s scripts/tests -p 'test_issue_loop.py'
-      - name: Check issue-loop script syntax
-        run: bash -n scripts/issue_loop.sh
-      - name: Validate visual PR contract
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          python3 scripts/check_visual_pr.py
-          --event "${GITHUB_EVENT_PATH}"
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha }}"
-          --repository "${{ github.repository }}"
-
   check:
-    name: Check
+    # Stable is already compiled per OS by Test (and on Linux by Clippy), so
+    # only the MSRV needs a separate check.
+    name: Check MSRV
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, "1.92"]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: "1.92"
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked --workspace
 
@@ -187,6 +148,19 @@ jobs:
       - run: cargo test --locked --workspace
         env:
           OFFICE2PDF_VALIDATE_PDF: "1"
+
+  no-embedded-fonts:
+    # A different feature set rebuilds the crate, so it runs beside Test
+    # instead of extending Test's critical path.
+    name: Test without Typst fonts
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Test native conversion without Typst fonts
         run: |
           cargo test --locked -p office2pdf --no-default-features --lib font_feature
@@ -205,8 +179,13 @@ jobs:
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   wasm-check:
-    name: WASM Check & Test
+    # One leg per browser feature: the two package builds share nothing but
+    # dependencies, so running them side by side halves the job.
+    name: WASM Check & Test (${{ matrix.feature }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        feature: [wasm, wasm-cjk-font]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -214,29 +193,31 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          key: wasm
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --no-default-features --features wasm
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm-cjk-font
+          key: ${{ matrix.feature }}
+      - name: Check wasm32 feature combinations
+        if: matrix.feature == 'wasm'
+        run: |
+          cargo check --locked --target wasm32-unknown-unknown -p office2pdf
+          cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm
+          cargo check --locked --target wasm32-unknown-unknown -p office2pdf --no-default-features --features wasm
+      - name: Check wasm32 with bundled Chinese font
+        if: matrix.feature == 'wasm-cjk-font'
+        run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm-cjk-font
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
       # `cargo check` and `wasm-pack test` do not link the browser package
       # documented in README.md, so keep that artifact buildable too.
+      # `--no-opt` skips wasm-opt, which took ~7 of every 8 minutes here; this
+      # job proves the package links, and no workflow publishes it.
       - name: Build browser package
-        run: wasm-pack build crates/office2pdf --target web --features wasm --locked
+        run: wasm-pack build crates/office2pdf --target web --no-opt --features ${{ matrix.feature }} --locked
       # Runs the wasm integration tests in src/wasm.rs under Node, exercising
       # the wasm32 time paths (Instant/SystemTime) end-to-end so the issue #178
       # class of runtime panic cannot regress unnoticed.
       - name: Run wasm tests in Node
         working-directory: crates/office2pdf
-        run: wasm-pack test --node --features wasm --locked
-      - name: Build browser package with bundled Chinese font
-        run: wasm-pack build crates/office2pdf --target web --features wasm-cjk-font --locked
-      - name: Run bundled Chinese font tests in Node
-        working-directory: crates/office2pdf
-        run: wasm-pack test --node --features wasm-cjk-font --locked
+        run: wasm-pack test --node --features ${{ matrix.feature }} --locked
 
   fmt:
     name: Format
