@@ -5443,6 +5443,7 @@ fn a_zero_baseline_shift_keeps_wrapped_lines_on_the_story_grid() {
 
 /// Enough paragraphs that the block is several times deeper than the frame,
 /// which is what the degenerate region truncates.
+#[cfg(not(target_arch = "wasm32"))]
 const OVERFLOWING_FRAME_LINES: [&str; 12] = [
     "Footnote appears here",
     "Bold italic underline",
@@ -5458,12 +5459,14 @@ const OVERFLOWING_FRAME_LINES: [&str; 12] = [
     "Row 2 column 2",
 ];
 
+#[cfg(not(target_arch = "wasm32"))]
 const OVERFLOWING_FRAME_ANCHORS: [crate::ir::TextBoxVerticalAlign; 3] = [
     crate::ir::TextBoxVerticalAlign::Top,
     crate::ir::TextBoxVerticalAlign::Center,
     crate::ir::TextBoxVerticalAlign::Bottom,
 ];
 
+#[cfg(not(target_arch = "wasm32"))]
 fn overflowing_inset_frame_runs(
     frame_height_pt: f64,
     top_inset_pt: f64,
@@ -5498,6 +5501,7 @@ fn overflowing_inset_frame_runs(
 
 /// The vertical distance every run moved between two frames, which must be one
 /// number: the whole block travels together.
+#[cfg(not(target_arch = "wasm32"))]
 fn overflowing_frame_block_shift(
     before: &[crate::render::pdf::PlacedTextRun],
     after: &[crate::render::pdf::PlacedTextRun],
@@ -5518,6 +5522,7 @@ fn overflowing_frame_block_shift(
     shift
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_frame_shorter_than_its_insets_keeps_every_line() {
     for vertical_align in OVERFLOWING_FRAME_ANCHORS {
@@ -5567,6 +5572,7 @@ fn a_frame_shorter_than_its_insets_keeps_every_line() {
 /// 35.98pt and the top-anchored one 35.98pt, and dropping its `tIns` instead
 /// raised the top-anchored block 35.78pt. Seating the block on the top inset,
 /// or centring it on the frame, makes both `bIns` figures zero.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn each_inset_moves_an_overflowing_block_half_its_own_change() {
     for vertical_align in OVERFLOWING_FRAME_ANCHORS {
@@ -5603,6 +5609,7 @@ fn each_inset_moves_an_overflowing_block_half_its_own_change() {
 /// A native PowerPoint for Mac export of the reported frame places the block's
 /// top 0.02pt below the seat line under `t` and 440.42pt above it under `b`,
 /// against a block measured at 440.44pt.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn the_three_anchors_of_an_overflowing_block_step_by_half_its_height() {
     let top = overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Top);
@@ -5715,6 +5722,7 @@ fn the_reported_zero_height_frame_centres_its_block_on_the_frame() {
 /// top-anchored box for its own reasons, and a box that did not ask for
 /// `<a:normAutofit/>` is excluded from the single-line path. It is here as a
 /// regression guard on the plain branch it does take.
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_single_paragraph_in_a_frame_shorter_than_its_insets_keeps_its_natural_width() {
     for vertical_align in OVERFLOWING_FRAME_ANCHORS {
