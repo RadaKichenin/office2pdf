@@ -18,8 +18,10 @@ replace those documents.
 - Settle an unclear native-application rule with `scripts/probe_harness.py` (one factor
   per variant) rather than by arguing from the corpus.
 - A visual defect fix owes the evidence contract in `AGENTS.md`:
-  `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`, and the pull
-  request body the contract check expects.
+  `assets/bugfixes/issue-<number>/gt.jpg`, `before.jpg`, `after.jpg`,
+  `layout-audit.json`, one `render-clusters-page-<page>.json` per compared page, and
+  the pull request body the contract check expects. `AGENTS.md` is authoritative if
+  this list and it disagree.
 - Never name anything under `tests/classified_fixtures/` in a commit message, pull
   request, or issue comment.
 - Re-run the audit on the fixed output before closing an issue. Every material deviation
