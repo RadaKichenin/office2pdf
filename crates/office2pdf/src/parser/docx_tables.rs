@@ -78,6 +78,24 @@ fn extract_table_alignment(prop_json: Option<&serde_json::Value>) -> Option<Alig
         })
 }
 
+/// What Word insets a cell by when the package resolves no table style and
+/// states no `w:tblCellMar`: nothing vertically, and 0.48pt on each horizontal
+/// side.
+///
+/// Measured off native Word for Mac 16 exports of one-factor probe packages
+/// (see `assets/bugfixes/issue-1687/README.md`). Word paints the vertical pair
+/// at 0, so it is exact. The horizontal pair is the painted value: Word
+/// quantises a cell inset to its 0.24pt device grid, and bracketing probes put
+/// the unquantised default between 9 and 11 twips, so 0.48pt is what reaches
+/// the page rather than a declared width. This is *not* the built-in Normal
+/// Table's 108 twips — that only applies once a table style resolves.
+const WORD_STYLELESS_TABLE_CELL_MARGINS: Insets = Insets {
+    top: 0.0,
+    right: 0.48,
+    bottom: 0.0,
+    left: 0.48,
+};
+
 fn extract_table_default_cell_padding(prop_json: Option<&serde_json::Value>) -> Option<Insets> {
     prop_json
         .and_then(|j| j.get("margins"))
@@ -143,16 +161,17 @@ pub(super) fn convert_table(
     let table_prop_json = serde_json::to_value(&table.property).ok();
     let alignment = extract_table_alignment(table_prop_json.as_ref());
     // Direct table properties win, but a table that states no `w:tblStyle`
-    // still inherits the package's default table style. Word's built-in
-    // `TableNormal` commonly carries 0pt vertical and 5.4pt horizontal cell
-    // margins there; losing it lets Typst's unrelated 5pt inset leak into all
-    // four sides (issue #1466).
+    // still inherits the package's default table style (issue #1466). A
+    // package that resolves no table style at all reaches the last arm, where
+    // Typst's unrelated symmetric 5pt inset used to leak in and put every cell
+    // line 5pt low (issue #1687).
     let default_cell_padding = extract_table_default_cell_padding(table_prop_json.as_ref())
         .or_else(|| {
             table_style
                 .as_ref()
                 .and_then(ResolvedTableStyle::default_cell_padding)
-        });
+        })
+        .or(Some(WORD_STYLELESS_TABLE_CELL_MARGINS));
 
     let mut raw_rows = extract_raw_rows(
         table,
