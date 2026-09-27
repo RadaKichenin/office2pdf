@@ -127,7 +127,7 @@ This project follows a **6-month rolling MSRV policy** (aligned with [tokio](htt
 **Before any MSRV change:**
 1. Verify no language features or APIs exclusive to versions above the target are used
 2. Confirm all dependencies compile on the target version (`cargo check` with the target toolchain, or review dependency MSRV metadata)
-3. Update CI matrix to include the new MSRV version
+3. Update the `toolchain` of the `Check MSRV` job in `.github/workflows/ci.yml`
 
 ## Visual Comparison Workflow
 
