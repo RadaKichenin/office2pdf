@@ -3925,7 +3925,34 @@ fn generate_block(out: &mut String, block: &Block, ctx: &mut GenCtx) -> Result<(
             out.push_str("#pagebreak()\n");
             Ok(())
         }
-        Block::Table(table) => generate_table(out, table, ctx),
+        Block::Table(table) => {
+            // Word gives a table no vertical spacing of its own: the gap above
+            // it is the preceding paragraph's `w:after` and the gap below it is
+            // the following paragraph's `w:before`. Typst resolves the gap
+            // between two blocks by weakness rather than by plain maximum.
+            // `typst-layout`'s flow collector tags an `auto` gap with the
+            // `par.spacing` fallback — 1.2em — at weakness 4 and a stated one
+            // at weakness 3, and `keep_weak_rel_spacing` replaces the standing
+            // gap only when the arriving one is strictly stronger or equally
+            // weak and larger. A stated gap therefore always wins, and the
+            // fallback survives only when neither neighbour states anything. A
+            // bare `#table` beside a paragraph that states no `w:before` hit
+            // exactly that case and opened 1.2em of engine whitespace: 13.2pt
+            // at 11pt, under every table in a document written from Word's
+            // default template (issue #1688). Stating both gaps leaves the
+            // neighbour's own `w:spacing` as the only thing between them, the
+            // way `write_image_block_open` already states both of a flow
+            // picture's gaps instead of letting the fallback apply (issues
+            // #463, #491, #499); a table differs only in having no `w:spacing`
+            // of its own to state, so both are zero. The wrapper spans the text
+            // column so a `w:tblPr/w:jc` table still centres in it, and the
+            // table's own `auto` gaps vanish against the wrapper's edges, where
+            // the same routine drops weak spacing that no frame precedes.
+            out.push_str("#block(width: 100%, above: 0pt, below: 0pt)[\n");
+            let result = generate_table(out, table, ctx);
+            out.push_str("]\n");
+            result
+        }
         Block::Image(img) => {
             // Word advances a picture paragraph by the picture plus its own
             // `w:spacing`. Leaving the element bare let Typst's 1.2em default

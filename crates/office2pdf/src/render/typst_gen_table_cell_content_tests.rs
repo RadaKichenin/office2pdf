@@ -1789,6 +1789,14 @@ fn stacked_cell_paragraphs_without_w_after_stack_flush() {
     );
 }
 
+/// The table's own emission, with the body-flow wrapper that pins a table's
+/// vertical gaps (issue #1688) cut away. These tests assert about what a *cell*
+/// emits, so the wrapper's own `above: 0pt, below: 0pt` must not be counted.
+fn table_emission(source: &str) -> &str {
+    let start: usize = source.find("#table(").expect("table emission");
+    &source[start..]
+}
+
 /// A single-paragraph cell has no sibling block to leak spacing against, so
 /// its emission must stay byte-identical to before the #625 fix: the plain
 /// `#block()` wrapper, the fixed line box, and the trailing `#v(w:after)`
@@ -1835,7 +1843,7 @@ fn single_paragraph_cell_emission_is_unchanged() {
         "a lone cell paragraph keeps its exact pre-fix wrapper: {result}"
     );
     assert!(
-        !result.contains("above: 0pt"),
+        !table_emission(&result).contains("above: 0pt"),
         "a lone cell paragraph gains no spacing parameters: {result}"
     );
     assert!(
@@ -1906,7 +1914,9 @@ fn line_spaced_stacked_cell_paragraphs_take_a_scaled_line_box() {
         "each paragraph takes a box 1.5 x Word's line: {result}"
     );
     assert_eq!(
-        result.matches("above: 0pt, below: 0pt").count(),
+        table_emission(&result)
+            .matches("above: 0pt, below: 0pt")
+            .count(),
         2,
         "and the box carrying the advance means the wrapper contributes none: {result}"
     );
