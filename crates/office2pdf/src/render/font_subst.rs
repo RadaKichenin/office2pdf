@@ -265,6 +265,103 @@ pub(crate) fn weight_stated_by_family_name(font_family: &str) -> Option<FontWeig
     })
 }
 
+/// Index into `book` of the face that carries `font_family` as its own name,
+/// when the request names a weight member and has not been asked for a heavier
+/// one.
+///
+/// Nearest-weight selection reaches a weight member only while the member
+/// agrees with its own name. Word's `GillSansUltraBold.ttf` does not: it is
+/// named `Gill Sans Ultra Bold` and declares `usWeightClass` 400, and the book
+/// files it under `Gill Sans` beside a Bold member at 700. Against the
+/// EXTRABOLD [`weight_stated_by_family_name`] reads off the request, Bold
+/// scores a weight distance of 100 and the face the name denotes scores 400, so
+/// the search can never land on it: twelve single-spaced 20pt paragraphs
+/// advanced 23.154pt — Gill Sans Bold's line box — against a native Word 16
+/// export's 24.916pt, Gill Sans UltraBold's own (issue #1836). The face's own
+/// `name` table is then the only thing that identifies it.
+///
+/// Answers `None` unless the request states a weight in its suffix *and* the
+/// composed `variant` still asks for exactly that weight. A run that states a
+/// heavier weight on top of the name has escalated past the member the name
+/// denotes — a bold cell in `Segoe UI Semibold` paints the family's Bold
+/// member, so it must measure that member and not Semibold — and that case
+/// belongs to the nearest-weight search over the whole base family, as before
+/// (issue #1643).
+///
+/// `face` opens the face at an index; the book alone cannot answer, because it
+/// stores only the *trimmed* family name.
+pub(crate) fn member_carrying_requested_name(
+    book: &typst::text::FontBook,
+    font_family: &str,
+    variant: typst::text::FontVariant,
+    face: impl Fn(usize) -> Option<typst::text::Font>,
+) -> Option<usize> {
+    let requested: &str = font_family.trim();
+    if weight_stated_by_family_name(requested) != Some(variant.weight) {
+        return None;
+    }
+    let requested_name: String = requested.to_lowercase();
+    let base_family_key: String = typographic_family(requested).to_lowercase();
+    let named: Vec<usize> = book
+        .select_family(&base_family_key)
+        .filter(|&index| {
+            face(index).is_some_and(|font| declares_family_name(&font, &requested_name))
+        })
+        .collect();
+    let scoped: Vec<typst::text::FontInfo> = named
+        .iter()
+        .filter_map(|&index| book.info(index))
+        .map(scoped_info)
+        .collect();
+    if scoped.len() != named.len() || scoped.is_empty() {
+        return None;
+    }
+    // One name is shared by a whole style group — `Calibri Light` names both
+    // the upright and the italic face — so the variant still decides between
+    // them, and Typst's own scorer is what decides it everywhere else.
+    let index: usize =
+        typst::text::FontBook::from_infos(scoped).select(SCOPED_FAMILY_KEY, variant)?;
+    named.get(index).copied()
+}
+
+/// The family key [`member_carrying_requested_name`] files every candidate
+/// under, so the scoped book holds exactly one family and its selected index
+/// is an index into the candidate list.
+const SCOPED_FAMILY_KEY: &str = "scoped";
+
+/// `info` refiled under [`SCOPED_FAMILY_KEY`], with its coverage dropped.
+///
+/// Coverage is the expensive field and `FontBook::select` never reads it — only
+/// `select_fallback`, which scores by the text it has to shape, does.
+fn scoped_info(info: &typst::text::FontInfo) -> typst::text::FontInfo {
+    typst::text::FontInfo {
+        family: SCOPED_FAMILY_KEY.to_string(),
+        variant: info.variant,
+        flags: info.flags,
+        axes: info.axes.clone(),
+        coverage: typst::text::Coverage::from_vec(Vec::new()),
+    }
+}
+
+/// Whether `font` declares `family_name` (already lowercased) as its own
+/// `name` table family.
+///
+/// Every family record is read rather than the first, because a face can carry
+/// both a Macintosh and a Windows copy and only one of them may decode. A
+/// Macintosh-only record in a legacy encoding stays unreadable here, and the
+/// caller then falls back to the nearest-weight search.
+fn declares_family_name(font: &typst::text::Font, family_name: &str) -> bool {
+    /// `name` table record holding the font family name.
+    const FAMILY_NAME_ID: u16 = 1;
+    super::pdf::measured_instance(font)
+        .ttf()
+        .names()
+        .into_iter()
+        .filter(|name| name.name_id == FAMILY_NAME_ID)
+        .filter_map(|name| name.to_string())
+        .any(|name| name.trim().to_lowercase() == family_name)
+}
+
 /// The base family a weight-suffixed request has to reach for its member:
 /// `Some("Calibri")` for `Calibri Light`, `None` for a name stating no
 /// weight.

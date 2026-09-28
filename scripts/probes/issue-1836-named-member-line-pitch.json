@@ -1,0 +1,27 @@
+{
+  "name": "issue-1836-named-member-line-pitch",
+  "base": "../../tests/fixtures/docx/issue_1836_named_member_line_pitch.docx",
+  "part": "word/document.xml",
+  "factor": "w:rFonts family / w:b on twelve single-spaced 20pt paragraphs",
+  "page": 1,
+  "variants": [
+    {
+      "value": "gill-sans",
+      "find": "w:ascii=\"Gill Sans Ultra Bold\" w:hAnsi=\"Gill Sans Ultra Bold\" w:cs=\"Gill Sans Ultra Bold\"",
+      "replace": "w:ascii=\"Gill Sans\" w:hAnsi=\"Gill Sans\" w:cs=\"Gill Sans\"",
+      "count": 12
+    },
+    {
+      "value": "gill-sans-bold",
+      "find": "w:ascii=\"Gill Sans Ultra Bold\" w:hAnsi=\"Gill Sans Ultra Bold\" w:cs=\"Gill Sans Ultra Bold\"",
+      "replace": "w:ascii=\"Gill Sans Bold\" w:hAnsi=\"Gill Sans Bold\" w:cs=\"Gill Sans Bold\"",
+      "count": 12
+    },
+    {
+      "value": "bold-run",
+      "find": "<w:sz w:val=\"40\"/>",
+      "replace": "<w:b/><w:bCs/><w:sz w:val=\"40\"/>",
+      "count": 12
+    }
+  ]
+}

@@ -1743,6 +1743,59 @@ fn a_weight_suffixed_request_reaches_its_base_family_for_metrics_too() {
 }
 
 #[test]
+fn a_run_stating_a_heavier_weight_escalates_past_the_name_it_asked_for() {
+    // A face is reached by its own name only while the request still asks for
+    // the weight that name states. A bold cell in `Segoe UI Semibold` paints
+    // the family's Bold member, not Semibold, because `chain_variant` composes
+    // `max(name-stated, run-stated)` — so at 700 the name has been escalated
+    // past and the nearest-weight search over the whole base family is what
+    // must answer (issues #1643, #1836).
+    use crate::render::font_context::test_faces::noto_serif_named;
+
+    // `Noto Light` declares BOLD, so a nearest-weight search for BOLD reaches
+    // it and a search for LIGHT does not: the two branches pick different faces
+    // and the test can tell them apart.
+    let light_named: typst::text::Font = noto_serif_named("Noto Light", 700, 1500);
+    let black_named: typst::text::Font = noto_serif_named("Noto Black", 300, 1069);
+    let fonts: Vec<typst::text::Font> = vec![black_named, light_named];
+    let book: typst::text::FontBook = typst::text::FontBook::from_fonts(&fonts);
+    let face = |index: usize| fonts.get(index).cloned();
+    let at = |weight: u16| typst::text::FontVariant {
+        weight: FontWeight::from_number(weight),
+        ..typst::text::FontVariant::default()
+    };
+
+    // Unescalated, the name decides: `Noto Light` is the face declaring that
+    // name even though it declares BOLD.
+    assert_eq!(
+        member_carrying_requested_name(&book, "Noto Light", at(300), face),
+        Some(1),
+        "an unescalated request must reach the face carrying its name"
+    );
+
+    // Escalated to BOLD, the name stands aside and the base family answers.
+    assert_eq!(
+        member_carrying_requested_name(&book, "Noto Light", at(700), face),
+        None,
+        "a request escalated past the weight its name states must not pin that name"
+    );
+
+    // A name stating no weight was never in scope.
+    assert_eq!(
+        member_carrying_requested_name(&book, "Noto", at(400), face),
+        None,
+        "a name stating no weight leaves selection to the nearest-weight search"
+    );
+
+    // Nor is a stretch suffix, which names a family rather than a member.
+    assert_eq!(
+        member_carrying_requested_name(&book, "Noto Condensed", at(400), face),
+        None,
+        "a stretch suffix states no weight and must not pin a name"
+    );
+}
+
+#[test]
 fn a_family_name_stating_no_weight_keeps_its_base_family_out_of_both_chains() {
     // A stretch suffix names a family of its own — `Arial Narrow` is not a
     // member of Arial — so neither chain may fall back on the base family.
