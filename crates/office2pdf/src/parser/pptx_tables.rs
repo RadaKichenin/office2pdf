@@ -79,6 +79,10 @@ struct PptxTableParser<'a> {
     is_in_text: bool,
     is_in_run_properties: bool,
     is_in_end_paragraph_run_properties: bool,
+    /// Which typeface slots the open `<a:rPr>`/`<a:endParaRPr>` already
+    /// filled, so its own `<a:latin>`/`<a:ea>` replaces the face the cell's
+    /// list style seeded into the run (issue #1838).
+    run_property_typefaces: PptxRunPropertyTypefaces,
 
     // ── Fill context ────────────────────────────────────────────────
     solid_fill_context: SolidFillCtx,
@@ -156,6 +160,7 @@ impl<'a> PptxTableParser<'a> {
             is_in_text: false,
             is_in_run_properties: false,
             is_in_end_paragraph_run_properties: false,
+            run_property_typefaces: PptxRunPropertyTypefaces::default(),
 
             solid_fill_context: SolidFillCtx::None,
 
@@ -226,11 +231,11 @@ impl<'a> PptxTableParser<'a> {
             }
             name if self.is_in_paragraph && !self.is_in_run => {
                 if !self.dispatch_bullet_element(name, e) {
-                    self.handle_start_non_bullet(reader, name, e)?;
+                    self.handle_start_in_paragraph(reader, name, e)?;
                 }
             }
             _ if self.is_in_paragraph => {
-                self.handle_start_run_and_fill(reader, local.as_ref(), e)?;
+                self.handle_start_in_paragraph(reader, local.as_ref(), e)?;
             }
             b"tcPr" if self.is_in_cell => {
                 self.is_in_table_cell_properties = true;
@@ -307,10 +312,12 @@ impl<'a> PptxTableParser<'a> {
                     .unwrap_or(BorderLineStyle::Solid);
             }
             b"rPr" if self.is_in_run => {
+                self.run_property_typefaces.enter_run_properties();
                 self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if self.is_in_paragraph && !self.is_in_run => {
+                self.run_property_typefaces.enter_run_properties();
                 self.paragraph_end_run_style = self.paragraph_default_run_style.clone();
                 self.paragraph_declares_end_para_rpr = true;
                 extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
@@ -348,10 +355,15 @@ impl<'a> PptxTableParser<'a> {
                 }
             }
             b"latin" | b"ea" | b"cs" if self.is_in_run_properties => {
-                apply_typeface_to_style(e, &mut self.run_style, self.theme);
+                self.run_property_typefaces
+                    .apply_typeface(e, &mut self.run_style, self.theme);
             }
             b"latin" | b"ea" | b"cs" if self.is_in_end_paragraph_run_properties => {
-                apply_typeface_to_style(e, &mut self.paragraph_end_run_style, self.theme);
+                self.run_property_typefaces.apply_typeface(
+                    e,
+                    &mut self.paragraph_end_run_style,
+                    self.theme,
+                );
             }
             b"hlinkClick" if self.is_in_run_properties => {
                 if self.run_marker_style_before_hyperlink.is_none() {
@@ -731,9 +743,17 @@ impl<'a> PptxTableParser<'a> {
         true
     }
 
-    // ── Private helpers: non-bullet Start elements inside paragraph ─
+    // ── Private helpers: Start elements inside a paragraph ─────────
 
-    fn handle_start_non_bullet(
+    /// Every `<a:p>` descendant the bullet dispatcher did not claim, in a run
+    /// or not.
+    ///
+    /// `handle_start` reaches this through two arms — one for a paragraph-level
+    /// element, one for a run-level one — because the guard that tells them
+    /// apart is the dispatcher's, not this match's. They used to call two
+    /// byte-identical copies, which is how a rule landing in one of them
+    /// drifted away from the other (#1838).
+    fn handle_start_in_paragraph(
         &mut self,
         reader: &mut Reader<&[u8]>,
         local_name: &[u8],
@@ -749,68 +769,13 @@ impl<'a> PptxTableParser<'a> {
             }
             b"rPr" if self.is_in_run => {
                 self.is_in_run_properties = true;
-                self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
-                extract_rpr_attributes(e, &mut self.run_style);
-            }
-            b"endParaRPr" => {
-                self.is_in_end_paragraph_run_properties = true;
-                self.paragraph_end_run_style = self.paragraph_default_run_style.clone();
-                self.paragraph_declares_end_para_rpr = true;
-                extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
-            }
-            b"solidFill" if self.is_in_run_properties => {
-                self.solid_fill_context = SolidFillCtx::RunFill;
-            }
-            b"solidFill" if self.is_in_end_paragraph_run_properties => {
-                self.solid_fill_context = SolidFillCtx::EndParaFill;
-            }
-            b"srgbClr" | b"schemeClr" | b"sysClr"
-                if self.solid_fill_context != SolidFillCtx::None =>
-            {
-                self.apply_color_start(reader, e);
-            }
-            b"t" if self.is_in_run => {
-                self.is_in_text = true;
-            }
-            b"hlinkClick" if self.is_in_run_properties => {
-                if self.run_marker_style_before_hyperlink.is_none() {
-                    self.run_marker_style_before_hyperlink = Some(self.run_style.clone());
-                }
-                apply_pptx_hyperlink_style(
-                    &mut self.run_style,
-                    self.run_has_explicit_underline,
-                    self.theme,
-                    self.color_map,
-                );
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    // ── Private helpers: run/fill Start elements (when in_run) ──────
-
-    fn handle_start_run_and_fill(
-        &mut self,
-        reader: &mut Reader<&[u8]>,
-        local_name: &[u8],
-        e: &BytesStart,
-    ) -> Result<(), ConvertError> {
-        match local_name {
-            b"r" => {
-                self.is_in_run = true;
-                self.run_style = self.paragraph_default_run_style.clone();
-                self.run_text.clear();
-                self.run_has_explicit_underline = false;
-                self.run_marker_style_before_hyperlink = None;
-            }
-            b"rPr" if self.is_in_run => {
-                self.is_in_run_properties = true;
+                self.run_property_typefaces.enter_run_properties();
                 self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if !self.is_in_run => {
                 self.is_in_end_paragraph_run_properties = true;
+                self.run_property_typefaces.enter_run_properties();
                 self.paragraph_end_run_style = self.paragraph_default_run_style.clone();
                 self.paragraph_declares_end_para_rpr = true;
                 extract_rpr_attributes(e, &mut self.paragraph_end_run_style);
@@ -850,10 +815,15 @@ impl<'a> PptxTableParser<'a> {
     fn handle_empty_non_bullet(&mut self, local_name: &[u8], e: &BytesStart) {
         match local_name {
             b"latin" | b"ea" | b"cs" if self.is_in_run_properties => {
-                apply_typeface_to_style(e, &mut self.run_style, self.theme);
+                self.run_property_typefaces
+                    .apply_typeface(e, &mut self.run_style, self.theme);
             }
             b"latin" | b"ea" | b"cs" if self.is_in_end_paragraph_run_properties => {
-                apply_typeface_to_style(e, &mut self.paragraph_end_run_style, self.theme);
+                self.run_property_typefaces.apply_typeface(
+                    e,
+                    &mut self.paragraph_end_run_style,
+                    self.theme,
+                );
             }
             _ => {}
         }

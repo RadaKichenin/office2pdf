@@ -1796,3 +1796,56 @@ fn structure_connector_line_caps_reach_the_stroke() {
          carries the cap it declares"
     );
 }
+
+// ---------------------------------------------------------------------------
+// issue_1838_table_run_typeface.pptx — a one-column table whose every cell
+// list style names Times New Roman. The first row's run declares
+// `<a:latin typeface="Verdana"/>`; the second row's declares nothing.
+// A native macOS PowerPoint 16 export embeds both Verdana and
+// TimesNewRomanPSMT, so the run's own face has to outrank the list style's
+// (issue #1838).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smoke_issue_1838_table_run_typeface() {
+    assert_produces_valid_pdf("issue_1838_table_run_typeface.pptx");
+}
+
+#[test]
+fn structure_table_cell_run_keeps_the_typeface_it_declares() {
+    let pages = fixed_pages("issue_1838_table_run_typeface.pptx");
+    assert_eq!(pages.len(), 1);
+
+    let table = pages[0]
+        .elements
+        .iter()
+        .find_map(|element| match &element.kind {
+            FixedElementKind::Table(table) => Some(table),
+            _ => None,
+        })
+        .expect("the slide must carry the table");
+
+    let cell_run_family = |row: usize| -> Option<String> {
+        match &table.rows[row].cells[0].content[0] {
+            Block::Paragraph(paragraph) => paragraph.runs[0]
+                .style
+                .font_family
+                .as_deref()
+                .map(str::to_owned),
+            other => panic!("expected a paragraph in row {row}, got {other:?}"),
+        }
+    };
+
+    assert_eq!(
+        cell_run_family(0).as_deref(),
+        Some("Verdana"),
+        "a cell run declaring <a:latin typeface=\"Verdana\"/> must override the \
+         Times New Roman its cell's <a:lstStyle> named"
+    );
+    assert_eq!(
+        cell_run_family(1).as_deref(),
+        Some("Times New Roman"),
+        "the control row, whose run declares no face, still inherits the list \
+         style's"
+    );
+}

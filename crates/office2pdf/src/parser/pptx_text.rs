@@ -62,6 +62,64 @@ pub(super) fn apply_typeface_to_style(
     }
 }
 
+/// The typeface slots the open `<a:rPr>` or `<a:endParaRPr>` has already
+/// filled.
+///
+/// A run's own `<a:latin>`/`<a:ea>` outranks every face it inherits, but
+/// [`apply_typeface_to_style`] writes a slot only while it is still `None`, so
+/// that the *first* declaration inside one property element wins. Clearing the
+/// slot before that first declaration reconciles the two rules: the inherited
+/// face goes, the element's own face lands, and a repeated declaration in the
+/// same element can neither clobber it nor restore what was inherited.
+///
+/// Both PPTX paragraph state machines own one — the text-box walker in
+/// `slides` and the table-cell walker in `tables`. The table one had no guard
+/// at all, so a cell run declaring `<a:latin>` kept its list style's face
+/// (#1838); holding the rule in one type is what stops the two copies drifting
+/// apart again.
+#[derive(Default)]
+pub(super) struct PptxRunPropertyTypefaces {
+    latin_applied: bool,
+    east_asian_applied: bool,
+}
+
+impl PptxRunPropertyTypefaces {
+    /// Call when an `<a:rPr>` or `<a:endParaRPr>` element opens, so the next
+    /// declaration in each slot is recognised as that element's own.
+    pub(super) fn enter_run_properties(&mut self) {
+        self.latin_applied = false;
+        self.east_asian_applied = false;
+    }
+
+    /// Apply one `<a:latin>`, `<a:ea>` or `<a:cs>` child of the open run
+    /// property element, overriding whatever `style` inherited.
+    pub(super) fn apply_typeface(
+        &mut self,
+        element: &quick_xml::events::BytesStart,
+        style: &mut TextStyle,
+        theme: &ThemeData,
+    ) {
+        match element.local_name().as_ref() {
+            b"latin" => {
+                if !self.latin_applied {
+                    style.font_family = None;
+                }
+                apply_typeface_to_style(element, style, theme);
+                self.latin_applied |= style.font_family.is_some();
+            }
+            b"ea" => {
+                if !self.east_asian_applied {
+                    style.east_asian_font_family = None;
+                }
+                apply_typeface_to_style(element, style, theme);
+                self.east_asian_applied |= style.east_asian_font_family.is_some();
+            }
+            // `<a:cs>` fills no slot; see `apply_typeface_to_style`.
+            _ => {}
+        }
+    }
+}
+
 /// Whether a paragraph wrote an `<a:endParaRPr>` at all, and — when it did
 /// not — the runs whose face its mark then takes.
 pub(super) enum PptxParagraphMark<'a> {
