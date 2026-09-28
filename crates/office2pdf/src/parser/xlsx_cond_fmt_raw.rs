@@ -119,19 +119,31 @@ pub(super) fn worksheet_has_direct_child(worksheet_xml: &str, names: &[&[u8]]) -
 }
 
 /// Names of the worksheets whose package part satisfies `predicate`.
+pub(super) fn worksheets_where(data: &[u8], predicate: impl Fn(&str) -> bool) -> HashSet<String> {
+    worksheets_map(data, |worksheet_xml| predicate(worksheet_xml).then_some(()))
+        .into_keys()
+        .collect()
+}
+
+/// Each worksheet name against whatever `extract` reads from its own part.
 ///
 /// Walks `xl/workbook.xml` and its relationships so each sheet is matched to
-/// the part umya later collapses; an unreadable package yields no names.
-pub(super) fn worksheets_where(data: &[u8], predicate: impl Fn(&str) -> bool) -> HashSet<String> {
-    let mut matching: HashSet<String> = HashSet::new();
+/// its own part. A sheet whose part is missing, unreadable, or yields `None`
+/// is left out of the map entirely, so the caller decides what an unreadable
+/// package means rather than inheriting a silent default.
+pub(super) fn worksheets_map<T>(
+    data: &[u8],
+    extract: impl Fn(&str) -> Option<T>,
+) -> HashMap<String, T> {
+    let mut extracted: HashMap<String, T> = HashMap::new();
     let Ok(mut archive) = crate::parser::open_zip(data) else {
-        return matching;
+        return extracted;
     };
     let Some(workbook_xml) = read_zip_text(&mut archive, "xl/workbook.xml") else {
-        return matching;
+        return extracted;
     };
     let Some(relationships_xml) = read_zip_text(&mut archive, "xl/_rels/workbook.xml.rels") else {
-        return matching;
+        return extracted;
     };
 
     let relationships = parse_relationships(&relationships_xml);
@@ -142,11 +154,11 @@ pub(super) fn worksheets_where(data: &[u8], predicate: impl Fn(&str) -> bool) ->
         let Some(worksheet_xml) = read_zip_text(&mut archive, &worksheet_path(target)) else {
             continue;
         };
-        if predicate(&worksheet_xml) {
-            matching.insert(sheet_name);
+        if let Some(value) = extract(&worksheet_xml) {
+            extracted.insert(sheet_name, value);
         }
     }
-    matching
+    extracted
 }
 
 pub(crate) fn parse_worksheet_hints(xml: &str) -> RawCondFmtHints {

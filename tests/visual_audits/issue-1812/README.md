@@ -9,10 +9,10 @@ data.
 declared zero fell through to Excel's 0.7in default and the first glyph landed
 at x53 instead of on the paper edge. A controlled left-margin sweep gave native
 x22 for 0-0.25in and x24/31/53 for 0.3/0.4/0.7in; the converter matched only the
-last three. Preserving attribute presence — `has_left()` and its siblings, added
-to the fork in MathNya/umya-spreadsheet#373 and developer0hye/umya-spreadsheet#15
-— puts the declared zero on the paper and leaves a worksheet with no
-`<pageMargins>` at all on the defaults.
+last three. Taking each edge's presence from the worksheet part — the umya
+version the published library resolves against maps a declared zero and a
+missing attribute to the same `0.0` — puts the declared zero on the paper and
+leaves a worksheet with no `<pageMargins>` at all on the defaults.
 
 After the fix the first glyph sits at x3 against the native x22. The residual
 19pt is the native export's own 20pt floor on the printed left origin, which

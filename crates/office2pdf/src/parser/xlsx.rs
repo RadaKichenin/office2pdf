@@ -17,6 +17,8 @@ mod chartsheet;
 mod fit_to_page;
 #[path = "xlsx_indent.rs"]
 mod indent;
+#[path = "xlsx_margin_state.rs"]
+mod margin_state;
 #[path = "xlsx_paper_state.rs"]
 mod paper_state;
 #[path = "xlsx_print_headings.rs"]
@@ -69,9 +71,13 @@ const DEFAULT_PRINT_MARGINS: Margins = Margins {
 /// `left="0"` for a sheet printed flush to the paper, and reading that zero as
 /// "not specified" substituted the 0.7in default and moved the first glyph
 /// from x22 to x53 on a workbook declaring it (issue #1812). Only a sheet
-/// whose worksheet part carries no `<pageMargins>` attribute at all takes a
-/// default. The far edge Excel itself prints such a sheet against is a
-/// separate export behaviour and is not modelled here (issue #1929).
+/// whose worksheet part carries no `<pageMargins>` attribute for an edge takes
+/// that edge's default. Which edges a sheet declares comes from
+/// [`margin_state`], because the umya version the published library resolves
+/// against maps a declared zero and a missing attribute to the same `0.0`; a
+/// part that module could not read keeps the value test rather than
+/// collapsing to zero. The far edge Excel itself prints such a sheet against
+/// is a separate export behaviour and is not modelled here (issue #1929).
 ///
 /// Excel lays a printed sheet out on whole device points, so a margin the file
 /// states in inches reaches the paper floored. Measured on an Excel-for-Mac
@@ -87,31 +93,38 @@ const DEFAULT_PRINT_MARGINS: Margins = Margins {
 /// far edges on whole points too. No native export measured here paginates
 /// against a fractional bottom margin, so the ≤1pt of printable extent that
 /// gains is inferred from the model rather than observed.
-fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
+fn sheet_print_margins(
+    sheet: &umya_spreadsheet::Worksheet,
+    declared: Option<&margin_state::DeclaredPrintMargins>,
+) -> Margins {
     let page_margins = sheet.get_page_margins();
-    let printed_pt = |declared: Option<f64>, default_pt: f64| -> f64 {
-        let declared_pt: f64 = match declared {
-            Some(inches) => inches * 72.0,
-            None => default_pt,
+    let printed_pt = |declared_edge: Option<bool>, inches: f64, default_pt: f64| -> f64 {
+        let declared_pt: f64 = if declared_edge.unwrap_or(inches > 0.0) {
+            inches * 72.0
+        } else {
+            default_pt
         };
         declared_pt.floor()
     };
-    let declared = |present: bool, inches: &f64| -> Option<f64> { present.then_some(*inches) };
     Margins {
         top: printed_pt(
-            declared(page_margins.has_top(), page_margins.get_top()),
+            declared.map(|edges| edges.top),
+            *page_margins.get_top(),
             DEFAULT_PRINT_MARGINS.top,
         ),
         bottom: printed_pt(
-            declared(page_margins.has_bottom(), page_margins.get_bottom()),
+            declared.map(|edges| edges.bottom),
+            *page_margins.get_bottom(),
             DEFAULT_PRINT_MARGINS.bottom,
         ),
         left: printed_pt(
-            declared(page_margins.has_left(), page_margins.get_left()),
+            declared.map(|edges| edges.left),
+            *page_margins.get_left(),
             DEFAULT_PRINT_MARGINS.left,
         ),
         right: printed_pt(
-            declared(page_margins.has_right(), page_margins.get_right()),
+            declared.map(|edges| edges.right),
+            *page_margins.get_right(),
             DEFAULT_PRINT_MARGINS.right,
         ),
     }
@@ -122,6 +135,11 @@ const DEFAULT_PRINT_FOOTER_MARGIN_PT: f64 = 21.6;
 
 /// The footer margin a sheet prints with, in paper points:
 /// `<pageMargins>/@footer`, or Excel's default when the sheet states none.
+///
+/// A declared zero still falls through to the default here: the value test
+/// #1812 replaced for the four body margins needs a native sweep of a
+/// declared `footer="0"` before it can be replaced for this one, and none has
+/// been taken (issue #1931).
 ///
 /// Excel measures a printed footer up from the paper through this margin, and
 /// neither the bottom margin nor the sheet's own body height moves it — both
@@ -302,12 +320,13 @@ fn empty_workbook_page(
     book: &umya_spreadsheet::Spreadsheet,
     options: &ConvertOptions,
     pristine_paper_sheets: &std::collections::HashSet<String>,
+    declared_print_margins: &std::collections::HashMap<String, margin_state::DeclaredPrintMargins>,
 ) -> Option<SheetPage> {
     let sheet = first_printed_sheet(book, options)?;
     Some(SheetPage {
         name: sheet.get_name().to_string(),
         size: sheet_page_size(sheet, pristine_paper_sheets.contains(sheet.get_name())),
-        margins: sheet_print_margins(sheet),
+        margins: sheet_print_margins(sheet, declared_print_margins.get(sheet.get_name())),
         table: Table::default(),
         header: None,
         footer: None,
@@ -854,6 +873,7 @@ impl XlsxParser {
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
         let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
+        let declared_print_margins = margin_state::declared_print_margins(data);
         // umya cannot tell an absent `<sheetFormatPr>` from a present one,
         // and Excel for Mac prices default columns differently (issue #1656).
         let format_properties_less_sheets = sheet_format::sheets_without_format_properties(data);
@@ -961,7 +981,10 @@ impl XlsxParser {
                                     sheet,
                                     pristine_paper_sheets.contains(sheet.get_name()),
                                 ),
-                                margins: sheet_print_margins(sheet),
+                                margins: sheet_print_margins(
+                                    sheet,
+                                    declared_print_margins.get(sheet.get_name()),
+                                ),
                                 table: Table::default(),
                                 header: None,
                                 footer: None,
@@ -1099,7 +1122,10 @@ impl XlsxParser {
                 let mut sheet_page = SheetPage {
                     name: sheet_name.clone(),
                     size: sheet_page_size(sheet, pristine_paper_sheets.contains(sheet.get_name())),
-                    margins: sheet_print_margins(sheet),
+                    margins: sheet_print_margins(
+                        sheet,
+                        declared_print_margins.get(sheet.get_name()),
+                    ),
                     table: Table {
                         rows,
                         column_widths: ctx.column_widths.clone(),
@@ -1173,7 +1199,12 @@ impl XlsxParser {
         }
 
         if chunks.is_empty()
-            && let Some(page) = empty_workbook_page(&book, options, &pristine_paper_sheets)
+            && let Some(page) = empty_workbook_page(
+                &book,
+                options,
+                &pristine_paper_sheets,
+                &declared_print_margins,
+            )
         {
             chunks.push(Document {
                 metadata,
@@ -1215,6 +1246,7 @@ impl Parser for XlsxParser {
         let defined_names = cond_fmt_raw::extract_defined_names(data);
         let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
         let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
+        let declared_print_margins = margin_state::declared_print_margins(data);
         // umya cannot tell an absent `<sheetFormatPr>` from a present one,
         // and Excel for Mac prices default columns differently (issue #1656).
         let format_properties_less_sheets = sheet_format::sheets_without_format_properties(data);
@@ -1319,7 +1351,10 @@ impl Parser for XlsxParser {
                                     sheet,
                                     pristine_paper_sheets.contains(sheet.get_name()),
                                 ),
-                                margins: sheet_print_margins(sheet),
+                                margins: sheet_print_margins(
+                                    sheet,
+                                    declared_print_margins.get(sheet.get_name()),
+                                ),
                                 table: Table::default(),
                                 header: None,
                                 footer: None,
@@ -1443,7 +1478,10 @@ impl Parser for XlsxParser {
                 let mut sheet_page = SheetPage {
                     name: sheet_name,
                     size: sheet_page_size(sheet, pristine_paper_sheets.contains(sheet.get_name())),
-                    margins: sheet_print_margins(sheet),
+                    margins: sheet_print_margins(
+                        sheet,
+                        declared_print_margins.get(sheet.get_name()),
+                    ),
                     table: Table {
                         rows,
                         column_widths: ctx.column_widths.clone(),
@@ -1560,7 +1598,10 @@ impl Parser for XlsxParser {
                             sheet,
                             pristine_paper_sheets.contains(sheet.get_name()),
                         ),
-                        margins: sheet_print_margins(sheet),
+                        margins: sheet_print_margins(
+                            sheet,
+                            declared_print_margins.get(sheet.get_name()),
+                        ),
                         table: Table {
                             rows: segment,
                             column_widths: ctx.column_widths.clone(),
@@ -1629,7 +1670,12 @@ impl Parser for XlsxParser {
         }
 
         if pages.is_empty()
-            && let Some(page) = empty_workbook_page(&book, options, &pristine_paper_sheets)
+            && let Some(page) = empty_workbook_page(
+                &book,
+                options,
+                &pristine_paper_sheets,
+                &declared_print_margins,
+            )
         {
             pages.push(Page::Sheet(page));
         }
