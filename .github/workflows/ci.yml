@@ -239,21 +239,42 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          # This job differs from Test only in typst-kit's font feature, but
-          # that flip rebuilds the Typst crates: ~5 min on Windows, where it
-          # was the critical path. Windows keeps its own ~1 GB entry; the other
-          # legs restore Test's and save nothing, to stay within the 10 GB cap.
+          # Unlike Test's workspace build, this job turns off typst-kit's font
+          # feature, which rebuilds the Typst crates (~5 min on Windows, where
+          # it was the critical path); it also lacks the CLI's `pdf-ops`.
+          # Windows keeps its own ~1 GB entry; the other legs restore Test's
+          # and save nothing, to stay within the 10 GB cap.
           shared-key: ${{ runner.os == 'Windows' && 'no-embedded-fonts-ci-profile' || 'test-ci-profile' }}
           save-if: ${{ github.ref == 'refs/heads/main' && runner.os == 'Windows' }}
       - name: Test native conversion without Typst fonts
         run: |
           cargo test --locked -p office2pdf --no-default-features --profile ci --lib font_feature
           cargo test --locked -p office2pdf --no-default-features --profile ci --test font_features
-          # Checked, not built: a ci-profile build of the CLI here recompiled
-          # dependencies at opt-level 2 for 4-6 min on Linux and macOS. A check
-          # does no codegen, so the profile only picks the target directory
-          # (and with it Windows' cached entry).
-          cargo check --locked -p office2pdf-cli --no-default-features --profile ci
+
+  no-embedded-fonts-cli:
+    # Split from the job above, where it added 84s to macOS, the critical path.
+    name: Check CLI without Typst fonts
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Reuses what it can of Test's entry (a check shares host build
+          # scripts and proc macros, not rlibs) and saves nothing, so the
+          # 10 GB cache budget is unchanged.
+          shared-key: test-ci-profile
+          save-if: false
+      # Checked, not built: a ci-profile build of the CLI recompiled
+      # dependencies at opt-level 2 for 4-6 min on Linux and macOS. A check
+      # does no codegen, so opt-level does not matter; `--profile ci` only
+      # selects target/ci, the directory the restored cache fills.
+      - run: cargo check --locked -p office2pdf-cli --no-default-features --profile ci
 
   clippy:
     name: Clippy
