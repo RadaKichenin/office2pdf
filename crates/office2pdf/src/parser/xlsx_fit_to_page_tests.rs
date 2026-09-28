@@ -162,3 +162,85 @@ fn a_custom_views_header_footer_does_not_shadow_the_sheets() {
     );
     assert!(worksheet_header_footer_scales_with_doc(&with_view));
 }
+
+/// A worksheet part declaring `<pageSetup scale="{percentage}">`.
+fn worksheet_declaring_scale(percentage: &str) -> String {
+    format!(
+        r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData/>
+  <pageSetup paperSize="1" scale="{percentage}" orientation="portrait"/>
+</worksheet>"#
+    )
+}
+
+/// An explicit percentage is read only when it changes a printed dimension.
+///
+/// umya-spreadsheet reports `0` for an absent `scale`, so absence and a
+/// declared zero are indistinguishable through it — both mean "no explicit
+/// percentage" here anyway. A declared `100` is Excel's resting value and
+/// prints the sheet as authored, so it must not mark the sheet as scaled
+/// (issue #1817).
+#[test]
+fn reads_only_a_print_percentage_that_changes_a_dimension() {
+    for percentage in ["85", "78", "10", "400", "150"] {
+        assert_eq!(
+            worksheet_print_percentage(&worksheet_declaring_scale(percentage)),
+            Some(percentage.parse::<u32>().expect("a numeric percentage")),
+            "scale=\"{percentage}\" asks for a different printed size"
+        );
+    }
+    for inert in ["100", "0"] {
+        assert_eq!(
+            worksheet_print_percentage(&worksheet_declaring_scale(inert)),
+            None,
+            "scale=\"{inert}\" prints the sheet at its declared size"
+        );
+    }
+    assert_eq!(worksheet_print_percentage(NO_SHEET_PR), None);
+}
+
+/// ECMA-376 §18.3.1.63 admits 10 through 400. A file naming anything outside
+/// that is not asking for a degenerate sheet, so the percentage is dropped
+/// rather than applied.
+#[test]
+fn rejects_a_print_percentage_outside_the_schema_range() {
+    for out_of_range in ["9", "401", "1", "5000"] {
+        assert_eq!(
+            worksheet_print_percentage(&worksheet_declaring_scale(out_of_range)),
+            None,
+            "scale=\"{out_of_range}\" is outside the range Excel can express"
+        );
+    }
+    assert_eq!(
+        worksheet_print_percentage(&worksheet_declaring_scale("not-a-number")),
+        None
+    );
+}
+
+/// A saved custom view nests its own `<pageSetup>`. Reading that one as the
+/// sheet's would rescale the whole printed grid to describe a view nobody
+/// asked to print.
+#[test]
+fn ignores_a_custom_sheet_view_print_percentage() {
+    const SAVED_VIEW_ONLY: &str = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData/>
+  <pageSetup paperSize="1" orientation="portrait"/>
+  <customSheetViews>
+    <customSheetView guid="{00000000-0000-0000-0000-000000000000}">
+      <pageSetup paperSize="1" scale="60" orientation="portrait"/>
+    </customSheetView>
+  </customSheetViews>
+</worksheet>"#;
+    assert_eq!(worksheet_print_percentage(SAVED_VIEW_ONLY), None);
+
+    const SHEET_AND_SAVED_VIEW: &str = r#"<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData/>
+  <pageSetup paperSize="1" scale="85" orientation="portrait"/>
+  <customSheetViews>
+    <customSheetView guid="{00000000-0000-0000-0000-000000000000}">
+      <pageSetup paperSize="1" scale="60" orientation="portrait"/>
+    </customSheetView>
+  </customSheetViews>
+</worksheet>"#;
+    assert_eq!(worksheet_print_percentage(SHEET_AND_SAVED_VIEW), Some(85));
+}

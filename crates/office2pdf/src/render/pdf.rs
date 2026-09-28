@@ -553,6 +553,8 @@ pub(crate) struct PlacedTextRun {
     pub baseline_pt: f64,
     /// Distance from the page's left edge to the run's origin, in points.
     pub left_pt: f64,
+    /// Shaped font size in points, before any enclosing group transform.
+    pub font_size_pt: f64,
     /// The family the run was actually shaped with, which is not always the one
     /// the source asked for.
     pub family: String,
@@ -619,6 +621,7 @@ fn compiled_text_runs_with_line_seating(
                 FrameItem::Text(text) => out.push(PlacedTextRun {
                     baseline_pt: at.ty.to_pt(),
                     left_pt: at.tx.to_pt(),
+                    font_size_pt: text.size.to_pt(),
                     family: text.font.info().family.clone(),
                     text: text.text.to_string(),
                 }),

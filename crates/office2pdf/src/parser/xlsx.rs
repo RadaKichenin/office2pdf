@@ -204,11 +204,15 @@ fn worksheet_paper_size(code: u32) -> PageSize {
     PageSize { width, height }
 }
 
-/// What a sheet asks its fit-to-page scale to be measured against, if it asks.
+/// Select the worksheet's fit-to-page bounds, or its explicit print percentage.
+///
+/// A sheet asks for exactly one of the two. Fit-to-page is the selected mode
+/// when `<pageSetUpPr fitToPage="1"/>` is set, and then `<pageSetup scale>` is
+/// inert however the file spells it (issue #1817).
 ///
 /// `fitToWidth` and `fitToHeight` count for nothing unless `<pageSetUpPr
 /// fitToPage="1"/>` is also set — Excel writes them into sheets that print at
-/// 100% too (issue #530). `fit_to_page::sheets_fit_to_page` has already
+/// 100% too (issue #530). `fit_to_page::sheets_print_setup` has already
 /// applied that gate and ECMA-376's default of one page in each direction. A
 /// zero is Excel's "as many pages as it takes", so it bounds nothing.
 ///
@@ -219,19 +223,34 @@ fn worksheet_paper_size(code: u32) -> PageSize {
 fn sheet_fit(
     sheet: &umya_spreadsheet::Worksheet,
     sheet_name: &str,
-    fitting_sheets: &std::collections::HashMap<String, fit_to_page::SheetFitToPage>,
+    print_setups: &std::collections::HashMap<String, fit_to_page::SheetPrintSetup>,
     printed_rows: (u32, u32),
     ctx: &SheetContext,
 ) -> xlsx_pagination::SheetFit {
-    let declared: Option<&fit_to_page::SheetFitToPage> = fitting_sheets.get(sheet_name);
+    let setup: Option<&fit_to_page::SheetPrintSetup> = print_setups.get(sheet_name);
+    let declared: Option<&fit_to_page::SheetPrintSetup> =
+        setup.filter(|setup| setup.fits_to_page);
     let bound = |pages: u32| -> Option<u32> { (pages > 0).then_some(pages) };
     let pages_tall: Option<u32> = declared.and_then(|fit| bound(fit.pages_tall));
-    xlsx_pagination::SheetFit {
+    let fit = xlsx_pagination::SheetFit {
+        // Both modes are reported as the sheet declares them; pagination
+        // resolves which one applies.
+        fits_to_page: declared.is_some(),
+        print_percentage: setup.and_then(|setup| setup.print_percentage),
         pages_wide: declared.and_then(|fit| bound(fit.pages_wide)),
         pages_tall,
         sheet_height_pt: pages_tall
             .map_or(0.0, |_| printed_sheet_height_pt(sheet, printed_rows, ctx)),
-    }
+    };
+    tracing::debug!(
+        sheet = sheet_name,
+        fits_to_page = fit.fits_to_page,
+        print_percentage = ?fit.print_percentage,
+        fit_pages_wide = ?fit.pages_wide,
+        fit_pages_tall = ?fit.pages_tall,
+        "Selected worksheet print scaling"
+    );
+    fit
 }
 
 /// Row-height sum used to choose the sheet's fit-to-page scale.
@@ -258,15 +277,15 @@ fn printed_sheet_height_pt(
         .sum()
 }
 
-/// Whether the sheet's header and footer shrink with its fit-to-page scale.
+/// Whether the sheet's header and footer follow its print scale.
 ///
 /// `headerFooter/@scaleWithDoc` defaults to 1, so a sheet that states nothing —
 /// including one with no `<headerFooter>` at all — scales (issue #940).
 fn sheet_header_footer_scales_with_doc(
     sheet_name: &str,
-    fitting_sheets: &std::collections::HashMap<String, fit_to_page::SheetFitToPage>,
+    print_setups: &std::collections::HashMap<String, fit_to_page::SheetPrintSetup>,
 ) -> bool {
-    fitting_sheets
+    print_setups
         .get(sheet_name)
         .is_none_or(|fit| fit.header_footer_scales_with_doc)
 }
@@ -871,7 +890,7 @@ impl XlsxParser {
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
-        let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
+        let print_setups = fit_to_page::sheets_print_setup(data);
         let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
         let declared_print_margins = margin_state::declared_print_margins(data);
         // umya cannot tell an absent `<sheetFormatPr>` from a present one,
@@ -1075,12 +1094,12 @@ impl XlsxParser {
             let fit: xlsx_pagination::SheetFit = sheet_fit(
                 sheet,
                 &sheet_name,
-                &fitting_sheets,
+                &print_setups,
                 (row_start, row_end),
                 &ctx,
             );
             let header_footer_scales_with_doc: bool =
-                sheet_header_footer_scales_with_doc(&sheet_name, &fitting_sheets);
+                sheet_header_footer_scales_with_doc(&sheet_name, &print_setups);
 
             // Process rows in chunks
             let mut chunk_start = row_start;
@@ -1244,7 +1263,7 @@ impl Parser for XlsxParser {
         // A `cfRule type="expression"` names the workbook's defined names
         // rather than repeating their formulas (issue #852).
         let defined_names = cond_fmt_raw::extract_defined_names(data);
-        let fitting_sheets = fit_to_page::sheets_fit_to_page(data);
+        let print_setups = fit_to_page::sheets_print_setup(data);
         let pristine_paper_sheets = paper_state::pristine_paper_sheets(data);
         let declared_print_margins = margin_state::declared_print_margins(data);
         // umya cannot tell an absent `<sheetFormatPr>` from a present one,
@@ -1388,12 +1407,12 @@ impl Parser for XlsxParser {
             let fit: xlsx_pagination::SheetFit = sheet_fit(
                 sheet,
                 sheet.get_name(),
-                &fitting_sheets,
+                &print_setups,
                 (row_start, row_end),
                 &ctx,
             );
             let header_footer_scales_with_doc: bool =
-                sheet_header_footer_scales_with_doc(sheet.get_name(), &fitting_sheets);
+                sheet_header_footer_scales_with_doc(sheet.get_name(), &print_setups);
             // Only the rows named by `_xlnm.Print_Titles` repeat on later
             // pages. Rows above them still lead the table, but print once, so
             // they go into a non-repeating header block.

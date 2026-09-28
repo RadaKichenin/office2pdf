@@ -5239,3 +5239,95 @@ fn blank_mark_row(family: &str, font_size: f64) -> TableRow {
         height: None,
     }
 }
+
+/// Native Excel scales adjacent cell origins to 91.8pt and 84.24pt for
+/// the source's 85% and 78% print settings (issue #1817).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn explicit_sheet_print_percentage_scales_cell_origins() {
+    use std::io::{Cursor, Read, Write};
+
+    if crate::render::pdf::font_line_metrics_em("Arial").is_none() {
+        return;
+    }
+    let fixture = include_bytes!("../../../../tests/visual_audits/issue-1817/source.xlsx");
+    let mut differences: Vec<String> = Vec::new();
+    for (percentage, fits_to_page, scales_header, expected_spacing, expected_font_size) in [
+        (100, false, true, 108.0, 11.0),
+        (85, false, true, 91.8, 9.35),
+        (85, false, false, 91.8, 9.35),
+        (78, false, true, 84.24, 8.58),
+        (85, true, true, 108.0, 11.0),
+    ] {
+        let mut archive = zip::ZipArchive::new(Cursor::new(fixture)).unwrap();
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).unwrap();
+            let mut bytes: Vec<u8> = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            if entry.name() == "xl/worksheets/sheet1.xml" {
+                let xml = std::str::from_utf8(&bytes).unwrap();
+                assert_eq!(xml.matches("scale=\"85\"").count(), 1);
+                let mut rewritten = xml.replace("scale=\"85\"", &format!("scale=\"{percentage}\""));
+                if fits_to_page {
+                    rewritten = rewritten.replace(
+                        "<dimension",
+                        "<sheetPr><pageSetUpPr fitToPage=\"1\"/></sheetPr><dimension",
+                    );
+                }
+                rewritten = rewritten.replace("</worksheet>", &format!(
+                    "<headerFooter scaleWithDoc=\"{}\"><oddHeader>&amp;C&amp;&quot;Arial,Regular&quot;&amp;11Print scale</oddHeader></headerFooter></worksheet>",
+                    u8::from(scales_header)
+                ));
+                bytes = rewritten.into_bytes();
+            }
+            writer
+                .start_file(entry.name(), zip::write::FileOptions::default())
+                .unwrap();
+            writer.write_all(&bytes).unwrap();
+        }
+        let data = writer.finish().unwrap().into_inner();
+        let (document, _) = crate::parser::Parser::parse(
+            &crate::parser::xlsx::XlsxParser,
+            &data,
+            &ConvertOptions::default(),
+        )
+        .unwrap();
+        let (mut chunks, _) = crate::parser::xlsx::XlsxParser
+            .parse_streaming(&data, &ConvertOptions::default(), 100)
+            .unwrap();
+        assert_eq!(chunks.len(), 1);
+        for (mode, document) in [("normal", document), ("streaming", chunks.remove(0))] {
+            let source = generate_typst(&document).unwrap().source;
+            let runs = crate::render::pdf::compiled_text_runs(&source, 0).unwrap();
+            let left = |label: &str| runs.iter().find(|run| run.text == label).unwrap().left_pt;
+            let spacing = left("Top row 6") - left("Bottom row 6");
+            let expected_header_size = if scales_header {
+                expected_font_size
+            } else {
+                11.0
+            };
+            let header = runs
+                .iter()
+                .find(|run| run.text == "Print scale")
+                .expect("the declared header remains present");
+            if (header.font_size_pt - expected_header_size).abs() > 0.01 {
+                differences.push(format!("{mode}, {percentage}%, fit {fits_to_page}, scale header {scales_header}: expected header {expected_header_size}pt, got {}pt", header.font_size_pt));
+            }
+            let font_size = runs
+                .iter()
+                .find(|run| run.text == "Bottom row 6")
+                .unwrap()
+                .font_size_pt;
+            if (font_size - expected_font_size).abs() > 0.01 {
+                differences.push(format!("{mode}, {percentage}%, fit {fits_to_page}: expected font {expected_font_size}pt, got {font_size}pt"));
+            }
+            if (spacing - expected_spacing).abs() > 0.01 {
+                differences.push(format!(
+                    "{mode}, {percentage}%: expected {expected_spacing}pt, got {spacing}pt"
+                ));
+            }
+        }
+    }
+    assert!(differences.is_empty(), "{}", differences.join("\n"));
+}

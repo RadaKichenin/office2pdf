@@ -888,6 +888,7 @@ fn test_fit_to_page_takes_the_tighter_of_the_two_bounds() {
         // 400pt of columns on a 400pt printable width needs no shrink;
         // 1400pt of rows on a 700pt printable height needs half.
         sheet_height_pt: 1400.0,
+        ..SheetFit::default()
     };
     let pages = split_sheet_page_by_width(
         make_page(
@@ -911,6 +912,7 @@ fn test_fit_to_page_takes_the_tighter_of_the_two_bounds() {
         // 800pt of columns on 400pt needs half; 875pt of rows on 700pt
         // needs only 0.80.
         sheet_height_pt: 875.0,
+        ..SheetFit::default()
     };
     let pages = split_sheet_page_by_width(
         make_page(
@@ -947,6 +949,7 @@ fn test_an_unbounded_fit_to_height_leaves_the_rows_alone() {
         pages_wide: Some(1),
         pages_tall: None,
         sheet_height_pt: 1400.0,
+        ..SheetFit::default()
     };
     let pages = split_sheet_page_by_width(page, None, unbounded, true);
     assert_eq!(pages[0].table.rows[0].height, Some(20.0));
@@ -1727,5 +1730,167 @@ fn test_the_measured_boundary_moves_with_the_page_column() {
                 "a 150pt line ends on the {boundary_pt}pt boundary and leaves the strip blank"
             );
         }
+    }
+}
+
+/// A cell whose single run carries `font_size`, so a scale reaching the type is
+/// observable without a font book.
+fn sized_cell(text: &str, font_size: f64) -> TableCell {
+    let mut cell = cell(text);
+    if let Some(Block::Paragraph(paragraph)) = cell.content.first_mut() {
+        for run in &mut paragraph.runs {
+            run.style.font_size = Some(font_size);
+        }
+    }
+    cell
+}
+
+/// One page of two 100pt columns and one 20pt row of 11pt text.
+fn print_scale_page() -> SheetPage {
+    make_page(
+        vec![100.0, 100.0],
+        vec![TableRow {
+            minimum_height: None,
+            cells: vec![sized_cell("left", 11.0), sized_cell("right", 11.0)],
+            height: Some(20.0),
+        }],
+    )
+}
+
+/// `<pageSetup scale="85">` without fit-to-page prints the sheet at 85% of its
+/// declared size — columns, rows and type alike.
+///
+/// The audited synthetic sheet's adjacent row-6 label origins are 108pt apart
+/// at 100% and 91.8pt at 85% in native Excel for Mac, and 84.24pt at 78%: a
+/// plain multiply of the grid, with no rounding of its own (issue #1817).
+/// Retaining the 100% geometry left the table and text visibly larger, with
+/// the drift growing rightward and downward.
+#[test]
+fn test_explicit_print_percentage_scales_the_whole_sheet() {
+    for (percentage, factor) in [(85_u32, 0.85), (78, 0.78), (50, 0.50)] {
+        let fit = SheetFit {
+            print_percentage: Some(percentage),
+            ..SheetFit::default()
+        };
+        let pages = split_sheet_page_by_width(print_scale_page(), None, fit, true);
+        assert_eq!(pages.len(), 1, "{percentage}% still prints one page");
+        assert_eq!(
+            pages[0].table.column_widths,
+            vec![100.0 * factor, 100.0 * factor],
+            "{percentage}% must scale the columns"
+        );
+        assert_eq!(
+            pages[0].table.rows[0].height,
+            Some(20.0 * factor),
+            "{percentage}% must scale the row height"
+        );
+        assert_eq!(
+            pages[0].table.print_scale,
+            Some(factor),
+            "{percentage}% must record its factor for rules evaluated at the declared size"
+        );
+        let Some(Block::Paragraph(paragraph)) = pages[0].table.rows[0].cells[0].content.first()
+        else {
+            panic!("the scaled cell keeps its paragraph");
+        };
+        assert_eq!(
+            paragraph.runs[0].style.font_size,
+            Some(11.0 * factor),
+            "{percentage}% must scale the type with the grid"
+        );
+    }
+}
+
+/// An explicit percentage above 100 enlarges the sheet. This is the one place
+/// print scaling differs in kind from fit-to-page, which only ever shrinks.
+#[test]
+fn test_an_explicit_print_percentage_above_one_hundred_enlarges_the_sheet() {
+    let fit = SheetFit {
+        print_percentage: Some(150),
+        ..SheetFit::default()
+    };
+    let pages = split_sheet_page_by_width(print_scale_page(), None, fit, true);
+    assert_eq!(pages[0].table.rows[0].height, Some(30.0));
+    assert_eq!(pages[0].table.print_scale, Some(1.5));
+    // 300pt of columns no longer fits the 400pt printable width in one strip
+    // only because it still does — the enlargement is what is under test, and
+    // the sheet must not silently lose the extra width.
+    assert_eq!(
+        pages
+            .iter()
+            .map(|page| page.table.column_widths.iter().sum::<f64>())
+            .sum::<f64>(),
+        300.0
+    );
+}
+
+/// Fit-to-page wins when a sheet declares both. Excel greys the "Adjust to"
+/// box out while "Fit to" is selected but keeps the percentage the file last
+/// carried, so the pair appears together in real workbooks; applying both would
+/// scale the sheet twice (issue #1817).
+#[test]
+fn test_fit_to_page_overrides_an_explicit_print_percentage() {
+    let fit = SheetFit {
+        print_percentage: Some(85),
+        fits_to_page: true,
+        pages_tall: Some(1),
+        // 1400pt of rows on a 700pt printable height needs half, which is
+        // neither 0.85 nor 0.85 x 0.5.
+        sheet_height_pt: 1400.0,
+        ..SheetFit::default()
+    };
+    let pages = split_sheet_page_by_width(print_scale_page(), None, fit, true);
+    assert_eq!(pages[0].table.rows[0].height, Some(10.0));
+    assert_eq!(pages[0].table.column_widths, vec![50.0, 50.0]);
+    assert_eq!(pages[0].table.print_scale, Some(0.5));
+}
+
+/// A sheet with no explicit percentage and no binding fit is untouched — it
+/// keeps `print_scale` unset rather than recording an inert 1.0, because the
+/// rules that read the factor treat its presence as "this sheet was scaled".
+#[test]
+fn test_an_unscaled_sheet_records_no_print_scale() {
+    let pages = split_sheet_page_by_width(print_scale_page(), None, SheetFit::default(), true);
+    assert_eq!(pages[0].table.print_scale, None);
+    assert_eq!(pages[0].table.column_widths, vec![100.0, 100.0]);
+    assert_eq!(pages[0].table.rows[0].height, Some(20.0));
+}
+
+/// `headerFooter/@scaleWithDoc` governs an explicit percentage exactly as it
+/// governs a fit-to-page scale: the header and footer shrink with the sheet
+/// unless the file opts out (issue #940).
+#[test]
+fn test_explicit_print_percentage_obeys_scale_with_doc() {
+    for (scales_with_doc, expected_size, expected_scale) in
+        [(true, Some(9.35), Some(0.85)), (false, Some(11.0), None)]
+    {
+        let mut page = print_scale_page();
+        page.footer = Some(footer_with_runs(vec![Run {
+            text: "Page 1".to_string(),
+            style: TextStyle {
+                font_size: Some(11.0),
+                ..TextStyle::default()
+            },
+            href: None,
+            footnote: None,
+            inline_box: None,
+        }]));
+        let fit = SheetFit {
+            print_percentage: Some(85),
+            ..SheetFit::default()
+        };
+        let pages = split_sheet_page_by_width(page, None, fit, scales_with_doc);
+        assert_eq!(footer_run_sizes(&pages[0]), vec![expected_size]);
+        assert_eq!(
+            pages[0]
+                .footer
+                .as_ref()
+                .expect("the page keeps its footer")
+                .sheet_print_scale,
+            expected_scale,
+            "scaleWithDoc={scales_with_doc} decides whether the footer box is scaled"
+        );
+        // The sheet itself scales either way.
+        assert_eq!(pages[0].table.column_widths, vec![85.0, 85.0]);
     }
 }
