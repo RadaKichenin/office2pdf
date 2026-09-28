@@ -1762,11 +1762,10 @@ struct SlideXmlParser<'a> {
     // ── Inline tracking flags ───────────────────────────────────────
     in_text: bool,
     in_rpr: bool,
-    /// True once the current rPr/endParaRPr applied its own Latin typeface, so
-    /// a duplicate slot does not override the first declaration.
-    rpr_applied_latin_typeface: bool,
-    /// The corresponding first-declaration guard for the East Asian slot.
-    rpr_applied_east_asian_typeface: bool,
+    /// Which typeface slots the open rPr/endParaRPr already filled, so its own
+    /// declaration replaces the inherited face and a duplicate slot does not
+    /// override the first declaration.
+    rpr_typefaces: PptxRunPropertyTypefaces,
     in_end_para_rpr: bool,
     in_text_line: bool,
     solid_fill_ctx: SolidFillCtx,
@@ -1829,8 +1828,7 @@ impl<'a> SlideXmlParser<'a> {
 
             in_text: false,
             in_rpr: false,
-            rpr_applied_latin_typeface: false,
-            rpr_applied_east_asian_typeface: false,
+            rpr_typefaces: PptxRunPropertyTypefaces::default(),
             in_end_para_rpr: false,
             in_text_line: false,
             solid_fill_ctx: SolidFillCtx::None,
@@ -2273,15 +2271,13 @@ impl<'a> SlideXmlParser<'a> {
             }
             b"rPr" if self.in_run => {
                 self.in_rpr = true;
-                self.rpr_applied_latin_typeface = false;
-                self.rpr_applied_east_asian_typeface = false;
+                self.rpr_typefaces.enter_run_properties();
                 self.run_has_explicit_underline = get_attr_str(e, b"u").is_some();
                 extract_rpr_attributes(e, &mut self.run_style);
             }
             b"endParaRPr" if self.in_para && !self.in_run => {
                 self.in_end_para_rpr = true;
-                self.rpr_applied_latin_typeface = false;
-                self.rpr_applied_east_asian_typeface = false;
+                self.rpr_typefaces.enter_run_properties();
                 self.para_end_run_style = self.para_default_run_style.clone();
                 self.para_declares_end_para_rpr = true;
                 extract_rpr_attributes(e, &mut self.para_end_run_style);
@@ -2831,38 +2827,14 @@ impl<'a> SlideXmlParser<'a> {
                     self.ctx.color_map,
                 );
             }
-            b"latin" if self.in_rpr => {
-                if !self.rpr_applied_latin_typeface {
-                    self.run_style.font_family = None;
-                }
-                apply_typeface_to_style(e, &mut self.run_style, self.ctx.theme);
-                self.rpr_applied_latin_typeface |= self.run_style.font_family.is_some();
+            b"latin" | b"ea" | b"cs" if self.in_rpr => {
+                self.rpr_typefaces
+                    .apply_typeface(e, &mut self.run_style, self.ctx.theme);
             }
-            b"ea" if self.in_rpr => {
-                if !self.rpr_applied_east_asian_typeface {
-                    self.run_style.east_asian_font_family = None;
-                }
-                apply_typeface_to_style(e, &mut self.run_style, self.ctx.theme);
-                self.rpr_applied_east_asian_typeface |=
-                    self.run_style.east_asian_font_family.is_some();
+            b"latin" | b"ea" | b"cs" if self.in_end_para_rpr => {
+                self.rpr_typefaces
+                    .apply_typeface(e, &mut self.para_end_run_style, self.ctx.theme);
             }
-            b"cs" if self.in_rpr => {}
-            b"latin" if self.in_end_para_rpr => {
-                if !self.rpr_applied_latin_typeface {
-                    self.para_end_run_style.font_family = None;
-                }
-                apply_typeface_to_style(e, &mut self.para_end_run_style, self.ctx.theme);
-                self.rpr_applied_latin_typeface |= self.para_end_run_style.font_family.is_some();
-            }
-            b"ea" if self.in_end_para_rpr => {
-                if !self.rpr_applied_east_asian_typeface {
-                    self.para_end_run_style.east_asian_font_family = None;
-                }
-                apply_typeface_to_style(e, &mut self.para_end_run_style, self.ctx.theme);
-                self.rpr_applied_east_asian_typeface |=
-                    self.para_end_run_style.east_asian_font_family.is_some();
-            }
-            b"cs" if self.in_end_para_rpr => {}
             _ => return false,
         }
         true

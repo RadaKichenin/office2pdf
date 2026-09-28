@@ -681,3 +681,152 @@ fn only_cell_paragraph(cell_xml: &str) -> Paragraph {
         other => panic!("Expected a paragraph in the cell, got {other:?}"),
     }
 }
+
+/// A run inside a slide table cell that declares its own `<a:latin>` paints in
+/// that face, whatever the cell's `<a:lstStyle>` named (issue #1838).
+///
+/// The cell seeds every run from the list style's defaults, and
+/// `apply_typeface_to_style` writes a slot only while it is still empty, so
+/// without clearing the inherited face first the run's own declaration is
+/// silently dropped. The text-box parser already clears it; the table parser
+/// is the second copy of the same paragraph state machine.
+#[test]
+fn a_cell_run_declaring_its_own_latin_typeface_overrides_the_list_style_face() {
+    let cell = concat!(
+        r#"<a:tc><a:txBody><a:bodyPr/>"#,
+        r#"<a:lstStyle><a:lvl1pPr><a:defRPr sz="1800">"#,
+        r#"<a:latin typeface="Gill Sans MT"/>"#,
+        r#"</a:defRPr></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:r><a:rPr lang="en-US"><a:latin typeface="Verdana"/></a:rPr>"#,
+        r#"<a:t>Manager</a:t></a:r></a:p>"#,
+        r#"</a:txBody><a:tcPr/></a:tc>"#,
+    );
+    let para = only_cell_paragraph(cell);
+
+    assert_eq!(
+        para.runs[0].style.font_family.as_deref(),
+        Some("Verdana"),
+        "the run's own <a:latin> outranks the face its cell's list style named"
+    );
+}
+
+/// Triangulation for the rule above: the face the run declares is whatever it
+/// wrote, not one particular family, and the list style's face is likewise not
+/// one particular family.
+#[test]
+fn a_cell_run_latin_typeface_wins_for_any_pair_of_families() {
+    let cell = concat!(
+        r#"<a:tc><a:txBody><a:bodyPr/>"#,
+        r#"<a:lstStyle><a:lvl1pPr><a:defRPr sz="1800">"#,
+        r#"<a:latin typeface="Courier New"/>"#,
+        r#"</a:defRPr></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:r><a:rPr lang="en-US"><a:latin typeface="Georgia"/></a:rPr>"#,
+        r#"<a:t>Owner</a:t></a:r></a:p>"#,
+        r#"</a:txBody><a:tcPr/></a:tc>"#,
+    );
+    let para = only_cell_paragraph(cell);
+
+    assert_eq!(
+        para.runs[0].style.font_family.as_deref(),
+        Some("Georgia"),
+        "the rule is the run's own face, not one particular family"
+    );
+}
+
+/// The East Asian slot follows the same rule as the Latin one: a run's own
+/// `<a:ea>` replaces the list style's (issue #1838).
+#[test]
+fn a_cell_run_declaring_its_own_east_asian_typeface_overrides_the_list_style_face() {
+    let cell = concat!(
+        r#"<a:tc><a:txBody><a:bodyPr/>"#,
+        r#"<a:lstStyle><a:lvl1pPr><a:defRPr sz="1800">"#,
+        r#"<a:ea typeface="MS PGothic"/>"#,
+        r#"</a:defRPr></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:r><a:rPr lang="ja-JP"><a:ea typeface="Yu Gothic"/></a:rPr>"#,
+        r#"<a:t>部長</a:t></a:r></a:p>"#,
+        r#"</a:txBody><a:tcPr/></a:tc>"#,
+    );
+    let para = only_cell_paragraph(cell);
+
+    assert_eq!(
+        para.runs[0].style.east_asian_font_family.as_deref(),
+        Some("Yu Gothic"),
+        "the run's own <a:ea> outranks the face its cell's list style named"
+    );
+}
+
+/// A cell run that declares no typeface at all still inherits the list
+/// style's face — the override is keyed on the run's own declaration, not on
+/// entering `<a:rPr>` (issue #1838).
+#[test]
+fn a_cell_run_declaring_no_typeface_keeps_the_list_style_face() {
+    let cell = concat!(
+        r#"<a:tc><a:txBody><a:bodyPr/>"#,
+        r#"<a:lstStyle><a:lvl1pPr><a:defRPr sz="1800">"#,
+        r#"<a:latin typeface="Gill Sans MT"/><a:ea typeface="MS PGothic"/>"#,
+        r#"</a:defRPr></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:r><a:rPr lang="en-US" b="1"/>"#,
+        r#"<a:t>Manager</a:t></a:r></a:p>"#,
+        r#"</a:txBody><a:tcPr/></a:tc>"#,
+    );
+    let para = only_cell_paragraph(cell);
+
+    assert_eq!(
+        para.runs[0].style.font_family.as_deref(),
+        Some("Gill Sans MT"),
+        "a run naming no Latin face keeps the one it inherits"
+    );
+    assert_eq!(
+        para.runs[0].style.east_asian_font_family.as_deref(),
+        Some("MS PGothic"),
+        "a run naming no East Asian face keeps the one it inherits"
+    );
+}
+
+/// The paragraph mark reads its face by the same rule: an `<a:endParaRPr>`
+/// that declares a typeface overrides the list style's (issue #1838).
+#[test]
+fn a_cell_paragraph_mark_declaring_its_own_latin_typeface_overrides_the_list_style_face() {
+    let cell = concat!(
+        r#"<a:tc><a:txBody><a:bodyPr/>"#,
+        r#"<a:lstStyle><a:lvl1pPr><a:defRPr sz="1800">"#,
+        r#"<a:latin typeface="Gill Sans MT"/>"#,
+        r#"</a:defRPr></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:r><a:rPr lang="en-US"><a:latin typeface="Verdana"/></a:rPr>"#,
+        r#"<a:t>Manager</a:t></a:r>"#,
+        r#"<a:endParaRPr lang="en-US"><a:latin typeface="Georgia"/></a:endParaRPr></a:p>"#,
+        r#"</a:txBody><a:tcPr/></a:tc>"#,
+    );
+    let para = only_cell_paragraph(cell);
+
+    assert_eq!(
+        para.style.paragraph_mark_font_family.as_deref(),
+        Some("Georgia"),
+        "the mark's own <a:latin> outranks the face its cell's list style named"
+    );
+}
+
+/// A second `<a:latin>` inside one `<a:rPr>` must not undo the first: the
+/// clear happens once per run-property element, so the first declaration still
+/// wins the way `apply_typeface_to_style` intends (issue #1838).
+#[test]
+fn a_repeated_latin_typeface_in_one_cell_run_keeps_the_first_declaration() {
+    let cell = concat!(
+        r#"<a:tc><a:txBody><a:bodyPr/>"#,
+        r#"<a:lstStyle><a:lvl1pPr><a:defRPr sz="1800">"#,
+        r#"<a:latin typeface="Gill Sans MT"/>"#,
+        r#"</a:defRPr></a:lvl1pPr></a:lstStyle>"#,
+        r#"<a:p><a:r><a:rPr lang="en-US">"#,
+        r#"<a:latin typeface="Verdana"/><a:latin typeface="Courier New"/>"#,
+        r#"</a:rPr><a:t>Manager</a:t></a:r></a:p>"#,
+        r#"</a:txBody><a:tcPr/></a:tc>"#,
+    );
+    let para = only_cell_paragraph(cell);
+
+    assert_eq!(
+        para.runs[0].style.font_family.as_deref(),
+        Some("Verdana"),
+        "the first <a:latin> of one <a:rPr> wins, and a later one neither \
+         clears it nor restores the inherited face"
+    );
+}
