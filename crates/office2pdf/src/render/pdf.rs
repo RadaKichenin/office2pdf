@@ -86,24 +86,117 @@ fn discover_fonts(
     include_system_fonts: bool,
     include_embedded_fonts: bool,
 ) -> (typst::text::FontBook, Vec<FontSlot>) {
-    let mut book = typst::text::FontBook::new();
+    let mut infos: Vec<typst::text::FontInfo> = Vec::new();
     let mut fonts: Vec<FontSlot> = Vec::new();
     for dir in font_dirs {
         for (found, info) in typst_kit::fonts::scan(dir) {
-            book.push(info);
+            infos.push(info);
             fonts.push(FontSlot::on_disk(found));
         }
     }
     if include_system_fonts {
         for (found, info) in typst_kit::fonts::system() {
-            book.push(info);
+            infos.push(info);
             fonts.push(FontSlot::on_disk(found));
         }
     }
     if include_embedded_fonts {
-        push_embedded_fonts(&mut book, &mut fonts);
+        push_embedded_fonts(&mut infos, &mut fonts);
     }
-    (book, fonts)
+    super::font_subst::refile_faces_shadowing_their_family(&mut infos, |index| {
+        fonts.get(index).and_then(declared_family_of)
+    });
+    (typst::text::FontBook::from_infos(infos), fonts)
+}
+
+/// The family a discovered face declares in its own `name` table.
+///
+/// Neither the slot's cache nor a full [`Font`] is built, and the file is not
+/// read whole: the refiling pass asks this of every installed face, and a
+/// `Font` computes a coverage bitmap and memoizes a rustybuzz face once
+/// instantiated. Over a thousand faces that cost 5.3 seconds a process, and
+/// reading their files whole still cost one.
+fn declared_family_of(slot: &FontSlot) -> Option<String> {
+    if let Some(Some(font)) = slot.font.get() {
+        return super::font_subst::declared_family_name(font);
+    }
+    let table: Vec<u8> = read_name_table(slot.path()?, slot.index)?;
+    let names = ttf_parser::name::Table::parse(&table)?.names;
+    super::font_subst::declared_family_names(names)
+        .into_iter()
+        .next()
+}
+
+/// The `name` table of the `index`th face in the font file at `path`.
+///
+/// Only the table directory and the table itself are read. A font file runs to
+/// tens of megabytes for a CJK collection, and the pass wants a few hundred
+/// bytes of it.
+fn read_name_table(path: &std::path::Path, index: u32) -> Option<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+
+    /// Tag opening a TrueType collection, ahead of one offset per member.
+    const COLLECTION_TAG: &[u8] = b"ttcf";
+    /// Tag of the table this reads.
+    const NAME_TAG: &[u8] = b"name";
+    /// A table directory record: tag, checksum, offset, length.
+    const RECORD_LEN: usize = 16;
+    /// Bytes ahead of the first record: version, table count, and the three
+    /// binary-search hints no reader needs.
+    const DIRECTORY_HEADER_LEN: u64 = 12;
+    /// A `name` table past this is a corrupt length, not a font.
+    const MAX_TABLE_LEN: u32 = 1 << 20;
+
+    let be_u16 = |bytes: &[u8]| -> Option<u16> { Some(u16::from_be_bytes(bytes.try_into().ok()?)) };
+    let be_u32 = |bytes: &[u8]| -> Option<u32> { Some(u32::from_be_bytes(bytes.try_into().ok()?)) };
+
+    let mut file: std::fs::File = std::fs::File::open(path).ok()?;
+    let mut header: [u8; DIRECTORY_HEADER_LEN as usize] = [0; DIRECTORY_HEADER_LEN as usize];
+    file.read_exact(&mut header).ok()?;
+
+    let directory_offset: u64 = if header.starts_with(COLLECTION_TAG) {
+        if index >= be_u32(&header[8..12])? {
+            return None;
+        }
+        file.seek(SeekFrom::Start(DIRECTORY_HEADER_LEN + u64::from(index) * 4))
+            .ok()?;
+        let mut member: [u8; 4] = [0; 4];
+        file.read_exact(&mut member).ok()?;
+        u64::from(be_u32(&member)?)
+    } else if index == 0 {
+        0
+    } else {
+        return None;
+    };
+
+    let table_count: u16 = if directory_offset == 0 {
+        be_u16(&header[4..6])?
+    } else {
+        file.seek(SeekFrom::Start(directory_offset)).ok()?;
+        file.read_exact(&mut header).ok()?;
+        be_u16(&header[4..6])?
+    };
+
+    let mut records: Vec<u8> = vec![0; usize::from(table_count) * RECORD_LEN];
+    file.seek(SeekFrom::Start(directory_offset + DIRECTORY_HEADER_LEN))
+        .ok()?;
+    file.read_exact(&mut records).ok()?;
+
+    let record: &[u8; RECORD_LEN] = records
+        .as_chunks::<RECORD_LEN>()
+        .0
+        .iter()
+        .find(|record| record.starts_with(NAME_TAG))?;
+    let offset: u32 = be_u32(&record[8..12])?;
+    let length: u32 = be_u32(&record[12..16])?;
+    if length == 0 || length > MAX_TABLE_LEN {
+        return None;
+    }
+
+    let mut table: Vec<u8> = vec![0; length as usize];
+    file.seek(SeekFrom::Start(u64::from(offset))).ok()?;
+    file.read_exact(&mut table).ok()?;
+    Some(table)
 }
 
 /// The book [`discover_fonts`] builds, for callers that only index families.
@@ -118,24 +211,27 @@ pub(crate) fn discover_font_book(
 
 /// Typst's fallback faces, empty on native builds without `embedded-fonts`.
 fn embedded_fonts() -> (typst::text::FontBook, Vec<FontSlot>) {
-    let mut book = typst::text::FontBook::new();
+    let mut infos: Vec<typst::text::FontInfo> = Vec::new();
     let mut fonts: Vec<FontSlot> = Vec::new();
-    push_embedded_fonts(&mut book, &mut fonts);
-    (book, fonts)
+    push_embedded_fonts(&mut infos, &mut fonts);
+    super::font_subst::refile_faces_shadowing_their_family(&mut infos, |index| {
+        fonts.get(index).and_then(declared_family_of)
+    });
+    (typst::text::FontBook::from_infos(infos), fonts)
 }
 
 /// Appends the faces embedded in typst-assets, which rank below every
 /// discovered face. Always available on WASM, opt-out on native builds.
 #[cfg(any(feature = "embedded-fonts", target_arch = "wasm32"))]
-fn push_embedded_fonts(book: &mut typst::text::FontBook, fonts: &mut Vec<FontSlot>) {
+fn push_embedded_fonts(infos: &mut Vec<typst::text::FontInfo>, fonts: &mut Vec<FontSlot>) {
     for (font, info) in typst_kit::fonts::embedded() {
-        book.push(info);
+        infos.push(info);
         fonts.push(FontSlot::loaded(font));
     }
 }
 
 #[cfg(all(not(feature = "embedded-fonts"), not(target_arch = "wasm32")))]
-fn push_embedded_fonts(_book: &mut typst::text::FontBook, _fonts: &mut Vec<FontSlot>) {}
+fn push_embedded_fonts(_infos: &mut Vec<typst::text::FontInfo>, _fonts: &mut Vec<FontSlot>) {}
 
 /// Document- or caller-provided in-memory faces followed by cached fallback
 /// slots. The combined book preserves the same priority order that native

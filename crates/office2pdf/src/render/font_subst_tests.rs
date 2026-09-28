@@ -1975,3 +1975,198 @@ fn east_asian_text_still_resolves_through_the_east_asian_family_first() {
         );
     }
 }
+
+// --- refile_faces_shadowing_their_family() tests ---
+
+/// A face filed under `family` at `weight`, in `style`, with nothing else the
+/// refiling rule reads.
+fn filed_as(family: &str, weight: u16, style: typst::text::FontStyle) -> typst::text::FontInfo {
+    typst::text::FontInfo {
+        family: family.to_string(),
+        variant: typst::text::FontVariant {
+            style,
+            weight: FontWeight::from_number(weight),
+            stretch: typst::text::FontStretch::NORMAL,
+        },
+        flags: typst::text::FontFlags::empty(),
+        axes: Vec::new(),
+        coverage: typst::text::Coverage::from_vec(Vec::new()),
+    }
+}
+
+/// The families `infos` hold after the rule has run.
+fn families_after_refiling(
+    mut infos: Vec<typst::text::FontInfo>,
+    declared: &[&str],
+) -> Vec<String> {
+    refile_faces_shadowing_their_family(&mut infos, |index| {
+        declared.get(index).map(|name| (*name).to_string())
+    });
+    infos.into_iter().map(|info| info.family).collect()
+}
+
+#[test]
+fn a_face_shadowing_another_designs_family_is_refiled_under_its_own_name() {
+    use typst::text::FontStyle::Normal;
+
+    // Typst files a face under its own name with style suffixes trimmed, so
+    // `GillSansUltraBold.ttf` — named `Gill Sans Ultra Bold` — lands under
+    // `Gill Sans`. It declares `usWeightClass` 400, the class Gill Sans
+    // Regular declares, so the two score an identical weight distance and book
+    // order alone decided which design a document naming plain `Gill Sans`
+    // got: 24.922pt lines against a native Word export's 22.975pt (#1837).
+    let infos: Vec<typst::text::FontInfo> = vec![
+        filed_as("Gill Sans", 400, Normal),
+        filed_as("Gill Sans", 400, Normal),
+        filed_as("Gill Sans", 700, Normal),
+    ];
+    assert_eq!(
+        families_after_refiling(infos, &["Gill Sans Ultra Bold", "Gill Sans", "Gill Sans"]),
+        vec![
+            "Gill Sans Ultra Bold".to_string(),
+            "Gill Sans".to_string(),
+            "Gill Sans".to_string(),
+        ],
+        "the intruder must move under the name it declares and leave the owner alone"
+    );
+}
+
+#[test]
+fn a_family_no_face_claims_by_name_keeps_every_member_where_the_book_filed_it() {
+    use typst::text::FontStyle::Normal;
+
+    // `Franklin Gothic Demi`, `Heavy` and `Medium` all declare 400 and all
+    // trim to `Franklin Gothic`, which no installed face declares. Emptying
+    // that key would leave a request for it with no face at all rather than
+    // the wrong weight of the right one, so the rule declines to act.
+    let infos: Vec<typst::text::FontInfo> = vec![
+        filed_as("Franklin Gothic", 400, Normal),
+        filed_as("Franklin Gothic", 400, Normal),
+        filed_as("Franklin Gothic", 400, Normal),
+    ];
+    assert_eq!(
+        families_after_refiling(
+            infos,
+            &[
+                "Franklin Gothic Demi",
+                "Franklin Gothic Heavy",
+                "Franklin Gothic Medium",
+            ],
+        ),
+        vec!["Franklin Gothic".to_string(); 3],
+        "a family with no face claiming its name must keep every member"
+    );
+}
+
+#[test]
+fn a_face_the_nearest_weight_search_can_tell_apart_stays_in_its_family() {
+    use typst::text::FontStyle::Normal;
+
+    // `calibril.ttf` is named `Calibri Light` and filed as `Calibri` at 300
+    // against Calibri's own 400. Nothing ties, a nearest-weight search reaches
+    // each of them, and that is how `Calibri Light` has resolved since #1286.
+    let infos: Vec<typst::text::FontInfo> = vec![
+        filed_as("Calibri", 300, Normal),
+        filed_as("Calibri", 400, Normal),
+        filed_as("Calibri", 700, Normal),
+    ];
+    assert_eq!(
+        families_after_refiling(infos, &["Calibri Light", "Calibri", "Calibri"]),
+        vec!["Calibri".to_string(); 3],
+        "a weight member the search can already reach must not be refiled"
+    );
+}
+
+#[test]
+fn every_face_sharing_a_refiled_name_moves_with_it() {
+    use typst::text::FontStyle::{Italic, Normal};
+
+    // One name is a whole style group. Moving only the face that ties would
+    // split the group, and a request for that name would then land on whatever
+    // single member stayed behind — here the italic, for an upright run.
+    let infos: Vec<typst::text::FontInfo> = vec![
+        filed_as("Noto", 400, Normal),
+        filed_as("Noto", 400, Normal),
+        filed_as("Noto", 500, Italic),
+    ];
+    assert_eq!(
+        families_after_refiling(infos, &["Noto Medium", "Noto", "Noto Medium"]),
+        vec![
+            "Noto Medium".to_string(),
+            "Noto".to_string(),
+            "Noto Medium".to_string(),
+        ],
+        "a face sharing the refiled name must follow it even where it ties with nothing"
+    );
+}
+
+#[test]
+fn a_face_whose_name_is_unreadable_is_left_where_the_book_filed_it() {
+    use typst::text::FontStyle::Normal;
+
+    // A legacy Macintosh record in a code page neither reader decodes leaves
+    // the face nameless, and a rule that cannot read a name must not guess.
+    let infos: Vec<typst::text::FontInfo> = vec![
+        filed_as("Gill Sans", 400, Normal),
+        filed_as("Gill Sans", 400, Normal),
+    ];
+    let mut unreadable: Vec<typst::text::FontInfo> = infos.clone();
+    let moved: usize = refile_faces_shadowing_their_family(&mut unreadable, |_| None);
+    assert_eq!(moved, 0, "an unreadable name must move nothing");
+    assert_eq!(
+        unreadable
+            .into_iter()
+            .map(|info| info.family)
+            .collect::<Vec<String>>(),
+        vec!["Gill Sans".to_string(); 2]
+    );
+}
+
+#[test]
+fn a_refiled_face_stops_shadowing_the_family_and_becomes_reachable_by_its_name() {
+    // The rule's whole point is which face `FontBook::select` answers with:
+    // Typst runs that very call for the `font:` list a run states, so the
+    // selection here is the selection a document gets (#1837).
+    use crate::render::font_context::test_faces::noto_serif_named;
+
+    // Two designs an unsuffixed request cannot tell apart: both declare 400,
+    // and `Noto Light` trims to the `Noto` the other declares outright. Their
+    // ascenders differ so the selected face is identifiable.
+    let owner: typst::text::Font = noto_serif_named("Noto      ", 400, 1069);
+    let intruder: typst::text::Font = noto_serif_named("Noto Light", 400, 1500);
+    // Book order alone decided the tie, so the intruder leads here exactly as
+    // Word's Office-bundled file leads the system collection.
+    let fonts: Vec<typst::text::Font> = vec![intruder, owner];
+    let mut infos: Vec<typst::text::FontInfo> =
+        fonts.iter().map(|font| font.info().clone()).collect();
+    assert_eq!(
+        infos
+            .iter()
+            .map(|info| info.family.as_str())
+            .collect::<Vec<&str>>(),
+        vec!["Noto", "Noto"],
+        "both faces must start out filed under the same family"
+    );
+
+    let unrepaired: typst::text::FontBook = typst::text::FontBook::from_infos(infos.clone());
+    assert_eq!(
+        unrepaired.select("noto", typst::text::FontVariant::default()),
+        Some(0),
+        "book order alone picked the intruder before the rule ran"
+    );
+
+    refile_faces_shadowing_their_family(&mut infos, |index| {
+        fonts.get(index).and_then(declared_family_name)
+    });
+    let repaired: typst::text::FontBook = typst::text::FontBook::from_infos(infos);
+    assert_eq!(
+        repaired.select("noto", typst::text::FontVariant::default()),
+        Some(1),
+        "an unsuffixed request must reach the face that declares the family"
+    );
+    assert_eq!(
+        repaired.select("noto light", typst::text::FontVariant::default()),
+        Some(0),
+        "the refiled face must be reachable under the name it declares"
+    );
+}

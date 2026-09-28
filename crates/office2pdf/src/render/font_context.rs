@@ -125,7 +125,21 @@ impl FontSearchContext {
         }
 
         self.in_memory_fonts.extend_from_slice(fonts);
-        self.in_memory_book = typst::text::FontBook::from_fonts(&self.in_memory_fonts);
+        // A conversion-local face can shadow another design's family exactly as
+        // a discovered one can, so the same refiling decides this book too
+        // (issue #1837). The faces are already loaded here, so reading their
+        // own names costs nothing.
+        let mut infos: Vec<typst::text::FontInfo> = self
+            .in_memory_fonts
+            .iter()
+            .map(|font| font.info().clone())
+            .collect();
+        super::font_subst::refile_faces_shadowing_their_family(&mut infos, |index| {
+            self.in_memory_fonts
+                .get(index)
+                .and_then(super::font_subst::declared_family_name)
+        });
+        self.in_memory_book = typst::text::FontBook::from_infos(infos);
 
         let FamilyIndex {
             available_families,
