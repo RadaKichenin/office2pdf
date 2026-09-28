@@ -1,0 +1,103 @@
+{
+  "clusters": [
+    {
+      "area_pt2": 40.5504,
+      "bbox_pt": {
+        "height": 10.08,
+        "width": 7.68,
+        "x": 27.36,
+        "y": 117.12
+      },
+      "disposition": {
+        "issue": "#1929",
+        "kind": "issue",
+        "note": "Every cluster is a fragment of the same three labels painted 19pt left of the native ones: Excel floors a printed sheet's left origin at 20pt, which this converter does not model. The 5% diff carries no other ink anywhere on the page."
+      },
+      "id": "p1-461ed2f2af05",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 37.5552,
+      "bbox_pt": {
+        "height": 5.76,
+        "width": 9.6,
+        "x": 39.36,
+        "y": 152.64
+      },
+      "disposition": {
+        "issue": "#1929",
+        "kind": "issue",
+        "note": "Every cluster is a fragment of the same three labels painted 19pt left of the native ones: Excel floors a printed sheet's left origin at 20pt, which this converter does not model. The 5% diff carries no other ink anywhere on the page."
+      },
+      "id": "p1-46a109308fc9",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 25.5744,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 4.8,
+        "x": 3.84,
+        "y": 85.44
+      },
+      "disposition": {
+        "issue": "#1929",
+        "kind": "issue",
+        "note": "Every cluster is a fragment of the same three labels painted 19pt left of the native ones: Excel floors a printed sheet's left origin at 20pt, which this converter does not model. The 5% diff carries no other ink anywhere on the page."
+      },
+      "id": "p1-ed4076e7ed12",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 22.1184,
+      "bbox_pt": {
+        "height": 6.72,
+        "width": 5.28,
+        "x": 46.56,
+        "y": 120.0
+      },
+      "disposition": {
+        "issue": "#1929",
+        "kind": "issue",
+        "note": "Every cluster is a fragment of the same three labels painted 19pt left of the native ones: Excel floors a printed sheet's left origin at 20pt, which this converter does not model. The 5% diff carries no other ink anywhere on the page."
+      },
+      "id": "p1-a36706b9b082",
+      "region": "top-left"
+    },
+    {
+      "area_pt2": 21.888,
+      "bbox_pt": {
+        "height": 8.16,
+        "width": 4.8,
+        "x": 22.56,
+        "y": 84.48
+      },
+      "disposition": {
+        "issue": "#1929",
+        "kind": "issue",
+        "note": "Every cluster is a fragment of the same three labels painted 19pt left of the native ones: Excel floors a printed sheet's left origin at 20pt, which this converter does not model. The 5% diff carries no other ink anywhere on the page."
+      },
+      "id": "p1-eaf0054dddc0",
+      "region": "top-left"
+    }
+  ],
+  "dpi": 150,
+  "duplicate_disposition_cluster_ids": [],
+  "errors": [],
+  "fuzz_percent": 5,
+  "minimum_area_pt2": 20.0,
+  "page": 1,
+  "passed": true,
+  "renderer_observations": [],
+  "schema_version": 1,
+  "strict": true,
+  "summary": {
+    "dispositioned": 5,
+    "duplicate": 0,
+    "total": 5,
+    "undispositioned": 0,
+    "unknown": 0
+  },
+  "undispositioned_cluster_ids": [],
+  "unknown_disposition_cluster_ids": []
+}
