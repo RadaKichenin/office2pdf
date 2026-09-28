@@ -11,10 +11,12 @@
 //!
 //! Set `UPDATE_BULK_BASELINE=1` to intentionally replace the baseline with the
 //! current outcomes after reviewing all changes.
+//!
+//! Set `BULK_CONVERSION_WORKERS=N` to change how many files convert at once
+//! (default 2).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as FmtWrite;
-use std::io::Write;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 
@@ -449,6 +451,62 @@ fn convert_file(path: &Path, format: Format) -> FileResult {
     }
 }
 
+/// Default number of files converted at once by the bulk gate.
+/// Override with `BULK_CONVERSION_WORKERS`.
+const DEFAULT_BULK_WORKERS: usize = 2;
+
+/// Files converted between two idle points. `pdf.rs` evicts Typst's
+/// memoization only when no compilation is active, so a pool that never goes
+/// idle would keep every document's cache alive; draining after each batch
+/// restores the eviction point a sequential run had after every file.
+const BULK_BATCH_SIZE: usize = 32;
+
+fn bulk_worker_count() -> usize {
+    std::env::var("BULK_CONVERSION_WORKERS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|&workers| workers > 0)
+        .unwrap_or(DEFAULT_BULK_WORKERS)
+}
+
+/// Applies `convert` to every item with up to `workers` threads, one bounded
+/// batch at a time, and returns the results in input order.
+fn map_in_batches<T, R, F>(items: &[T], workers: usize, batch_size: usize, convert: F) -> Vec<R>
+where
+    T: Sync,
+    R: Send,
+    F: Fn(&T) -> R + Sync,
+{
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let mut results: Vec<R> = Vec::with_capacity(items.len());
+    for batch in items.chunks(batch_size.max(1)) {
+        let next_index = AtomicUsize::new(0);
+        let mut indexed: Vec<(usize, R)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..workers.max(1).min(batch.len()))
+                .map(|_| {
+                    scope.spawn(|| {
+                        let mut local: Vec<(usize, R)> = Vec::new();
+                        loop {
+                            let index = next_index.fetch_add(1, Ordering::Relaxed);
+                            let Some(item) = batch.get(index) else { break };
+                            local.push((index, convert(item)));
+                        }
+                        local
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|handle| handle.join().expect("bulk worker thread panicked"))
+                .collect()
+        });
+        indexed.sort_by_key(|(index, _)| *index);
+        results.extend(indexed.into_iter().map(|(_, result)| result));
+    }
+    results
+}
+
 /// Run bulk conversion for a single format, returning results and summary.
 fn run_bulk_test(
     format_name: &'static str,
@@ -479,24 +537,39 @@ fn run_bulk_test(
         println!();
     }
 
-    let mut results = Vec::with_capacity(files.len());
+    // Converting ~2,700 files one at a time took ~4 min of the CI gate.
+    let results: Vec<FileResult> =
+        map_in_batches(&files, bulk_worker_count(), BULK_BATCH_SIZE, |path| {
+            convert_file(path, format)
+        });
 
-    for (i, path) in files.iter().enumerate() {
-        let filename = path
+    for (i, result) in results.iter().enumerate() {
+        let filename = result
+            .path
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_default();
-        print!("[{}/{}] {filename} ... ", i + 1, files.len());
-        std::io::stdout().flush().ok();
-
-        let result = convert_file(path, format);
         match result.outcome {
-            Outcome::Success => println!("OK"),
-            Outcome::Error => println!("ERROR: {}", result.detail),
-            Outcome::ExpectedError => println!("EXPECTED ERROR: {}", result.detail),
-            Outcome::Panic => println!("PANIC: {}", result.detail),
+            Outcome::Success => println!("[{}/{}] {filename} ... OK", i + 1, files.len()),
+            Outcome::Error => println!(
+                "[{}/{}] {filename} ... ERROR: {}",
+                i + 1,
+                files.len(),
+                result.detail
+            ),
+            Outcome::ExpectedError => println!(
+                "[{}/{}] {filename} ... EXPECTED ERROR: {}",
+                i + 1,
+                files.len(),
+                result.detail
+            ),
+            Outcome::Panic => println!(
+                "[{}/{}] {filename} ... PANIC: {}",
+                i + 1,
+                files.len(),
+                result.detail
+            ),
         }
-        results.push(result);
     }
 
     let success = results
@@ -1171,4 +1244,63 @@ fn test_bulk_success_rate_target() {
         "Overall success rate {rate:.1}% is below the {TARGET_RATE}% target. \
          {success}/{eff_total} files converted successfully."
     );
+}
+
+/// Parallel conversion must report results in corpus order, so the report and
+/// the baseline comparison stay identical to a sequential run.
+#[test]
+fn test_map_in_batches_preserves_input_order() {
+    let fixture_sizes: Vec<usize> = (0..103).collect();
+    for (workers, batch_size) in [(1, 7), (2, 7), (4, 10), (3, 200)] {
+        let doubled: Vec<usize> = map_in_batches(&fixture_sizes, workers, batch_size, |n| n * 2);
+        let expected: Vec<usize> = fixture_sizes.iter().map(|n| n * 2).collect();
+        assert_eq!(
+            doubled, expected,
+            "workers={workers} batch_size={batch_size}"
+        );
+    }
+}
+
+/// Typst's memoization is evicted only while no compilation is active, so
+/// every batch must drain completely before the next one starts, and no more
+/// than `workers` conversions may overlap.
+#[test]
+fn test_map_in_batches_drains_each_batch_and_bounds_concurrency() {
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let items: Vec<usize> = (0..50).collect();
+    let workers: usize = 3;
+    let batch_size: usize = 8;
+    let active = AtomicUsize::new(0);
+    let peak_active = AtomicUsize::new(0);
+    let completed = AtomicUsize::new(0);
+    let violations: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    map_in_batches(&items, workers, batch_size, |&index| {
+        let now_active = active.fetch_add(1, Ordering::SeqCst) + 1;
+        peak_active.fetch_max(now_active, Ordering::SeqCst);
+        let finished_before_start = completed.load(Ordering::SeqCst);
+        let earlier_batches = (index / batch_size) * batch_size;
+        if finished_before_start < earlier_batches {
+            violations.lock().unwrap().push(format!(
+                "item {index} started after only {finished_before_start} of {earlier_batches} earlier items"
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        active.fetch_sub(1, Ordering::SeqCst);
+        completed.fetch_add(1, Ordering::SeqCst);
+    });
+
+    assert!(
+        violations.lock().unwrap().is_empty(),
+        "{:?}",
+        violations.lock().unwrap()
+    );
+    let peak: usize = peak_active.load(Ordering::SeqCst);
+    assert!(
+        peak <= workers,
+        "peak concurrency {peak} exceeded {workers} workers"
+    );
+    assert!(peak > 1, "expected overlapping work, peak was {peak}");
 }
