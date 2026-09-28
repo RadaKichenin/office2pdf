@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "groups": [
+    {
+      "kind": "issue",
+      "issue": "#1929",
+      "cluster_ids": [
+        "p1-461ed2f2af05",
+        "p1-46a109308fc9",
+        "p1-ed4076e7ed12",
+        "p1-a36706b9b082",
+        "p1-eaf0054dddc0"
+      ],
+      "note": "Every cluster is a fragment of the same three labels painted 19pt left of the native ones: Excel floors a printed sheet's left origin at 20pt, which this converter does not model. The 5% diff carries no other ink anywhere on the page."
+    }
+  ]
+}

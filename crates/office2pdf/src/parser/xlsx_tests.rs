@@ -1564,6 +1564,27 @@ fn rewrite_theme_major_font_hang_face(data: &[u8], face: &str) -> Vec<u8> {
     )
 }
 
+/// Strip every worksheet's `<pageMargins .../>`, leaving a package whose
+/// sheets state no print margins at all.
+///
+/// umya's writer emits Excel's own defaults for margins the workbook never
+/// set, so a generated package can no longer stand in for an absent element —
+/// removing it from the part is the only way to reach the fallback (issue
+/// #1812).
+fn remove_page_margins(data: &[u8]) -> Vec<u8> {
+    rewrite_zip_parts(
+        data,
+        |name| name.starts_with("xl/worksheets/sheet") && name.ends_with(".xml"),
+        |xml| {
+            let start = xml
+                .find("<pageMargins")
+                .expect("worksheet has page margins");
+            let end = start + xml[start..].find("/>").expect("page margins is closed") + "/>".len();
+            format!("{}{}", &xml[..start], &xml[end..])
+        },
+    )
+}
+
 /// Rewrite every XML part whose name `selects` through `rewrite`, copying
 /// the rest of the package as is.
 fn rewrite_zip_parts(

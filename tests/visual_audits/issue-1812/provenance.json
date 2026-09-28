@@ -1,0 +1,16 @@
+{
+  "source": "Synthetic one-page workbook: three plain alignment labels in Malgun Gothic 11pt on fixed 15pt rows, four 18-character columns, pageMargins left=0 right=0.7 top=1.15 bottom=1; no private data",
+  "source_sha256": "0ec9bcf39b13344ae2ba3877c3518a4b0c88601346db4b20168c744a2c149b8a",
+  "reference": "Microsoft Excel 16.113.2 on macOS 26.6.2 build 25G83, exported with scripts/macos/export_excel_pdfs.applescript from the Excel container; MalgunGothic embedded, check_gt_integrity.py clean",
+  "before_office2pdf": "b3f0f5ce06607bfb554f47483c87ae01d2a17f1f",
+  "page": 1,
+  "dpi": 150,
+  "render_audit_dpi": 150,
+  "fine_shift_pt": 0.5,
+  "pdf_sha256": {
+    "gt": "ce4d17dcc33e75faf822380e80f72a38ad99da93a3ba6fc9596623113459eab0",
+    "before": "284f48a5e6f9033292647c118c9034498aac30dc7000e09a3e7bf200f5dbb032",
+    "after": "688a12c64650a9bff75c6ebbac39aba6c3216efe4073636711a0f78c1478031d"
+  },
+  "candidate_binary_sha256": "f0e9677b083b645f40a054bbcf1d29ce490806d36f030940687f35a092cc90e3"
+}

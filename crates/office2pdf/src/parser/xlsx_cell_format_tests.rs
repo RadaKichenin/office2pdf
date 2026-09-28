@@ -1350,6 +1350,65 @@ fn test_sheet_table_defaults_to_bottom_vertical_alignment() {
 
 // ----- Explicit print margins (issue #300) -----
 
+/// An explicitly declared zero margin is a margin, not a missing one.
+///
+/// Every body edge is exercised because the presence test is per attribute:
+/// a fix that only consulted the left edge would leave the other three
+/// silently defaulted (issue #1812).
+#[test]
+fn explicit_zero_print_margins_are_preserved_on_every_body_edge() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("여백 없음");
+        let margins = sheet.get_page_margins_mut();
+        margins.set_top(0.0);
+        margins.set_bottom(0.0);
+        margins.set_left(0.0);
+        margins.set_right(0.0);
+    });
+    let (document, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = get_sheet_page(&document, 0);
+    assert_eq!(page.margins.top, 0.0, "declared zero top is not absent");
+    assert_eq!(page.margins.bottom, 0.0);
+    assert_eq!(page.margins.left, 0.0);
+    assert_eq!(page.margins.right, 0.0);
+}
+
+/// A zero edge beside declared positive edges keeps both: the presence of one
+/// attribute says nothing about the others (issue #1812).
+#[test]
+fn a_zero_margin_beside_positive_margins_keeps_each_declared_value() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_cell_mut("A1").set_value("혼합 여백");
+        let margins = sheet.get_page_margins_mut();
+        margins.set_top(0.0);
+        margins.set_bottom(1.0);
+        margins.set_left(0.75);
+        margins.set_right(0.0);
+    });
+    let (document, _warnings) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+    let page = get_sheet_page(&document, 0);
+    assert_eq!(page.margins.top, 0.0);
+    assert_eq!(page.margins.bottom, 72.0, "1in bottom stays 72pt");
+    assert_eq!(page.margins.left, 54.0, "0.75in left stays 54pt");
+    assert_eq!(page.margins.right, 0.0);
+}
+
+/// The synthetic workbook filed with issue #1812: `pageMargins/@left="0"`
+/// beside three positive edges, as Excel writes a borderless left margin.
+#[test]
+fn a_declared_zero_left_margin_seats_the_sheet_on_the_paper_edge() {
+    let data: &[u8] = include_bytes!("../../../../tests/visual_audits/issue-1812/source.xlsx");
+    let (document, _warnings) = XlsxParser.parse(data, &ConvertOptions::default()).unwrap();
+    let page = get_sheet_page(&document, 0);
+    assert_eq!(
+        page.margins.left, 0.0,
+        "explicit zero is not an absent margin"
+    );
+    assert_eq!(page.margins.right, 50.0, "0.7in right prints against 50");
+    assert_eq!(page.margins.top, 82.0, "1.15in top prints against 82");
+    assert_eq!(page.margins.bottom, 72.0, "1in bottom prints against 72");
+}
+
 #[test]
 fn test_explicit_page_margins_are_used() {
     let data = build_xlsx_formatted(|sheet| {
@@ -1371,9 +1430,9 @@ fn test_explicit_page_margins_are_used() {
 
 #[test]
 fn test_absent_page_margins_fall_back_to_excel_defaults() {
-    let data = build_xlsx_formatted(|sheet| {
+    let data = remove_page_margins(&build_xlsx_formatted(|sheet| {
         sheet.get_cell_mut("A1").set_value("기본 여백");
-    });
+    }));
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
     let tp = get_sheet_page(&doc, 0);

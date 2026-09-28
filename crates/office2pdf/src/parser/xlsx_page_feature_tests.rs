@@ -888,9 +888,14 @@ fn a_sheet_footer_seat_follows_its_own_margin_not_the_bottom_one() {
 }
 
 /// A sheet that states no `<pageMargins>` takes Excel's own 0.3in default.
+///
+/// The element is stripped from the written package rather than simply left
+/// unset: umya writes Excel's own `footer="0.3"` for a margin the workbook
+/// never set, which would reach the same 21.6pt down the declared branch and
+/// leave this fallback untested (issue #1812).
 #[test]
 fn a_sheet_footer_without_page_margins_takes_excels_default() {
-    let data = build_xlsx_with_footer("&LSensitivity: Internal");
+    let data = remove_page_margins(&build_xlsx_with_footer("&LSensitivity: Internal"));
     let parser = XlsxParser;
     let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
 

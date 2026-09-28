@@ -65,8 +65,13 @@ const DEFAULT_PRINT_MARGINS: Margins = Margins {
 /// present, otherwise Excel's defaults, each snapped to the whole device point
 /// Excel prints against.
 ///
-/// umya leaves absent margin attributes at 0.0, which is not a value Excel
-/// ever writes, so ≤0 means "not specified".
+/// Presence comes from the attribute, not from the value: Excel writes
+/// `left="0"` for a sheet printed flush to the paper, and reading that zero as
+/// "not specified" substituted the 0.7in default and moved the first glyph
+/// from x22 to x53 on a workbook declaring it (issue #1812). Only a sheet
+/// whose worksheet part carries no `<pageMargins>` attribute at all takes a
+/// default. The far edge Excel itself prints such a sheet against is a
+/// separate export behaviour and is not modelled here (issue #1929).
 ///
 /// Excel lays a printed sheet out on whole device points, so a margin the file
 /// states in inches reaches the paper floored. Measured on an Excel-for-Mac
@@ -84,19 +89,31 @@ const DEFAULT_PRINT_MARGINS: Margins = Margins {
 /// gains is inferred from the model rather than observed.
 fn sheet_print_margins(sheet: &umya_spreadsheet::Worksheet) -> Margins {
     let page_margins = sheet.get_page_margins();
-    let inches_to_printed_pt = |inches: f64, default_pt: f64| -> f64 {
-        let declared_pt: f64 = if inches > 0.0 {
-            inches * 72.0
-        } else {
-            default_pt
+    let printed_pt = |declared: Option<f64>, default_pt: f64| -> f64 {
+        let declared_pt: f64 = match declared {
+            Some(inches) => inches * 72.0,
+            None => default_pt,
         };
         declared_pt.floor()
     };
+    let declared = |present: bool, inches: &f64| -> Option<f64> { present.then_some(*inches) };
     Margins {
-        top: inches_to_printed_pt(*page_margins.get_top(), DEFAULT_PRINT_MARGINS.top),
-        bottom: inches_to_printed_pt(*page_margins.get_bottom(), DEFAULT_PRINT_MARGINS.bottom),
-        left: inches_to_printed_pt(*page_margins.get_left(), DEFAULT_PRINT_MARGINS.left),
-        right: inches_to_printed_pt(*page_margins.get_right(), DEFAULT_PRINT_MARGINS.right),
+        top: printed_pt(
+            declared(page_margins.has_top(), page_margins.get_top()),
+            DEFAULT_PRINT_MARGINS.top,
+        ),
+        bottom: printed_pt(
+            declared(page_margins.has_bottom(), page_margins.get_bottom()),
+            DEFAULT_PRINT_MARGINS.bottom,
+        ),
+        left: printed_pt(
+            declared(page_margins.has_left(), page_margins.get_left()),
+            DEFAULT_PRINT_MARGINS.left,
+        ),
+        right: printed_pt(
+            declared(page_margins.has_right(), page_margins.get_right()),
+            DEFAULT_PRINT_MARGINS.right,
+        ),
     }
 }
 
