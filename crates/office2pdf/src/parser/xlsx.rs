@@ -228,8 +228,7 @@ fn sheet_fit(
     ctx: &SheetContext,
 ) -> xlsx_pagination::SheetFit {
     let setup: Option<&fit_to_page::SheetPrintSetup> = print_setups.get(sheet_name);
-    let declared: Option<&fit_to_page::SheetPrintSetup> =
-        setup.filter(|setup| setup.fits_to_page);
+    let declared: Option<&fit_to_page::SheetPrintSetup> = setup.filter(|setup| setup.fits_to_page);
     let bound = |pages: u32| -> Option<u32> { (pages > 0).then_some(pages) };
     let pages_tall: Option<u32> = declared.and_then(|fit| bound(fit.pages_tall));
     let fit = xlsx_pagination::SheetFit {
