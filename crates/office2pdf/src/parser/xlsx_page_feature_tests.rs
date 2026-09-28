@@ -711,6 +711,45 @@ fn build_xlsx_with_footer(footer_str: &str) -> Vec<u8> {
 }
 
 #[test]
+fn cdata_header_footer_text_preserves_text_and_bold_in_both_parser_paths() {
+    for is_header in [true, false] {
+        let original = if is_header {
+            build_xlsx_with_header("CDATA_PLACEHOLDER")
+        } else {
+            build_xlsx_with_footer("CDATA_PLACEHOLDER")
+        };
+        let data = rewrite_zip_parts(
+            &original,
+            |name| name == "xl/worksheets/sheet1.xml",
+            |xml| {
+                xml.replace(
+                    "CDATA_PLACEHOLDER",
+                    r#"<![CDATA[&C&"-,Bold"Research && Development]]>"#,
+                )
+            },
+        );
+        let (document, _) = XlsxParser.parse(&data, &ConvertOptions::default()).unwrap();
+        let (chunks, _) = XlsxParser
+            .parse_streaming(&data, &ConvertOptions::default(), 100)
+            .unwrap();
+        for parsed in std::iter::once(&document).chain(chunks.iter()) {
+            let sheet = get_sheet_page(parsed, 0);
+            let section = if is_header {
+                &sheet.header
+            } else {
+                &sheet.footer
+            };
+            let section = section.as_ref().expect("header/footer parsed");
+            assert_eq!(hf_section_texts(section), vec!["Research & Development"]);
+            let HFInline::Run(run) = &section.paragraphs[0].elements[0] else {
+                panic!("expected text run");
+            };
+            assert_eq!(run.style.bold, Some(true));
+        }
+    }
+}
+
+#[test]
 fn normal_font_color_precedence_is_independent_of_xml_attribute_order() {
     let cases: &[(&str, Color)] = &[
         (r#"theme="1" rgb="FFFFFF""#, Color::black()),
@@ -1388,5 +1427,136 @@ fn header_footer_bold_toggle_preserves_surrounding_text_and_font_styles() {
             })
             .collect();
         assert_eq!(actual, expected, "{format}");
+    }
+}
+
+/// Rebinds the `SpreadsheetML` namespace of a worksheet part to `prefix` and
+/// prefixes every element in it. Expanded element names, attributes and text
+/// stay identical, so the package remains equivalent to its default-namespace
+/// original and only the serialization differs. The part is machine-written
+/// with no `<` inside an attribute value or text node, which keeps the
+/// single-pass substitution exact.
+fn worksheet_with_namespace_prefix(package: &[u8], prefix: &str) -> Vec<u8> {
+    use std::io::{Read, Write};
+
+    const SHEET_MAIN_NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    let mut archive = zip::ZipArchive::new(Cursor::new(package)).unwrap();
+    let mut rewritten = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for index in 0..archive.len() {
+        let mut part = archive.by_index(index).unwrap();
+        let name: String = part.name().to_string();
+        let mut contents: Vec<u8> = Vec::new();
+        part.read_to_end(&mut contents).unwrap();
+        rewritten
+            .start_file(&name, zip::write::FileOptions::default())
+            .unwrap();
+        if name != "xl/worksheets/sheet1.xml" {
+            rewritten.write_all(&contents).unwrap();
+            continue;
+        }
+        let xml: String = String::from_utf8(contents).unwrap();
+        let split: usize = xml.find("?>").expect("XML declaration") + "?>".len();
+        let (declaration, body) = xml.split_at(split);
+        let mut prefixed: String = declaration.to_string();
+        let mut characters = body.chars().peekable();
+        while let Some(character) = characters.next() {
+            if character != '<' {
+                prefixed.push(character);
+                continue;
+            }
+            prefixed.push('<');
+            if characters.peek() == Some(&'/') {
+                prefixed.push(characters.next().expect("peeked closing slash"));
+            }
+            prefixed.push_str(prefix);
+            prefixed.push(':');
+        }
+        let prefixed: String = prefixed.replace(
+            &format!("xmlns=\"{SHEET_MAIN_NS}\""),
+            &format!("xmlns:{prefix}=\"{SHEET_MAIN_NS}\""),
+        );
+        rewritten.write_all(prefixed.as_bytes()).unwrap();
+    }
+    rewritten.finish().unwrap().into_inner()
+}
+
+/// Excel accepts a worksheet serialized with a namespace prefix as readily as
+/// one using the default namespace, so an equivalent package must convert to
+/// the same content. The reader used to match literal `row` and `headerFooter`
+/// spellings and silently produced a blank page for the prefixed form (#1803).
+#[test]
+fn worksheet_namespace_prefixes_preserve_body_and_header_footer() {
+    const CONTROL: &[u8] =
+        include_bytes!("../../../../tests/visual_audits/issue-1803/control.xlsx");
+    const PREFIXED: &[u8] =
+        include_bytes!("../../../../tests/visual_audits/issue-1803/prefixed.xlsx");
+    // Any prefix spelling must work, so the committed `s:` pair is joined by
+    // prefixes generated from the control package. A prefix that is itself a
+    // worksheet element name would expose a substring-matching reader.
+    let generated: Vec<Vec<u8>> = ["x", "ns0", "spreadsheetml", "row"]
+        .iter()
+        .map(|prefix| worksheet_with_namespace_prefix(CONTROL, prefix))
+        .collect();
+    let mut packages: Vec<(String, &[u8])> = vec![
+        ("default namespace".to_string(), CONTROL),
+        ("s: prefix".to_string(), PREFIXED),
+    ];
+    packages.extend(
+        ["x", "ns0", "spreadsheetml", "row"]
+            .iter()
+            .zip(generated.iter())
+            .map(|(prefix, bytes)| (format!("{prefix}: prefix"), bytes.as_slice())),
+    );
+
+    for (label, bytes) in packages {
+        let (document, _) = XlsxParser.parse(bytes, &ConvertOptions::default()).unwrap();
+        let (chunks, _) = XlsxParser
+            .parse_streaming(bytes, &ConvertOptions::default(), 100)
+            .unwrap();
+        assert_eq!(chunks.len(), 1, "{label}");
+        for parsed in std::iter::once(&document).chain(chunks.iter()) {
+            let sheet = get_sheet_page(parsed, 0);
+            let body: Vec<String> = sheet
+                .table
+                .rows
+                .iter()
+                .flat_map(|row| row.cells.iter())
+                .map(cell_text)
+                .filter(|text| !text.is_empty())
+                .collect();
+            assert_eq!(
+                body,
+                ["Quarterly summary", "Research", "120", "Development", "240"],
+                "{label}"
+            );
+            assert_eq!(
+                hf_section_texts(sheet.header.as_ref().expect("header preserved")),
+                ["Quarterly report"],
+                "{label}"
+            );
+            let footer = sheet.footer.as_ref().expect("footer preserved");
+            let footer_text: String = hf_section_texts(footer).join("");
+            assert!(footer_text.contains("Internal"), "{label}: {footer_text}");
+            assert!(
+                footer_text.contains("Generated by Example Reporting System"),
+                "{label}: {footer_text}"
+            );
+            assert!(
+                footer
+                    .paragraphs
+                    .iter()
+                    .flat_map(|paragraph| &paragraph.elements)
+                    .any(|element| matches!(element, HFInline::PageNumber(_))),
+                "{label}"
+            );
+            assert!(
+                footer
+                    .paragraphs
+                    .iter()
+                    .flat_map(|paragraph| &paragraph.elements)
+                    .any(|element| matches!(element, HFInline::TotalPages(_))),
+                "{label}"
+            );
+        }
     }
 }

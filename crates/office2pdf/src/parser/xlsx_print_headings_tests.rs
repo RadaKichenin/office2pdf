@@ -15,6 +15,7 @@ fn text_cell(text: &str) -> TableCell {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()

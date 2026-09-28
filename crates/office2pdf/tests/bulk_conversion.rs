@@ -84,8 +84,6 @@ const DENYLIST: &[&str] = &[
     // XML bomb variants (lol9 entity expansion)
     "54764.xlsx",
     "54764-2.xlsx",
-    // Shared string table bomb (OOM)
-    "poc-shared-strings.xlsx",
     // Hangs during conversion (CI timeout)
     "bug62181.xlsx",
 ];
@@ -111,6 +109,9 @@ const EXPECTED_ERRORS: &[&str] = &[
     "protected_passtika.xlsx",
     // Invalid cell coordinates past Excel's grid are rejected before layout.
     "too-many-cols-rows.xlsx",
+    // A shared string longer than an Excel cell is rejected before the reader
+    // copies it into every referencing cell.
+    "poc-shared-strings.xlsx",
 ];
 
 /// Returns `true` if the file should be skipped due to being on the denylist.

@@ -1,0 +1,17 @@
+{
+  "source": "Synthetic single-page XLSX created for this regression; no real document content",
+  "source_sha256": "a902fce7340d5abff08db4e2f174397326a548ff2ffc54f2121b1dd08786dc2e",
+  "reference": "Microsoft Excel 16.113 on macOS 26.6.2, scripts/macos/export_excel_pdfs.applescript",
+  "before_office2pdf": "17d4a1b883d21457d8eb13f8460962e1a96e948a",
+  "before_umya": "aa30b5c6dd1139ec24c5a189fc9acdfd3f1d32cd",
+  "after_umya": "10efd229e65cd4aa2c2a40e431c1eb38d71a5ff7",
+  "dpi": 150,
+  "page": 1,
+  "fine_shift_pt": 0.5,
+  "pdf_sha256": {
+    "gt": "7e7a2246b6c95973350b9813e1b3a3c5a59d50d56c58f155aa936380d56fced8",
+    "before": "8ea67661f450abfd2fd2f9783f92de5559da03baa8f924e389db2c0fa7ebf635",
+    "after": "d9a2db834da7afada0c58dd1d874bd36482029ae987b6e0f6c5c3fb81046da56"
+  },
+  "after_office2pdf": "merge of main 17d4a1b8 into fix/xlsx-cdata-text"
+}

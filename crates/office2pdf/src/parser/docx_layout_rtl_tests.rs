@@ -731,14 +731,14 @@ fn test_word_wrap_reaches_the_paragraph_style() {
 <w:p/>
 </w:body></w:document>"#;
     let context = super::super::contexts::WordWrapContext::from_xml(Some(xml));
-    assert_eq!(context.next_word_wrap(), Some(false));
-    assert_eq!(context.next_word_wrap(), Some(true));
+    assert_eq!(context.next_word_wrap(None), Some(false));
+    assert_eq!(context.next_word_wrap(None), Some(true));
     assert_eq!(
-        context.next_word_wrap(),
+        context.next_word_wrap(None),
         Some(true),
         "an absent w:val means on, the element's own default"
     );
-    assert_eq!(context.next_word_wrap(), None);
+    assert_eq!(context.next_word_wrap(None), None);
 }
 
 /// A table cell's paragraph consumes its own slot, so nesting cannot shift
@@ -752,9 +752,9 @@ fn test_word_wrap_scan_covers_nested_table_paragraphs() {
 <w:p/>
 </w:body></w:document>"#;
     let context = super::super::contexts::WordWrapContext::from_xml(Some(xml));
-    assert_eq!(context.next_word_wrap(), None);
-    assert_eq!(context.next_word_wrap(), Some(false));
-    assert_eq!(context.next_word_wrap(), None);
+    assert_eq!(context.next_word_wrap(None), None);
+    assert_eq!(context.next_word_wrap(None), Some(false));
+    assert_eq!(context.next_word_wrap(None), None);
 }
 
 /// A paragraph style's `w:wordWrap` comes from the raw styles.xml the same

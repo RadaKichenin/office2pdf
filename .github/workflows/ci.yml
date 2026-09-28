@@ -5,14 +5,68 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, edited]
+    # `edited` is deliberately absent: only the PR body contract reads the body,
+    # and it lives in pr-contract.yml so a description edit does not re-run
+    # every Rust job on an unchanged head.
+    types: [opened, synchronize, reopened]
+
+# A new push to a PR supersedes its running checks. Pushes to main key on the
+# commit, so every merge commit keeps its own complete run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
 
+# Every rust-cache step saves only on main. The repository's Actions cache is
+# capped at 10 GB; when each PR also saved its own ~1 GB entries, they evicted
+# main's and most jobs restored nothing. PRs restore main's entries instead.
+# Jobs whose dependency graphs match share one entry for the same reason.
+
+permissions:
+  contents: read
+
 jobs:
+  changes:
+    # A PR touching only `.md` files, `assets/` or `references/` skips the Rust
+    # jobs (AGENTS.md, Testing). Pushes to main always build everything so each
+    # merge commit gets a full run. A skipped job reports success, so nothing
+    # waits on a pending check.
+    name: Detect Rust-relevant changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - id: filter
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            echo "rust=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' > "${RUNNER_TEMP}/changed.txt"
+          # No Rust code reads Markdown, bug-fix evidence, validation notes or
+          # reference summaries at runtime. The Python contract jobs, which do
+          # read README.md and AGENTS.md, are not gated.
+          if grep -qvE '\.md$|^assets/|^references/' "${RUNNER_TEMP}/changed.txt"; then
+            echo "rust=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "rust=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice::Only documentation or evidence changed; Rust jobs skipped"
+          fi
+
   publish-verification:
     name: Publish Verification
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,72 +156,30 @@ jobs:
       - name: Validate business golden corpus
         run: python3 scripts/validate_business_golden_mocks.py
 
-  visual-pr-contract:
-    name: Visual PR Contract
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-      - name: Test visual PR validator
-        run: python3 -m unittest discover -s scripts/tests -p 'test_check_visual_pr.py'
-      - name: Test layout differ
-        run: |
-          python3 -m unittest discover -s scripts/tests -p 'test_compare_layout.py'
-          python3 -m unittest discover -s scripts/tests -p 'test_spatial_match.py'
-      - name: Test render comparison
-        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_render.py'
-      - name: Test text-layer census
-        run: python3 -m unittest discover -s scripts/tests -p 'test_compare_text_layer.py'
-      - name: Test GT integrity gate
-        run: python3 -m unittest discover -s scripts/tests -p 'test_check_gt_integrity.py'
-      - name: Test probe harness
-        run: python3 -m unittest discover -s scripts/tests -p 'test_probe_harness.py'
-      - name: Test PowerPoint chart-axis harness
-        run: python3 -m unittest discover -s scripts/tests -p 'test_measure_powerpoint_chart_axis.py'
-      - name: Test Excel row-height sweep
-        run: python3 -m unittest discover -s scripts/tests -p 'test_measure_excel_row_height.py'
-      - name: Test issue-loop viewer
-        run: python3 -m unittest discover -s scripts/tests -p 'test_issue_loop_watch.py'
-      - name: Test issue-loop usage-limit detector
-        run: python3 -m unittest discover -s scripts/tests -p 'test_issue_loop.py'
-      - name: Check issue-loop script syntax
-        run: bash -n scripts/issue_loop.sh
-      - name: Validate visual PR contract
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          python3 scripts/check_visual_pr.py
-          --event "${GITHUB_EVENT_PATH}"
-          --base "${{ github.event.pull_request.base.sha }}"
-          --head "${{ github.event.pull_request.head.sha }}"
-          --repository "${{ github.repository }}"
-
   check:
-    name: Check
+    # Stable is already compiled per OS by Test (and on Linux by Clippy), so
+    # only the MSRV needs a separate check.
+    name: Check MSRV
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, "1.92"]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: "1.92"
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --locked --workspace
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -178,20 +190,54 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # rust-cache keys ignore the Cargo profile, so a key that already
+          # held dev-profile dependencies would restore as a full match and
+          # never save the optimized ones. The name marks the ci profile.
+          shared-key: test-ci-profile
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install qpdf
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y qpdf
-      - run: cargo test --locked --workspace
+      - run: cargo test --locked --workspace --profile ci
         env:
           OFFICE2PDF_VALIDATE_PDF: "1"
+
+  no-embedded-fonts:
+    # A different feature set rebuilds the crate, so it runs beside Test
+    # instead of extending Test's critical path.
+    name: Test without Typst fonts
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # This job differs from Test only in typst-kit's font feature, but
+          # that flip rebuilds the Typst crates: ~5 min on Windows, where it
+          # was the critical path. Windows keeps its own ~1 GB entry; the other
+          # legs restore Test's and save nothing, to stay within the 10 GB cap.
+          shared-key: ${{ runner.os == 'Windows' && 'no-embedded-fonts-ci-profile' || 'test-ci-profile' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && runner.os == 'Windows' }}
       - name: Test native conversion without Typst fonts
         run: |
-          cargo test --locked -p office2pdf --no-default-features --lib font_feature
-          cargo test --locked -p office2pdf --no-default-features --test font_features
-          cargo check --locked -p office2pdf-cli --no-default-features
+          cargo test --locked -p office2pdf --no-default-features --profile ci --lib font_feature
+          cargo test --locked -p office2pdf --no-default-features --profile ci --test font_features
+          # Checked, not built: a ci-profile build of the CLI here recompiled
+          # dependencies at opt-level 2 for 4-6 min on Linux and macOS. A check
+          # does no codegen, so the profile only picks the target directory
+          # (and with it Windows' cached entry).
+          cargo check --locked -p office2pdf-cli --no-default-features --profile ci
 
   clippy:
     name: Clippy
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -199,11 +245,20 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   wasm-check:
-    name: WASM Check & Test
+    # One leg per browser feature: the two package builds share nothing but
+    # dependencies, so running them side by side halves the job.
+    name: WASM Check & Test (${{ matrix.feature }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        feature: [wasm, wasm-cjk-font]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -211,29 +266,34 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          key: wasm
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --no-default-features --features wasm
-      - run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm-cjk-font
+          # wasm-cjk-font adds no dependency over wasm, so both legs share one
+          # ~1.5 GB entry and only one leg saves it.
+          shared-key: wasm
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.feature == 'wasm' }}
+      - name: Check wasm32 feature combinations
+        if: matrix.feature == 'wasm'
+        run: |
+          cargo check --locked --target wasm32-unknown-unknown -p office2pdf
+          cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm
+          cargo check --locked --target wasm32-unknown-unknown -p office2pdf --no-default-features --features wasm
+      - name: Check wasm32 with bundled Chinese font
+        if: matrix.feature == 'wasm-cjk-font'
+        run: cargo check --locked --target wasm32-unknown-unknown -p office2pdf --features wasm-cjk-font
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
       # `cargo check` and `wasm-pack test` do not link the browser package
       # documented in README.md, so keep that artifact buildable too.
+      # `--no-opt` skips wasm-opt, which took ~7 of every 8 minutes here; this
+      # job proves the package links, and no workflow publishes it.
       - name: Build browser package
-        run: wasm-pack build crates/office2pdf --target web --features wasm --locked
+        run: wasm-pack build crates/office2pdf --target web --no-opt --features ${{ matrix.feature }} --locked
       # Runs the wasm integration tests in src/wasm.rs under Node, exercising
       # the wasm32 time paths (Instant/SystemTime) end-to-end so the issue #178
       # class of runtime panic cannot regress unnoticed.
       - name: Run wasm tests in Node
         working-directory: crates/office2pdf
-        run: wasm-pack test --node --features wasm --locked
-      - name: Build browser package with bundled Chinese font
-        run: wasm-pack build crates/office2pdf --target web --features wasm-cjk-font --locked
-      - name: Run bundled Chinese font tests in Node
-        working-directory: crates/office2pdf
-        run: wasm-pack test --node --features wasm-cjk-font --locked
+        run: wasm-pack test --node --features ${{ matrix.feature }} --locked
 
   fmt:
     name: Format
@@ -247,6 +307,8 @@ jobs:
 
   bulk-test:
     name: Bulk Third-Party Fixture Test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -254,6 +316,8 @@ jobs:
       - uses: ./.github/actions/bulk-fixtures
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Compare fixture outcomes with baseline
         run: cargo test --locked --release -p office2pdf --test bulk_conversion test_bulk_regression_gate -- --ignored --nocapture --exact
         env:

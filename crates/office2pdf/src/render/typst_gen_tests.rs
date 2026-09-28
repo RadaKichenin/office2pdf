@@ -41,8 +41,29 @@ fn make_paragraph(text: &str) -> Block {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
+}
+
+/// The tracked Noto Sans CJK SC face's family, and its `hhea` ascender and
+/// descender in em (1160 and -288 of 1000 units). It declares no line gap,
+/// which [`noto_sans_cjk_context_with_line_gap`] rewrites.
+const NOTO_SANS_CJK_SC: &str = "Noto Sans CJK SC";
+const NOTO_SANS_CJK_ASCENDER_EM: f64 = 1.160;
+const NOTO_SANS_CJK_DESCENDER_EM: f64 = 0.288;
+
+/// A font context whose only caller-provided face is the tracked Noto Sans
+/// CJK SC with its `hhea` line gap rewritten to `line_gap` units — the one
+/// factor Batang, Gulim, Dotum and Gungsuh (152/1024) differ from Malgun
+/// Gothic (0) by. Held in memory, it outranks any installed copy.
+fn noto_sans_cjk_context_with_line_gap(
+    line_gap: i16,
+) -> crate::render::font_context::FontSearchContext {
+    let base: &[u8] = include_bytes!("../../fonts/NotoSansCJKsc-GB2312.otf");
+    let face: Vec<u8> = crate::test_support::make_face_with_hhea_line_gap(base.to_vec(), line_gap);
+    let fonts = crate::render::pdf::load_fonts_from_bytes([face.as_slice()]);
+    crate::render::font_context::resolve_font_search_context_from_fonts(&fonts)
 }
 
 /// The `(top_edge_em, bottom_edge_em)` of the first line box the generator
@@ -135,6 +156,7 @@ fn make_text_box(x: f64, y: f64, w: f64, h: f64, text: &str) -> FixedElement {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             padding: Insets::default(),
@@ -280,6 +302,7 @@ fn make_simple_table(rows: Vec<Vec<&str>>) -> Table {
                                 style: TextStyle::default(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         })],
                         ..TableCell::default()
@@ -328,6 +351,7 @@ fn test_generate_run_superscript() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -349,6 +373,7 @@ fn test_generate_run_subscript() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -372,6 +397,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "1".to_string(),
@@ -382,6 +408,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "B".to_string(),
@@ -391,6 +418,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "2".to_string(),
@@ -401,6 +429,7 @@ fn test_generate_run_baseline_shift_moves_text_by_its_run_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -446,6 +475,7 @@ fn test_generate_run_small_caps() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -467,6 +497,7 @@ fn test_generate_run_all_caps() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -489,6 +520,7 @@ fn test_generate_run_superscript_with_bold() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -510,6 +542,7 @@ fn test_generate_run_highlight_yellow() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -574,6 +607,7 @@ fn generated_source_for_run_style(style: TextStyle) -> String {
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     generate_typst(&doc).unwrap().source
@@ -592,6 +626,7 @@ fn test_table_cell_vertical_align_center() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Center),
@@ -623,6 +658,7 @@ fn test_generate_run_highlight_with_bold() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -649,6 +685,7 @@ fn test_table_cell_vertical_align_bottom() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 vertical_align: Some(CellVerticalAlign::Bottom),
@@ -756,6 +793,7 @@ fn test_inferred_weight_not_emitted_when_font_unavailable() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst_with_options_and_font_context(
@@ -787,6 +825,7 @@ fn test_inferred_weight_emitted_when_font_available_via_alias() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst_with_options_and_font_context(
@@ -819,6 +858,7 @@ fn test_explicit_bold_still_emitted_when_font_unavailable() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst_with_options_and_font_context(
@@ -916,6 +956,7 @@ fn a_latin_line_set_in_a_cjk_face_keeps_the_east_asian_line_box() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         emitted_line_box_em(&generate_typst(&doc).unwrap().source)

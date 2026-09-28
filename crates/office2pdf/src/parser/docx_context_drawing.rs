@@ -1,11 +1,19 @@
 use std::cell::Cell;
 
-use crate::parser::units::emu_to_pt;
+use crate::ir::{BorderSide, Color, Insets};
 
-#[derive(Debug, Clone, Copy, Default)]
+use super::docx_context_shape::{ShapeBuilder, ShapeScanState};
+
+#[derive(Debug, Clone, Default)]
 pub(in super::super) struct DrawingTextBoxInfo {
     pub(in super::super) width_pt: Option<f64>,
     pub(in super::super) height_pt: Option<f64>,
+    /// Outline from the shape's `a:ln`, `None` when it paints none.
+    pub(in super::super) stroke: Option<BorderSide>,
+    /// Background from the shape's `a:solidFill`.
+    pub(in super::super) fill: Option<Color>,
+    /// Where the box's text starts inside it, from `wps:bodyPr`.
+    pub(in super::super) padding: Insets,
 }
 
 pub(in super::super) struct DrawingTextBoxContext {
@@ -24,55 +32,63 @@ impl DrawingTextBoxContext {
     pub(in super::super) fn consume_next(&self) -> DrawingTextBoxInfo {
         let index = self.cursor.get();
         self.cursor.set(index + 1);
-        self.text_boxes.get(index).copied().unwrap_or_default()
+        self.text_boxes.get(index).cloned().unwrap_or_default()
     }
 }
 
+/// Scan `word/document.xml` for every `wps:wsp` text box drawing, in document
+/// order: its on-page extent, and the frame it paints around its text.
+///
+/// The element dispatch is [`ShapeScanState`]'s, shared with the geometry-only
+/// shape scan, so `wp:extent`, `a:ln`, `a:solidFill` and `wps:bodyPr` are read
+/// one way for both (issue #1690).
 fn scan_drawing_text_boxes(xml: &str) -> Vec<DrawingTextBoxInfo> {
     let mut reader = quick_xml::Reader::from_str(xml);
     let mut buffer: Vec<u8> = Vec::new();
     let mut result: Vec<DrawingTextBoxInfo> = Vec::new();
     let mut in_body: bool = false;
     let mut drawing_depth: usize = 0;
-    let mut current_info: DrawingTextBoxInfo = DrawingTextBoxInfo::default();
-    let mut saw_text_box: bool = false;
+    let mut state: ShapeScanState = ShapeScanState::default();
+    let mut builder: Option<ShapeBuilder> = None;
 
     loop {
         match reader.read_event_into(&mut buffer) {
-            Ok(quick_xml::events::Event::Start(ref element)) => match element.local_name().as_ref()
-            {
-                b"body" => in_body = true,
-                b"drawing" if in_body => {
-                    if drawing_depth == 0 {
-                        current_info = DrawingTextBoxInfo::default();
-                        saw_text_box = false;
+            Ok(quick_xml::events::Event::Start(ref element)) => {
+                match element.local_name().as_ref() {
+                    b"body" => in_body = true,
+                    b"drawing" if in_body => {
+                        if drawing_depth == 0 {
+                            builder = Some(ShapeBuilder::default());
+                            state.reset();
+                        }
+                        drawing_depth += 1;
                     }
-                    drawing_depth += 1;
+                    // Only the box's own `wps:wsp` describes the box. A nested
+                    // `w:drawing` inside `w:txbxContent` — a picture in one of
+                    // the box's paragraphs — carries its own `wp:extent`,
+                    // `a:ln` and `a:solidFill`, and would otherwise overwrite
+                    // the box's size and frame with the picture's.
+                    _ if drawing_depth == 1 => state.start(builder.as_mut(), element),
+                    _ => {}
                 }
-                b"extent" if drawing_depth > 0 => {
-                    update_drawing_text_box_extent(&mut current_info, element);
+            }
+            Ok(quick_xml::events::Event::Empty(ref element)) => {
+                if drawing_depth == 1 {
+                    state.empty(builder.as_mut(), element);
                 }
-                b"txbx" if drawing_depth > 0 => saw_text_box = true,
-                _ => {}
-            },
-            Ok(quick_xml::events::Event::Empty(ref element)) => match element.local_name().as_ref()
-            {
-                b"extent" if drawing_depth > 0 => {
-                    update_drawing_text_box_extent(&mut current_info, element);
-                }
-                b"txbx" if drawing_depth > 0 => saw_text_box = true,
-                _ => {}
-            },
+            }
             Ok(quick_xml::events::Event::End(ref element)) => match element.local_name().as_ref() {
                 b"body" => in_body = false,
                 b"drawing" if drawing_depth > 0 => {
                     drawing_depth -= 1;
-                    if drawing_depth == 0 && saw_text_box {
-                        result.push(current_info);
-                        current_info = DrawingTextBoxInfo::default();
-                        saw_text_box = false;
+                    if drawing_depth == 0
+                        && let Some(builder) = builder.take()
+                        && builder.is_text_box()
+                    {
+                        result.push(text_box_info(&builder));
                     }
                 }
+                other if drawing_depth == 1 => state.end(other),
                 _ => {}
             },
             Ok(quick_xml::events::Event::Eof) => break,
@@ -85,37 +101,14 @@ fn scan_drawing_text_boxes(xml: &str) -> Vec<DrawingTextBoxInfo> {
     result
 }
 
-fn update_drawing_text_box_extent(
-    info: &mut DrawingTextBoxInfo,
-    element: &quick_xml::events::BytesStart<'_>,
-) {
-    if info.width_pt.is_some() && info.height_pt.is_some() {
-        return;
-    }
-
-    let mut width_emu: Option<u32> = None;
-    let mut height_emu: Option<u32> = None;
-
-    for attribute in element.attributes().flatten() {
-        match attribute.key.local_name().as_ref() {
-            b"cx" => {
-                width_emu = std::str::from_utf8(attribute.value.as_ref())
-                    .ok()
-                    .and_then(|value| value.parse::<u32>().ok());
-            }
-            b"cy" => {
-                height_emu = std::str::from_utf8(attribute.value.as_ref())
-                    .ok()
-                    .and_then(|value| value.parse::<u32>().ok());
-            }
-            _ => {}
-        }
-    }
-
-    if let Some(width_emu) = width_emu {
-        info.width_pt = Some(emu_to_pt(width_emu));
-    }
-    if let Some(height_emu) = height_emu {
-        info.height_pt = Some(emu_to_pt(height_emu));
+fn text_box_info(builder: &ShapeBuilder) -> DrawingTextBoxInfo {
+    let (width_pt, height_pt) = builder.box_size_pt();
+    let (stroke, fill) = builder.text_box_frame();
+    DrawingTextBoxInfo {
+        width_pt,
+        height_pt,
+        stroke,
+        fill,
+        padding: builder.text_box_insets(),
     }
 }

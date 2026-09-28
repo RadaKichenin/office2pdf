@@ -293,15 +293,19 @@ fn weight_member_base_family(font_family: &str) -> Option<&str> {
 
 /// What a candidate list is being built for.
 ///
-/// The two answers differ once a family's own substitutes are exhausted.
-/// Painting wants the class tail: Typst walks the list per glyph, so a face of
-/// the family's own class beats falling through to the engine's default serif.
-/// Reading a family's *metrics* does not — [`family_candidates`] takes the
-/// numbers of the first candidate that resolves, whole, and a generic class
-/// face's numbers are not the family's. A fit-to-page sheet whose Normal font
-/// is `Trebuchet MS` re-scaled by 13% on a host without Ubuntu once the tail
-/// handed its column unit Liberation Sans's digit advance, and a Korean footer
-/// on a host without a Korean font reported a Latin line box (issue #1213).
+/// The two answers differ only in the generic class tail. Painting wants it:
+/// Typst walks the list per glyph, so a face of the family's own class beats
+/// falling through to the engine's default serif. Reading a family's *metrics*
+/// does not — [`family_candidates`] takes the numbers of the first candidate
+/// that resolves, whole, and a generic class face's numbers are not the
+/// family's. A fit-to-page sheet whose Normal font is `Trebuchet MS` re-scaled
+/// by 13% on a host without Ubuntu once the tail handed its column unit
+/// Liberation Sans's digit advance, and a Korean footer on a host without a
+/// Korean font reported a Latin line box (issue #1213).
+///
+/// A weight-suffixed request's base family is *not* one of those differences:
+/// both chains carry it, because the resolver walks them at the weight the
+/// name states and so lands on the same member (issue #1643).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ChainPurpose {
     /// Choosing the faces Typst paints with.
@@ -319,16 +323,14 @@ fn fallback_candidates(
     let requested = font_family.trim();
 
     // Typst never finds a family called `Calibri Light`: the book holds that
-    // face as `Calibri` at 300. The base family follows the request so the
-    // weight the run states lands on the member it names; a metrics lookup
-    // stays off it, since that resolves the regular variant, which is not the
-    // member the name denotes (issue #1286). A variable-font suffix, which
-    // typst 0.15 trims too, names the very face requested, so both follow it.
-    let base_family: Option<&str> = variable_font_base_family(requested).or_else(|| {
-        (purpose == ChainPurpose::Paint)
-            .then(|| weight_member_base_family(requested))
-            .flatten()
-    });
+    // face as `Calibri` at 300. Both chains follow the base family so the
+    // weight the run states lands on the member it names — the resolver walks
+    // this list at that weight, so a metrics lookup reads the same face the
+    // paint chain shapes with rather than the family's regular member (issues
+    // #1286 and #1643). A variable-font suffix, which typst 0.15 trims too,
+    // names the very face requested, so both follow it as well.
+    let base_family: Option<&str> =
+        variable_font_base_family(requested).or_else(|| weight_member_base_family(requested));
     if let Some(base_family) = base_family {
         candidates.push(base_family.to_string());
     }
@@ -413,12 +415,24 @@ fn table_entry(normalized_family: &str) -> Option<(FamilyClass, &'static [&'stat
         //
         // `Calibri` leads because the light member declares Calibri's own hhea
         // line — both are 1950/-550/0 on 2048 upem — so it reproduces the line
-        // box exactly.
+        // box either way. Since #1643 the chain builder adds `Calibri` to both
+        // chains for every weight-suffixed name, and the resolver picks the 300
+        // member off it; this entry stays because it also orders the substitutes
+        // a host without Calibri falls back on.
         "calibri light" => (SansSerif, &["Calibri", "Carlito", "Liberation Sans"]),
         "carlito" => (SansSerif, &["Calibri", "Liberation Sans", "Arimo", "Arial"]),
         "cambria" => (Serif, &["Caladea", "Liberation Serif"]),
         "arial" => (SansSerif, &["Liberation Sans", "Arimo"]),
         "times new roman" => (Serif, &["Liberation Serif", "Tinos"]),
+        // The same pair the other way round. LibreOffice writes `Liberation
+        // Serif` into every document it authors with the default style, and
+        // the name carries no class token this table's inference reads, so
+        // the family had no chain at all: `substitutes` answered `None` and
+        // the run degraded through whatever else its paragraph named. Times
+        // New Roman leads because Liberation Serif is its metric twin by
+        // design, which is also the face Word substitutes when Liberation
+        // Serif is absent (issue #1707).
+        "liberation serif" => (Serif, &["Times New Roman", "Tinos"]),
         "courier new" => (Monospace, &["Liberation Mono", "Cousine"]),
         "comic sans ms" => (SansSerif, &["Comic Neue"]),
         "verdana" => (SansSerif, &["DejaVu Sans"]),
@@ -1287,20 +1301,29 @@ pub(crate) fn active_font_search_paths() -> Option<Vec<std::path::PathBuf>> {
 /// The font list for a run that states a Latin family and an East Asian one.
 ///
 /// Word shapes a run's Latin codepoints with `w:ascii` and its East Asian ones
-/// with `w:eastAsia`. Typst resolves a font list per glyph, falling through to
-/// the next family for a character the current one has no glyph for, so
+/// with `w:eastAsia`, so the slot that owns the run's script decides the whole
+/// answer and the other slot only catches what it cannot cover.
+///
+/// Over East Asian text, Typst resolves a font list per glyph, falling through
+/// to the next family for a character the current one has no glyph for, so
 /// listing the Latin family first and the East Asian family straight after it
 /// reproduces that split: a Latin face has no Hangul, so the Hangul lands on
 /// the declared East Asian face rather than on whatever the Latin family's own
-/// substitutes happen to cover (issue #575).
+/// substitutes happen to cover (issue #575). The script's own faces come next,
+/// then a Latin chain for symbol-block glyphs, then the East Asian family's
+/// substitutes and the Latin family's, so a document naming a face the system
+/// does not have still degrades the way each family's chain says it should.
+/// Both declared families outrank those substitutes for the reason given on
+/// [`font_with_fallbacks_for_text`]: a family substitute preserves metrics or
+/// class, which is the wrong priority for a glyph the family does not have.
 ///
-/// The script's own faces come next, then a Latin chain for symbol-block
-/// glyphs, then the East Asian family's substitutes and the Latin family's, so
-/// a document naming a face the system does not have still degrades the way
-/// each family's chain says it should. Both outrank those substitutes for the
-/// reason given on [`font_with_fallbacks_for_text`]: a family substitute
-/// preserves metrics or class, which is the wrong priority for a glyph the
-/// family does not have.
+/// A run carrying no East Asian character at all is the Latin slot's, so that
+/// slot resolves whole — the family, then its substitutes — before the East
+/// Asian family is reached. Ranking the East Asian faces first painted the
+/// `fr-FR` body of a LibreOffice-authored fixture in SimSun, because neither
+/// its `Liberation Serif` nor its `Noto Serif CJK SC` is installed on macOS
+/// and SimSun was the first face in the list that covers Latin at all. Word
+/// substitutes Times New Roman there (issue #1707).
 pub fn font_with_east_asian_fallbacks(
     latin_family: &str,
     east_asian_family: &str,
@@ -1395,11 +1418,17 @@ fn east_asian_family_chain(
     text: &str,
     context: Option<&FontSearchContext>,
 ) -> Vec<String> {
+    // Which declared slot owns the run. Word shapes Latin codepoints with
+    // `w:ascii`, so a run holding no East Asian character never reaches the
+    // `w:eastAsia` face in Word and must not reach it here either until the
+    // Latin slot has been resolved in full (issue #1707).
+    let latin_run: bool = text_script(text) == TextScript::Latin;
+
     let mut families: Vec<String> = Vec::new();
     if requested_family_leads(latin_family, context) {
         families.push(latin_family.to_string());
     }
-    if requested_family_leads(east_asian_family, context) {
+    if !latin_run && requested_family_leads(east_asian_family, context) {
         families.push(east_asian_family.to_string());
     }
     // The East Asian slot names the face whose voice must be kept — the
@@ -1420,16 +1449,36 @@ fn east_asian_family_chain(
             .iter()
             .map(|face| (*face).to_string()),
     );
-    families.extend(fallback_candidates(
-        east_asian_family,
-        context,
-        ChainPurpose::Paint,
-    ));
-    families.extend(fallback_candidates(
-        latin_family,
-        context,
-        ChainPurpose::Paint,
-    ));
+    if latin_run {
+        families.extend(fallback_candidates(
+            latin_family,
+            context,
+            ChainPurpose::Paint,
+        ));
+        // The East Asian slot still trails the list: a Latin run can hold a
+        // character neither the Latin family nor its substitutes carry, and
+        // the declared East Asian face is a better answer for it than
+        // nothing.
+        if requested_family_leads(east_asian_family, context) {
+            families.push(east_asian_family.to_string());
+        }
+        families.extend(fallback_candidates(
+            east_asian_family,
+            context,
+            ChainPurpose::Paint,
+        ));
+    } else {
+        families.extend(fallback_candidates(
+            east_asian_family,
+            context,
+            ChainPurpose::Paint,
+        ));
+        families.extend(fallback_candidates(
+            latin_family,
+            context,
+            ChainPurpose::Paint,
+        ));
+    }
     append_last_resort(&mut families, context);
     families
 }
@@ -1521,8 +1570,20 @@ fn visit_paragraph_fonts(
     visitor: &mut impl FnMut(&str, &str) -> bool,
 ) -> bool {
     paragraph.runs.iter().all(|run| {
-        declared_family(run.style.font_family.as_deref())
+        if !declared_family(run.style.font_family.as_deref())
             .is_none_or(|family| visitor(family, &run.text))
+        {
+            return false;
+        }
+        // An inline text box's paragraphs declare their own faces. They are not
+        // in the body flow, so nothing else reaches them and the box's text
+        // would fall back to the engine default (issue #1690).
+        run.inline_box.as_ref().is_none_or(|inline_box| {
+            inline_box
+                .content
+                .iter()
+                .all(|paragraph| visit_paragraph_fonts(paragraph, visitor))
+        })
     })
 }
 

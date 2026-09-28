@@ -294,12 +294,18 @@ pub(super) struct ThemeLineStyle {
     /// The stated corner join, or `None` when the entry names none of
     /// `a:round`, `a:bevel` and `a:miter` (issue #1090).
     pub(super) join: Option<LineJoin>,
+    /// The stated end geometry, or `None` when the entry declares no `cap`.
+    ///
+    /// PowerPoint's stock themes write `cap="flat"` here, but some state `rnd`,
+    /// and a shape taking such an entry through `<a:lnRef idx>` rounds its ends
+    /// without naming a cap of its own (issue #1682).
+    pub(super) cap: Option<LineCap>,
 }
 
 /// Extract each `<a:ln>` inside the theme `<a:lnStyleLst>`.
 ///
-/// One walk builds width and join together so the two stay index-aligned with
-/// the `<a:lnRef idx="N">` that selects an entry.
+/// One walk builds width, join and cap together so the three stay index-aligned
+/// with the `<a:lnRef idx="N">` that selects an entry.
 fn extract_line_styles(xml: &str) -> Vec<ThemeLineStyle> {
     let mut reader = Reader::from_str(xml);
     let mut styles: Vec<ThemeLineStyle> = Vec::new();
@@ -315,6 +321,7 @@ fn extract_line_styles(xml: &str) -> Vec<ThemeLineStyle> {
                         styles.push(ThemeLineStyle {
                             width_emu: line_width_attr(e),
                             join: None,
+                            cap: crate::parser::drawingml::line_cap(e),
                         });
                     }
                 }
@@ -331,6 +338,7 @@ fn extract_line_styles(xml: &str) -> Vec<ThemeLineStyle> {
                 b"ln" if depth == 0 => styles.push(ThemeLineStyle {
                     width_emu: line_width_attr(e),
                     join: None,
+                    cap: crate::parser::drawingml::line_cap(e),
                 }),
                 name if depth == 1 => {
                     if let Some(join) = drawingml_line_join(name)

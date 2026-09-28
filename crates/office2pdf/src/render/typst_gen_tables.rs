@@ -1,4 +1,5 @@
 use super::*;
+use std::borrow::Cow;
 
 pub(super) fn generate_table(
     out: &mut String,
@@ -63,7 +64,11 @@ fn generate_table_inner(
                 .sheet_print_scale()
                 .filter(|s| *s > 0.0 && *s < 1.0)
                 .unwrap_or(1.0);
-            format!("o2p-excel-fill-{id}-{}", format_f64(scale))
+            format!(
+                "{}{id}-{}",
+                crate::render::excel_fill_paint::SHEET_TABLE_LABEL_PREFIX,
+                format_f64(scale)
+            )
         });
     out.push_str("#table(\n");
 
@@ -1317,6 +1322,15 @@ fn generate_table_cell(
         // inset content edge instead would have cut two glyphs earlier than
         // the export does, so the gridline is the boundary, not the inset.
         //
+        // What overhangs is painted *cut*, not whole: the native export
+        // carries its own gridline clip. On the blocked column of
+        // `customers_overflow_strip.xlsx` it records `201 .. 275` against our
+        // `203 .. 275` from the content edge, and its `Brice_Tromp@` ends
+        // mid-bowl on that same 275. Issue #1660 read `mutool -F stext`'s
+        // `quad`, which is the pen-to-pen advance box rather than the ink, and
+        // asked for the clip to admit the whole glyph; widening it would paint
+        // ink Excel does not.
+        //
         // Nothing is lost on the anchored side: the line starts at that same
         // content edge, so the width given up is width the text never occupies.
         let spill_inset: Insets = cell.padding.unwrap_or(default_cell_padding);
@@ -1887,6 +1901,7 @@ fn printed_gridline_side() -> BorderSide {
         color: Color::black(),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 
@@ -1904,6 +1919,7 @@ fn print_heading_frame_side() -> BorderSide {
         color: Color::black(),
         style: BorderLineStyle::Solid,
         join: LineJoin::Round,
+        cap: LineCap::Flat,
     }
 }
 
@@ -3322,7 +3338,7 @@ fn generate_cell_content(
             paragraph_mark_metric_runs: para
                 .runs
                 .is_empty()
-                .then(|| empty_cell_paragraph_metric_runs(blocks, i))
+                .then(|| cell_paragraph_mark_metric_runs(blocks, i, &para.style))
                 .flatten(),
             breaks_hangul_at_eojeol: ctx.breaks_hangul_at_eojeol,
             available_measure_pt: ctx.available_measure_pt,
@@ -3416,8 +3432,8 @@ struct CellParagraphCtx<'a> {
     /// paragraph has a sibling to leak Typst's default block spacing against.
     stacks_multiple_blocks: bool,
     /// Runs standing in for the paragraph mark's own font when the paragraph
-    /// has none of its own — see [`empty_cell_paragraph_metric_runs`].
-    paragraph_mark_metric_runs: Option<&'a [Run]>,
+    /// has none of its own — see [`cell_paragraph_mark_metric_runs`].
+    paragraph_mark_metric_runs: Option<Cow<'a, [Run]>>,
     /// Whether the enclosing page is a Word flow page, whose Hangul lines
     /// break only at eojeol boundaries (issue #626). False for a slide or a
     /// sheet, which keep the engine's syllable breaking.
@@ -3436,21 +3452,52 @@ struct CellParagraphCtx<'a> {
     sheet_cell_box: Option<SheetCellBox>,
 }
 
-/// The runs an empty `<w:p>` in a cell borrows its line box from.
+/// The runs an empty `<w:p>` in a cell resolves its line box from.
 ///
 /// Word lays a blank cell paragraph out on a full line, sized from the
-/// paragraph mark's own `w:rPr`. The IR carries no runs — and so no font or
-/// size — for such a paragraph, so the nearest sibling paragraph in the same
-/// cell stands in: the one above by preference, since a spacer line follows
-/// the text it separates (issue #625).
+/// paragraph mark's own resolved `w:rPr`. Two sources answer that, in this
+/// order:
 ///
-/// `None` when the cell holds no other text at all — a wholly blank cell,
-/// whose height Word takes from the row and the cell insets rather than from
-/// any run this codegen could measure.
-/// TODO(#625 follow-up: a wholly blank cell keeps today's zero-height
-/// emission, so a blank auto-height row is still one line short of Word;
-/// sizing it needs the table/style default font, which the IR does not carry
-/// to codegen — measure against a Word GT before inventing one).
+/// 1. **A sibling paragraph in the same cell** — the one above by preference,
+///    since a spacer line follows the text it separates (issue #625). Kept
+///    first because that is the shape every native export behind #625
+///    measured, and no export here measures a cell whose runs and mark
+///    disagree.
+/// 2. **The mark's own resolved formatting**, carried from the parser as
+///    `paragraph_mark_text_style`. A cell holding nothing but empty paragraphs
+///    has no sibling to borrow from, and used to emit no line at all: the
+///    probe of issue #1700 collapsed its blank row to the 0.500pt its rule
+///    alone takes, where native Word for Mac prints 13.200pt of rule and line
+///    together — the same as the text rows above and below it.
+///
+/// `None` when neither answers — a blank cell in a slide or a worksheet, whose
+/// mark the parser resolves no formatting for, so nothing here invents a line
+/// those formats were never measured to have.
+fn cell_paragraph_mark_metric_runs<'a>(
+    blocks: &'a [Block],
+    index: usize,
+    style: &ParagraphStyle,
+) -> Option<Cow<'a, [Run]>> {
+    if let Some(sibling_runs) = empty_cell_paragraph_metric_runs(blocks, index) {
+        return Some(Cow::Borrowed(sibling_runs));
+    }
+    // The mark paints no glyph, so the stand-in run carries its formatting and
+    // no text: every metric the line box needs is read off the style, and an
+    // empty string keeps the run out of the script and width decisions that
+    // read the text itself.
+    let mark: &TextStyle = style.paragraph_mark_text_style.as_deref()?;
+    Some(Cow::Owned(vec![Run {
+        text: String::new(),
+        style: mark.clone(),
+        href: None,
+        footnote: None,
+        inline_box: None,
+    }]))
+}
+
+/// The runs a sibling paragraph in the same cell lends an empty `<w:p>`.
+///
+/// `None` when the cell holds no other text at all.
 fn empty_cell_paragraph_metric_runs(blocks: &[Block], index: usize) -> Option<&[Run]> {
     fn paragraph_runs(block: &Block) -> Option<&[Run]> {
         match block {
@@ -3538,24 +3585,25 @@ fn generate_cell_paragraph(out: &mut String, para: &Paragraph, cell: &CellParagr
     // The blank line has to come from the same model as its neighbours, or a
     // slide's empty cell keeps Word's hhea height while the cell beside it
     // takes PowerPoint's 1.2em one (issue #663).
-    let paragraph_mark_line_pt: Option<f64> = cell.paragraph_mark_metric_runs.and_then(|runs| {
-        if cell.uses_powerpoint_line_box {
-            powerpoint_line_box_pt(runs)
-        } else {
-            word_cell_line_box(
-                runs,
-                style,
-                cell.line_grid_pitch,
-                cell.row_east_asian,
-                cell.vertical_align,
-                cell.seats_text_on_descender,
-                cell.sheet_row_line.as_ref(),
-                cell.sheet_seat,
-                cell.sheet_print_scale,
-            )
-            .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
-        }
-    });
+    let paragraph_mark_line_pt: Option<f64> =
+        cell.paragraph_mark_metric_runs.as_deref().and_then(|runs| {
+            if cell.uses_powerpoint_line_box {
+                powerpoint_line_box_pt(runs)
+            } else {
+                word_cell_line_box(
+                    runs,
+                    style,
+                    cell.line_grid_pitch,
+                    cell.row_east_asian,
+                    cell.vertical_align,
+                    cell.seats_text_on_descender,
+                    cell.sheet_row_line.as_ref(),
+                    cell.sheet_seat,
+                    cell.sheet_print_scale,
+                )
+                .map(|line_box| (line_box.top_em + line_box.bottom_em) * line_box.font_size_pt)
+            }
+        });
     // Typst's default block spacing may only be dropped where this paragraph
     // supplies a fixed line box of its own, which carries the whole advance;
     // adding Typst's gap on top would count the line twice. A paragraph that

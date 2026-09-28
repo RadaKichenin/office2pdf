@@ -20,8 +20,8 @@ use docx_rs::FromXML;
 use quick_xml::events::{BytesStart, Event};
 
 use crate::ir::{
-    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, GradientFill, Insets, LineJoin,
-    Shape, ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
+    ArrowHead, BorderLineStyle, BorderSide, Color, FloatingShape, GradientFill, Insets, LineCap,
+    LineJoin, Shape, ShapeKind, Subpath, TextBoxVerticalAlign, WrapMode,
 };
 use crate::parser::drawingml::{
     ParsedColor, SchemeColors, parse_color_from_empty, parse_color_from_start,
@@ -61,6 +61,12 @@ const DEFAULT_STROKE_WIDTH_PT: f64 = 0.75;
 
 /// EMU per point (914400 EMU/inch ÷ 72 pt/inch).
 const EMU_PER_POINT: f64 = 12700.0;
+
+/// `wps:bodyPr` content insets OOXML applies to every side the element leaves
+/// out: `lIns`/`rIns` 91440 EMU and `tIns`/`bIns` 45720 EMU. A box with no
+/// `wps:bodyPr` at all still seats its text by these.
+const DEFAULT_TEXT_BOX_INSET_HORIZONTAL_PT: f64 = 91440.0 / EMU_PER_POINT;
+const DEFAULT_TEXT_BOX_INSET_VERTICAL_PT: f64 = 45720.0 / EMU_PER_POINT;
 
 /// Raw drawing metadata scanned from `word/document.xml`, consumed in document
 /// order alongside the docx-rs element walk.
@@ -133,7 +139,7 @@ enum PositionAxis {
 
 /// Mutable accumulator for a single `<w:drawing>` while scanning.
 #[derive(Default)]
-struct ShapeBuilder {
+pub(super) struct ShapeBuilder {
     has_wsp: bool,
     has_wpg: bool,
     has_text_box: bool,
@@ -156,6 +162,10 @@ struct ShapeBuilder {
     tail_arrow: bool,
     custom_subpaths: Vec<Subpath>,
     gradient_fill: Option<GradientFill>,
+    body_inset_left_pt: Option<f64>,
+    body_inset_top_pt: Option<f64>,
+    body_inset_right_pt: Option<f64>,
+    body_inset_bottom_pt: Option<f64>,
 }
 
 impl ShapeBuilder {
@@ -267,6 +277,47 @@ impl ShapeBuilder {
         }
     }
 
+    /// Whether this drawing is a `wps:wsp` text box rather than a picture,
+    /// a group, or a geometry-only shape.
+    pub(super) fn is_text_box(&self) -> bool {
+        self.has_wsp && self.has_text_box && !self.has_wpg
+    }
+
+    pub(super) fn box_size_pt(&self) -> (Option<f64>, Option<f64>) {
+        (self.box_width_pt, self.box_height_pt)
+    }
+
+    /// The outline and background a text box shape paints around its text.
+    /// `finish_with_text_box` discards a text box drawing, so the inline box of
+    /// issue #1690 resolves its frame from the same accumulated `a:ln` and
+    /// `a:solidFill` rather than parsing them a second way.
+    pub(super) fn text_box_frame(&self) -> (Option<BorderSide>, Option<Color>) {
+        let fill: Option<Color> = if self.fill_none {
+            None
+        } else {
+            self.fill_color
+        };
+        (self.resolve_stroke(), fill)
+    }
+
+    /// Where the box's text starts inside it, from `wps:bodyPr`.
+    pub(super) fn text_box_insets(&self) -> Insets {
+        Insets {
+            top: self
+                .body_inset_top_pt
+                .unwrap_or(DEFAULT_TEXT_BOX_INSET_VERTICAL_PT),
+            right: self
+                .body_inset_right_pt
+                .unwrap_or(DEFAULT_TEXT_BOX_INSET_HORIZONTAL_PT),
+            bottom: self
+                .body_inset_bottom_pt
+                .unwrap_or(DEFAULT_TEXT_BOX_INSET_VERTICAL_PT),
+            left: self
+                .body_inset_left_pt
+                .unwrap_or(DEFAULT_TEXT_BOX_INSET_HORIZONTAL_PT),
+        }
+    }
+
     fn resolve_stroke(&self) -> Option<BorderSide> {
         if self.line_none || !self.has_line {
             return None;
@@ -280,6 +331,7 @@ impl ShapeBuilder {
             color: self.line_color.unwrap_or(Color { r: 0, g: 0, b: 0 }),
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         })
     }
 }
@@ -363,8 +415,7 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
     let mut result: Vec<FloatingShape> = Vec::new();
 
     let mut drawing_depth: usize = 0;
-    let mut sppr_depth: usize = 0;
-    let mut line_depth: usize = 0;
+    let mut state: ShapeScanState = ShapeScanState::default();
     let mut axis: PositionAxis = PositionAxis::None;
     let mut in_position_offset: bool = false;
     let mut builder: Option<ShapeBuilder> = None;
@@ -376,8 +427,7 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
                     drawing_depth += 1;
                     if drawing_depth == 1 {
                         builder = Some(ShapeBuilder::default());
-                        sppr_depth = 0;
-                        line_depth = 0;
+                        state.reset();
                         axis = PositionAxis::None;
                         in_position_offset = false;
                     }
@@ -385,31 +435,10 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
                 b"positionH" => axis = PositionAxis::Horizontal,
                 b"positionV" => axis = PositionAxis::Vertical,
                 b"posOffset" => in_position_offset = true,
-                b"spPr" if builder.is_some() => sppr_depth += 1,
-                b"ln" if builder.is_some() => {
-                    line_depth += 1;
-                    if let Some(builder) = builder.as_mut() {
-                        builder.has_line = true;
-                        builder.line_width_pt =
-                            emu_attr_to_pt(element, b"w").or(builder.line_width_pt);
-                    }
-                }
-                other => handle_geometry_element(
-                    builder.as_mut(),
-                    other,
-                    element,
-                    sppr_depth,
-                    line_depth,
-                ),
+                _ => state.start(builder.as_mut(), element),
             },
             Ok(Event::Empty(ref element)) => {
-                handle_geometry_element(
-                    builder.as_mut(),
-                    element.local_name().as_ref(),
-                    element,
-                    sppr_depth,
-                    line_depth,
-                );
+                state.empty(builder.as_mut(), element);
             }
             Ok(Event::Text(ref text)) => {
                 if in_position_offset
@@ -428,8 +457,6 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
             Ok(Event::End(ref element)) => match element.local_name().as_ref() {
                 b"posOffset" => in_position_offset = false,
                 b"positionH" | b"positionV" => axis = PositionAxis::None,
-                b"spPr" if sppr_depth > 0 => sppr_depth -= 1,
-                b"ln" if line_depth > 0 => line_depth -= 1,
                 b"drawing" if drawing_depth > 0 => {
                     drawing_depth -= 1;
                     if drawing_depth == 0
@@ -438,7 +465,7 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
                         result.push(shape);
                     }
                 }
-                _ => {}
+                other => state.end(other),
             },
             Ok(Event::Eof) => break,
             Err(_) => break,
@@ -450,9 +477,67 @@ fn scan_drawing_shapes(xml: &str) -> Vec<FloatingShape> {
     result
 }
 
+/// The `<a:ln>` / `<wps:spPr>` nesting a `wps:wsp` scan has to track to tell a
+/// line colour from a fill colour.
+///
+/// Two scanners walk `word/document.xml` for `wps:wsp` drawings: this module's
+/// geometry-only one and the text box one in `docx_context_drawing.rs`. Sharing
+/// the state and the dispatch keeps one reading of the OOXML rather than letting
+/// the two drift apart (issue #1690).
+#[derive(Default)]
+pub(super) struct ShapeScanState {
+    sppr_depth: usize,
+    line_depth: usize,
+}
+
+impl ShapeScanState {
+    /// Feed a start element to the builder, tracking `spPr`/`ln` nesting.
+    pub(super) fn start(&mut self, builder: Option<&mut ShapeBuilder>, element: &BytesStart<'_>) {
+        match element.local_name().as_ref() {
+            b"spPr" if builder.is_some() => self.sppr_depth += 1,
+            b"ln" if builder.is_some() => {
+                self.line_depth += 1;
+                if let Some(builder) = builder {
+                    builder.has_line = true;
+                    builder.line_width_pt = emu_attr_to_pt(element, b"w").or(builder.line_width_pt);
+                }
+            }
+            other => {
+                handle_geometry_element(builder, other, element, self.sppr_depth, self.line_depth)
+            }
+        }
+    }
+
+    /// Feed an empty element to the builder.
+    pub(super) fn empty(&mut self, builder: Option<&mut ShapeBuilder>, element: &BytesStart<'_>) {
+        handle_geometry_element(
+            builder,
+            element.local_name().as_ref(),
+            element,
+            self.sppr_depth,
+            self.line_depth,
+        );
+    }
+
+    /// Close the `spPr`/`ln` nesting for an end element.
+    pub(super) fn end(&mut self, local_name: &[u8]) {
+        match local_name {
+            b"spPr" if self.sppr_depth > 0 => self.sppr_depth -= 1,
+            b"ln" if self.line_depth > 0 => self.line_depth -= 1,
+            _ => {}
+        }
+    }
+
+    /// Reset at the start of a new top-level `<w:drawing>`.
+    pub(super) fn reset(&mut self) {
+        self.sppr_depth = 0;
+        self.line_depth = 0;
+    }
+}
+
 /// Apply a geometry/fill/stroke element (`wsp`, `txbx`, `extent`, `prstGeom`,
 /// `xfrm`, `srgbClr`, `noFill`, `tailEnd`, `headEnd`) to the current builder.
-fn handle_geometry_element(
+pub(super) fn handle_geometry_element(
     builder: Option<&mut ShapeBuilder>,
     local_name: &[u8],
     element: &BytesStart<'_>,
@@ -502,6 +587,14 @@ fn handle_geometry_element(
             } else {
                 builder.fill_none = true;
             }
+        }
+        // A geometry-only shape has no text to inset, but the same `wps:wsp`
+        // element states where an inline text box's paragraphs start (#1690).
+        b"bodyPr" => {
+            builder.body_inset_left_pt = emu_attr_to_pt(element, b"lIns");
+            builder.body_inset_top_pt = emu_attr_to_pt(element, b"tIns");
+            builder.body_inset_right_pt = emu_attr_to_pt(element, b"rIns");
+            builder.body_inset_bottom_pt = emu_attr_to_pt(element, b"bIns");
         }
         b"tailEnd" if line_depth > 0 => builder.tail_arrow = arrow_type_present(element),
         b"headEnd" if line_depth > 0 => builder.head_arrow = arrow_type_present(element),

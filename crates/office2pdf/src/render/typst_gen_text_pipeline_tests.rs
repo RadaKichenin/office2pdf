@@ -216,6 +216,7 @@ fn test_generate_rtl_paragraph() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -248,6 +249,7 @@ fn test_generate_mixed_rtl_ltr_paragraphs() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }),
         make_paragraph("English text"),
@@ -333,6 +335,7 @@ fn test_generate_paragraph_all_alignment_variants() {
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let output = generate_typst(&doc);
@@ -551,12 +554,14 @@ fn test_unstyled_run_with_parens_after_styled_run() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
             Run {
                 text: "(parenthetical note)".to_string(),
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             },
         ],
     })])]);
@@ -726,6 +731,7 @@ fn the_auto_space_marker_becomes_a_quarter_of_the_runs_size() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -759,6 +765,7 @@ fn the_auto_space_scales_with_the_run_not_the_document() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let result = generate_typst(&doc).unwrap().source;
@@ -792,6 +799,7 @@ fn korean_paragraph(text: &str, alignment: Option<Alignment>, family: Option<&st
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -1403,6 +1411,7 @@ fn the_frames_bottom_edge_scales_with_the_font_size() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })])]);
         let result = generate_typst(&doc).unwrap().source;
@@ -1436,6 +1445,7 @@ fn a_letter_spaced_run_is_not_framed() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })])]);
     let result = generate_typst(&doc).unwrap().source;
@@ -1476,6 +1486,7 @@ fn a_letter_spaced_slide_run_declines_the_advance_grid() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1640,24 +1651,28 @@ fn a_docx_table_cell_breaks_only_an_overlong_latin_token() {
                     style: linked_style(Color::black()),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "WEL".to_string(),
                     style: linked_style(Color::new(255, 0, 0)),
                     href: href.clone(),
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "CO".to_string(),
                     style: linked_style(Color::new(0, 0, 255)),
                     href: href.clone(),
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "ME".to_string(),
                     style: linked_style(Color::new(0, 128, 0)),
                     href,
                     footnote: None,
+                    inline_box: None,
                 },
             ],
         })],
@@ -1759,6 +1774,7 @@ fn make_text_cell_styled(text: &str, family: &str, font_size: f64) -> TableCell 
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
         ..TableCell::default()
@@ -1779,6 +1795,7 @@ fn make_text_box_with_list(x: f64, y: f64, w: f64, h: f64, text: &str) -> FixedE
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -1875,6 +1892,7 @@ fn a_docx_list_item_keeps_each_hangul_eojeol_whole() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             }],
             level: 0,
@@ -2010,6 +2028,7 @@ fn styled_paragraph(text: &str, style: TextStyle) -> Block {
             style,
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     })
 }
@@ -2256,6 +2275,7 @@ fn paragraph_of_runs(style: ParagraphStyle, texts: &[(&str, TextStyle)]) -> Bloc
                 style: run_style.clone(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             })
             .collect(),
     })
@@ -2400,6 +2420,7 @@ fn arabic_list_source(kind: crate::ir::ListKind, marker_text: Option<&str>) -> S
                         style: item_style,
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 }],
                 level: 0,
@@ -2548,6 +2569,7 @@ fn test_unembedded_aptos_footer_uses_noto_sans_on_an_aptos_host() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 })],
                 border: None,
                 border_space: None,
@@ -2609,6 +2631,7 @@ fn italic_run(text: &str, family: &str) -> Run {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     }
 }
 
@@ -3413,6 +3436,7 @@ fn a_run_naming_a_light_member_states_its_weight_where_the_face_is_indexed() {
         },
         href: None,
         footnote: None,
+        inline_box: None,
     };
 
     let light_indexed = resolve_font_search_context_from_fonts(&[noto_serif_at_weight(300)]);
@@ -3657,6 +3681,7 @@ fn test_centred_sheet_line_seat_is_scoped_to_fitting_single_lines() {
                         style: libertinus_total(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 ..TableCell::default()
@@ -3675,5 +3700,174 @@ fn test_centred_sheet_line_seat_is_scoped_to_fitting_single_lines() {
     assert!(
         !word_source.contains("#move(dx: "),
         "Excel's whole-point seat must not leak into Word tables: {word_source}"
+    );
+}
+
+// ── Page breaks inside a multi-column section (issue #1695) ───────
+
+/// Generate one flow page and report both its markup and the page count Typst
+/// lays it out to.
+///
+/// The page count is the observable these tests assert on: Typst refuses
+/// `#pagebreak()` below the top level, so a section that emits one inside its
+/// column wrapper fails to compile at all rather than producing a wrong count.
+#[cfg(not(target_arch = "wasm32"))]
+fn column_section_layout(content: Vec<Block>, columns: Option<ColumnLayout>) -> (String, u32) {
+    let doc = make_doc(vec![Page::Flow(FlowPage {
+        first_header: None,
+        first_footer: None,
+        size: PageSize::default(),
+        margins: Margins::default(),
+        content,
+        header: None,
+        footer: None,
+        columns,
+        line_grid_pitch: None,
+        line_grid_snaps_lines: false,
+        page_numbering: None,
+    })]);
+    let output = generate_typst(&doc).expect("codegen must succeed");
+    let pages =
+        crate::render::pdf::compile_page_count_with_fonts(&output.source, &output.images, &[], &[])
+            .unwrap_or_else(|error| {
+                panic!(
+                    "a page break in a column section must compile: {error}\n{}",
+                    output.source
+                )
+            });
+    (output.source, pages)
+}
+
+/// Two equal columns, and the same content laid out without any column
+/// section: the break has to move the page in both.
+#[cfg(not(target_arch = "wasm32"))]
+const EQUAL_TWO_COLUMNS: ColumnLayout = ColumnLayout {
+    num_columns: 2,
+    spacing: 36.0,
+    column_widths: None,
+};
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_page_break_inside_equal_columns_breaks_the_page() {
+    let content = || {
+        vec![
+            make_paragraph("Before the break"),
+            Block::PageBreak,
+            make_paragraph("After the break"),
+        ]
+    };
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "a page break has to move the page inside a column section exactly as it \
+         does outside one: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        2,
+        "each page's slice of the section keeps the section's columns: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_page_break_inside_unequal_columns_breaks_the_page() {
+    let unequal = ColumnLayout {
+        num_columns: 2,
+        spacing: 36.0,
+        column_widths: Some(vec![300.0, 150.0]),
+    };
+    // A column break moves to the next column and a page break to the next
+    // page, so this section spans exactly two pages. The plain-page baseline the
+    // other cases compare against cannot be used here: outside a column section
+    // Typst's `#colbreak()` breaks the page, so the same blocks would count a
+    // third page for a reason that has nothing to do with the page break.
+    let (source, columned_pages) = column_section_layout(
+        vec![
+            make_paragraph("Left column"),
+            Block::ColumnBreak,
+            make_paragraph("Right column"),
+            Block::PageBreak,
+            make_paragraph("Next page, left column"),
+        ],
+        Some(unequal),
+    );
+
+    assert_eq!(
+        columned_pages, 2,
+        "the page break is the only thing that moves the page: {source}"
+    );
+    assert_eq!(
+        source.matches("#grid(columns: (300pt, 150pt)").count(),
+        2,
+        "the declared column widths apply again after the break: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_leading_page_break_inside_columns_matches_the_plain_page() {
+    let content = || vec![Block::PageBreak, make_paragraph("First visible line")];
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "a break before any content behaves as it does outside a section: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        1,
+        "the empty slice before the break needs no column wrapper: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_trailing_page_break_inside_columns_matches_the_plain_page() {
+    let content = || vec![make_paragraph("Last visible line"), Block::PageBreak];
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "a break after the last block behaves as it does outside a section: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        1,
+        "the empty slice after the break needs no column wrapper: {source}"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn test_consecutive_page_breaks_inside_columns_match_the_plain_page() {
+    let content = || {
+        vec![
+            make_paragraph("First"),
+            Block::PageBreak,
+            Block::PageBreak,
+            make_paragraph("Fourth"),
+        ]
+    };
+    let (source, columned_pages) =
+        column_section_layout(content(), Some(EQUAL_TWO_COLUMNS.clone()));
+    let (_, plain_pages) = column_section_layout(content(), None);
+
+    assert_eq!(
+        columned_pages, plain_pages,
+        "two breaks in a row skip a page inside a section too: {source}"
+    );
+    assert_eq!(
+        source.matches("#columns(2, gutter: 36pt)").count(),
+        2,
+        "only the two non-empty slices carry a column wrapper: {source}"
     );
 }

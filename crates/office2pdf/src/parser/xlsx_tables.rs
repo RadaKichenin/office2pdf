@@ -12,7 +12,7 @@ use quick_xml::events::Event;
 
 use super::xlsx_cells::parse_column_letters;
 use super::xlsx_drawing::{parse_rels_by_type, read_zip_entry_string, resolve_relative_xl_path};
-use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, LineJoin};
+use crate::ir::{BorderLineStyle, BorderSide, CellBorder, Color, LineCap, LineJoin};
 use crate::parser::xml_util::get_attr_str;
 
 /// One table's range together with the paint its built-in style lays over it.
@@ -89,6 +89,7 @@ impl TableStyleRange {
             color: rule.color,
             style: BorderLineStyle::Solid,
             join: LineJoin::Round,
+            cap: LineCap::Flat,
         };
         let extent: RuleExtent = rule.extent;
         // The header rule closes the last header row, so a table declaring

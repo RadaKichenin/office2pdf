@@ -616,6 +616,181 @@ fn a_fixed_numeric_format_that_does_not_fit_prints_hashes() {
     assert_eq!(cell_text(&sheet.table.rows[71].cells[14]), "#####");
 }
 
+/// Every colour Excel's number-format grammar names paints the fully
+/// saturated primary, whatever section selects it.
+///
+/// Measured on a native Excel 16 for Mac export (2026-09-28) of a one-factor
+/// probe workbook: ten cells differing only in their selected section's
+/// bracketed colour control. The traces print Red `1 0 0`, Green `0 1 0`,
+/// Blue `0 0 1`, Cyan `0 1 1`, Magenta `1 0 1`, Yellow `1 1 0`, White
+/// `1 1 1` and Black `0 0 0` (issue #1776).
+#[test]
+fn every_named_number_format_colour_paints_its_primary() {
+    let named_colours: [(&str, Color); 8] = [
+        ("Red", Color::new(255, 0, 0)),
+        ("Green", Color::new(0, 255, 0)),
+        ("Blue", Color::new(0, 0, 255)),
+        ("Cyan", Color::new(0, 255, 255)),
+        ("Magenta", Color::new(255, 0, 255)),
+        ("Yellow", Color::new(255, 255, 0)),
+        ("White", Color::new(255, 255, 255)),
+        ("Black", Color::new(0, 0, 0)),
+    ];
+    for (name, expected) in named_colours {
+        let format_code = format!("0.00;[{name}]0.00");
+        let data = build_xlsx_formatted(|sheet| {
+            sheet.get_column_dimension_by_number_mut(&1).set_width(20.0);
+            let cell = sheet.get_cell_mut("A1");
+            cell.set_value_number(-123.0f64);
+            cell.get_style_mut()
+                .get_number_format_mut()
+                .set_format_code(&format_code);
+        });
+        let parser = XlsxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        let tp = get_sheet_page(&doc, 0);
+        let style = first_run_style(&tp.table.rows[0].cells[0]);
+        assert_eq!(
+            style.color,
+            Some(expected),
+            "[{name}] must paint its primary"
+        );
+    }
+}
+
+/// The colour a section names wins over the cell font's own colour: the probe
+/// prints `[Red]` over an explicit `FF0000FF` font as `1 0 0`, and `[Black]`
+/// over that same blue font as `0 0 0` (issue #1776).
+#[test]
+fn a_number_format_section_colour_overrides_the_cell_font_colour() {
+    for (name, expected) in [
+        ("Red", Color::new(255, 0, 0)),
+        ("Black", Color::new(0, 0, 0)),
+    ] {
+        let format_code = format!("0.00;[{name}]0.00");
+        let data = build_xlsx_formatted(|sheet| {
+            sheet.get_column_dimension_by_number_mut(&1).set_width(20.0);
+            let cell = sheet.get_cell_mut("A1");
+            cell.set_value_number(-123.0f64);
+            let style = cell.get_style_mut();
+            style.get_number_format_mut().set_format_code(&format_code);
+            style.get_font_mut().get_color_mut().set_argb("FF0000FF");
+        });
+        let parser = XlsxParser;
+        let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+        let tp = get_sheet_page(&doc, 0);
+        let style = first_run_style(&tp.table.rows[0].cells[0]);
+        assert_eq!(
+            style.color,
+            Some(expected),
+            "[{name}] must override the cell font's blue"
+        );
+    }
+}
+
+/// Only the section Excel selects contributes its colour: the same
+/// `0.00;[Red]0.00` that reddens a negative value leaves a positive one on the
+/// ink a control cell under a colourless `0.00` prints (issue #1776).
+#[test]
+fn a_colourless_selected_section_keeps_the_cell_font_colour() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_column_dimension_by_number_mut(&1).set_width(20.0);
+        for (coordinate, value, format_code) in [
+            ("A1", -123.0f64, "0.00;[Red]0.00"),
+            ("A2", 123.0f64, "0.00;[Red]0.00"),
+            ("A3", 123.0f64, "0.00"),
+        ] {
+            let cell = sheet.get_cell_mut(coordinate);
+            cell.set_value_number(value);
+            cell.get_style_mut()
+                .get_number_format_mut()
+                .set_format_code(format_code);
+        }
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let rows = &get_sheet_page(&doc, 0).table.rows;
+    let control_ink = first_run_style(&rows[2].cells[0]).color;
+    assert_eq!(
+        first_run_style(&rows[0].cells[0]).color,
+        Some(Color::new(255, 0, 0)),
+        "the negative section names red"
+    );
+    assert_eq!(
+        first_run_style(&rows[1].cells[0]).color,
+        control_ink,
+        "the positive section names no colour, so the cell keeps its own ink"
+    );
+}
+
+/// A one-section format's colour applies to every value, since that section is
+/// the one Excel selects for all of them (issue #1776).
+#[test]
+fn a_single_section_colour_paints_a_positive_value() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_column_dimension_by_number_mut(&1).set_width(20.0);
+        let cell = sheet.get_cell_mut("A1");
+        cell.set_value_number(123.0f64);
+        cell.get_style_mut()
+            .get_number_format_mut()
+            .set_format_code("[Blue]0.00");
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let tp = get_sheet_page(&doc, 0);
+    let style = first_run_style(&tp.table.rows[0].cells[0]);
+    assert_eq!(style.color, Some(Color::new(0, 0, 255)));
+}
+
+/// A quoted colour name is literal text Excel prints, not a colour control,
+/// so the value keeps the ink a colourless control cell prints (issue #1776).
+#[test]
+fn a_quoted_colour_name_is_literal_text_not_an_ink() {
+    let data = build_xlsx_formatted(|sheet| {
+        sheet.get_column_dimension_by_number_mut(&1).set_width(30.0);
+        for (coordinate, format_code) in [("A1", "0.00;\"[Red]\"0.00"), ("A2", "0.00;0.00")] {
+            let cell = sheet.get_cell_mut(coordinate);
+            cell.set_value_number(-123.0f64);
+            cell.get_style_mut()
+                .get_number_format_mut()
+                .set_format_code(format_code);
+        }
+    });
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(&data, &ConvertOptions::default()).unwrap();
+
+    let rows = &get_sheet_page(&doc, 0).table.rows;
+    assert_eq!(
+        first_run_style(&rows[0].cells[0]).color,
+        first_run_style(&rows[1].cells[0]).color,
+        "a quoted name names no colour"
+    );
+}
+
+/// The reported worksheet cell: `-123` under built-in format 8,
+/// `"$"#,##0.00_);[Red]("$"#,##0.00)`, inside a `TableStyleMedium2` table.
+/// The native Excel export paints its `($123.00)` glyphs `1 0 0` while the
+/// converter printed them in the sheet's default black (issue #1776).
+#[test]
+fn the_reported_table_cell_negative_currency_prints_red() {
+    let data = include_bytes!("../../../../tests/fixtures/xlsx/SH008-Table-With-Tall-Row.xlsx");
+    let parser = XlsxParser;
+    let (doc, _warnings) = parser.parse(data, &ConvertOptions::default()).unwrap();
+
+    let sheet = get_sheet_page(&doc, 0);
+    let negative = &sheet.table.rows[1].cells[0];
+    assert_eq!(cell_text(negative), "($123.00)");
+    assert_eq!(
+        first_run_style(negative).color,
+        Some(Color::new(255, 0, 0)),
+        "the [Red] negative section paints the cell red"
+    );
+}
+
 #[test]
 fn test_number_format_general_unchanged() {
     let data = build_xlsx_formatted(|sheet| {

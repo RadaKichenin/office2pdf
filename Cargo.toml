@@ -28,3 +28,16 @@ docx-rs = { git = "https://github.com/developer0hye/docx-rs.git", branch = "fix/
 # `ZByteReaderTrait`s, so `image` stops satisfying its own bounds.
 zune-jpeg = { git = "https://github.com/etemesi254/zune-image", rev = "0346b875169ed528e206441c97899d99002e17ca" }
 zune-core = { git = "https://github.com/etemesi254/zune-image", rev = "0346b875169ed528e206441c97899d99002e17ca" }
+
+# CI test profile. The suite is bound by executing unoptimized dependencies
+# (Typst layout, font parsing, inflate), not by compiling them: optimizing only
+# the dependencies cut the Windows test run from 17.5 to 3.2 minutes while the
+# workspace crates, which change every PR, stay fast to rebuild. Debug
+# assertions and overflow checks remain on.
+[profile.ci]
+inherits = "dev"
+debug = "line-tables-only"
+
+[profile.ci.package."*"]
+opt-level = 2
+debug = false

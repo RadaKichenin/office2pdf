@@ -24,6 +24,7 @@ impl VmlTextBoxInfo {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })
             })

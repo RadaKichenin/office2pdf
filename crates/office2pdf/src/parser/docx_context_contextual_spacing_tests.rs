@@ -41,7 +41,7 @@ fn drops(body: &str, styles_xml: Option<&str>) -> Vec<(bool, bool)> {
     let context = ContextualSpacingContext::from_xml(Some(&document_xml(body)), styles_xml);
     context
         .rules
-        .iter()
+        .values()
         .map(|rule| (rule.drops_before, rule.drops_after))
         .collect()
 }

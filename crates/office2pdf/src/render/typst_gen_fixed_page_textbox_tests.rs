@@ -22,6 +22,7 @@ fn wrapped_mixed_sizes_round_each_physical_lines_own_seat() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
                 Run {
                     text: "by Grade Level ".into(),
@@ -33,6 +34,7 @@ fn wrapped_mixed_sizes_round_each_physical_lines_own_seat() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 },
             ];
             if small_first {
@@ -113,6 +115,7 @@ fn wrapped_slide_lines_share_the_story_baseline_grid() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })
                     .collect();
@@ -203,6 +206,7 @@ fn top_anchored_slide_text_preserves_fractional_origin() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     })
                     .collect();
@@ -334,6 +338,7 @@ fn compile_paragraph_mark_probe(
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     };
     let document = make_doc(vec![make_fixed_page(
@@ -498,6 +503,7 @@ fn a_subscript_is_not_a_separate_powerpoint_line() {
             style: TextStyle::default(),
             href: None,
             footnote: None,
+            inline_box: None,
         };
         normal.style.font_family = Some("Arial".to_string());
         normal.style.font_size = Some(17.0);
@@ -589,6 +595,7 @@ fn test_fixed_page_text_box_uses_padding_and_center_vertical_align() {
                     style: TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -626,6 +633,7 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     }),
                     Block::Paragraph(Paragraph {
@@ -635,6 +643,7 @@ fn test_fixed_page_text_box_multiple_paragraphs_preserve_breaks() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         }],
                     }),
                 ],
@@ -691,6 +700,7 @@ fn test_fixed_page_bulletless_paragraph_keeps_resolved_hanging_indent() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -740,6 +750,7 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -759,6 +770,7 @@ fn test_fixed_page_text_box_ordered_list_preserves_textbox_styling() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -841,6 +853,7 @@ fn test_fixed_page_empty_pptx_list_paragraph_keeps_line_without_marker_or_number
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     };
     let doc = make_doc(vec![make_fixed_page(
@@ -934,6 +947,7 @@ fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -950,6 +964,7 @@ fn test_fixed_page_text_box_compact_list_items_use_full_width_blocks() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1023,6 +1038,7 @@ fn test_fixed_page_text_box_compact_list_preserves_hanging_indent() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1096,6 +1112,7 @@ fn test_fixed_page_text_box_compact_list_preserves_marker_origin_offset() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1180,6 +1197,7 @@ fn test_fixed_page_text_box_compact_bulleted_list_uses_custom_marker_style() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1258,6 +1276,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1279,6 +1298,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1300,6 +1320,7 @@ fn test_fixed_page_text_box_dash_bullets_use_generic_list_path() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -1374,6 +1395,7 @@ fn test_fixed_page_text_box_compact_list_preserves_soft_line_breaks() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             }],
                         }],
                         level: 0,
@@ -1436,6 +1458,7 @@ fn test_fixed_page_text_box_soft_line_break_before_parenthesis_compiles() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1485,12 +1508,14 @@ fn test_fixed_page_text_box_grid_word_before_parenthesised_run_compiles() {
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "(2) 둘째 줄".to_string(),
                             style: TextStyle::default(),
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -1549,6 +1574,7 @@ fn test_fixed_page_text_box_with_solid_fill() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1594,6 +1620,7 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1609,6 +1636,7 @@ fn test_fixed_page_text_box_with_fill_and_stroke() {
                     color: Color { r: 0, g: 0, b: 0 },
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 shape_kind: None,
                 no_wrap: false,
@@ -1651,6 +1679,7 @@ fn test_fixed_page_text_box_with_fill_and_opacity() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1696,6 +1725,7 @@ fn test_fixed_page_text_box_with_polygon_shape_kind() {
                         style: TextStyle::default(),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets {
@@ -1802,6 +1832,7 @@ fn test_fixed_page_text_box_no_wrap_centered_text_uses_inline_box() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1862,6 +1893,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_latin_cjk_searchable() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1912,6 +1944,7 @@ fn test_fixed_page_text_box_no_wrap_still_strips_the_kinsoku_marker() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -1964,6 +1997,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_cjk_title_extractable() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2030,6 +2064,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_latin_text_extractable() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2087,6 +2122,7 @@ fn test_fixed_page_text_box_no_wrap_keeps_mixed_script_titles_unbroken() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2147,6 +2183,7 @@ fn test_fixed_page_text_box_no_wrap_preserves_mixed_script_titles_across_runs() 
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: " 기술부문".to_string(),
@@ -2156,6 +2193,7 @@ fn test_fixed_page_text_box_no_wrap_preserves_mixed_script_titles_across_runs() 
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2212,6 +2250,7 @@ fn test_fixed_page_text_box_auto_fit_short_text_uses_scale_to_fit() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -2281,6 +2320,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "목 차 ".to_string(),
@@ -2290,6 +2330,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "-".to_string(),
@@ -2299,6 +2340,7 @@ fn test_fixed_page_text_box_no_wrap_auto_fit_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2362,6 +2404,7 @@ fn test_fixed_page_text_box_mixed_font_header_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "| 클라우드 기반 업무 시스템 연동".to_string(),
@@ -2371,6 +2414,7 @@ fn test_fixed_page_text_box_mixed_font_header_uses_scale_to_fit() {
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2427,6 +2471,7 @@ fn test_fixed_page_text_box_mixed_font_header_with_tight_leading_uses_scale_to_f
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                         Run {
                             text: "|  클라우드 기반 업무 시스템 연동".to_string(),
@@ -2436,6 +2481,7 @@ fn test_fixed_page_text_box_mixed_font_header_with_tight_leading_uses_scale_to_f
                             },
                             href: None,
                             footnote: None,
+                            inline_box: None,
                         },
                     ],
                 })],
@@ -2498,6 +2544,7 @@ fn test_fixed_page_text_box_wrapped_centered_paragraph_scales_to_fit_height() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets {
@@ -2522,6 +2569,7 @@ fn test_fixed_page_text_box_wrapped_centered_paragraph_scales_to_fit_height() {
                     width: 1.0,
                     style: BorderLineStyle::Solid,
                     join: LineJoin::Round,
+                    cap: LineCap::Flat,
                 }),
                 shape_kind: None,
                 no_wrap: false,
@@ -2577,6 +2625,7 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -2597,6 +2646,7 @@ fn test_fixed_page_text_box_ordered_grid_normalizes_marker_spacing() {
                                     },
                                     href: None,
                                     footnote: None,
+                                    inline_box: None,
                                 }],
                             }],
                             level: 0,
@@ -2690,6 +2740,7 @@ fn slide_text_box_source(family: &str, size: f64, style: ParagraphStyle) -> Opti
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -2976,19 +3027,18 @@ fn the_contoso_scaled_attribution_lands_on_its_native_baseline() {
 /// `tests/fixtures/pptx/run-fill-alpha.pptx` seats its `txBox="1"` frame at
 /// `a:off y="2133600"` under the default `tIns` of 45720 EMU, putting the
 /// content top on 171.60pt, and sets all three of its paragraphs in 32pt Arial
-/// at a width none of them wraps at. None writes an `<a:endParaRPr>`, so each
-/// mark resolves through `presentation.xml`'s `<a:defaultTextStyle>`, whose
-/// `<a:latin typeface="+mn-lt"/>` names the theme's minor Latin font — here
-/// `Calisto MT` — and shares the line box with the run. A native PowerPoint
-/// 16.112 export puts the first baseline on 202.56pt.
+/// at a width none of them wraps at. None writes an `<a:endParaRPr>`, so no
+/// mark face joins the line and each is measured from its Arial run alone
+/// (issue #1645). A native PowerPoint 16.112 export puts the first baseline on
+/// 202.56pt.
 ///
-/// The two faces settle on 0.963654em, a 31pt seat at this size, which is also
-/// where Arial's own 0.972378em share rounds: a frame this shallow cannot tell
-/// the mark's contribution apart, and no claim about it is made here. What it
-/// does separate is the **metric source**. Folding Arial's 67/2048 hhea line
-/// gap into the descent gives 0.944713em and a 30pt seat, landing the line on
-/// 201.60pt — 0.96pt high, four times the export's 0.24pt position grid
-/// (issue #1179).
+/// Arial's own 0.972378em share rounds to a 31pt seat at this size, and so
+/// does the 0.963654em it used to share with the theme's minor Latin
+/// `Calisto MT`: a frame this shallow cannot tell the mark's contribution
+/// apart, and no claim about it is made here. What it does separate is the
+/// **metric source**. Folding Arial's 67/2048 hhea line gap into the descent
+/// gives 0.944713em and a 30pt seat, landing the line on 201.60pt — 0.96pt
+/// high, four times the export's 0.24pt position grid (issue #1179).
 #[test]
 fn the_unwrapped_label_lands_on_its_native_first_baseline() {
     const EMU_PER_PT: f64 = 12700.0;
@@ -3483,6 +3533,7 @@ fn consecutive_slide_paragraphs_keep_powerpoints_full_line_advance() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })
             })
@@ -3564,6 +3615,7 @@ fn consecutive_fractional_slide_paragraph_tops_snap_within_story() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })
         })
@@ -3687,6 +3739,7 @@ fn flat_slide_list_with_different_baseline_seats_declines_a_shared_snap() {
                 },
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         }],
         level: 0,
@@ -3981,6 +4034,7 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Small\u{000B}".to_string(),
@@ -3991,6 +4045,7 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Large".to_string(),
@@ -4001,6 +4056,7 @@ fn powerpoint_hard_break_advance_clears_the_line_above_it() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4086,6 +4142,7 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Small".to_string(),
@@ -4096,6 +4153,7 @@ fn powerpoint_hard_break_preserves_proportional_line_spacing() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4160,6 +4218,7 @@ fn powerpoint_hard_break_keeps_normal_edges_when_the_segment_soft_wraps() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "Small".to_string(),
@@ -4170,6 +4229,7 @@ fn powerpoint_hard_break_keeps_normal_edges_when_the_segment_soft_wraps() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4250,6 +4310,7 @@ fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                     Run {
                         text: "by Grade Level".to_string(),
@@ -4261,6 +4322,7 @@ fn powerpoint_soft_wrap_uses_each_lines_own_largest_font_size() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     },
                 ],
             })],
@@ -4360,6 +4422,7 @@ fn slide_latin_math_symbols_keep_powerpoints_advance_grid() {
                                 style: style.clone(),
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             },
                             Run {
                                 text: "END".to_string(),
@@ -4369,6 +4432,7 @@ fn slide_latin_math_symbols_keep_powerpoints_advance_grid() {
                                 },
                                 href: None,
                                 footnote: None,
+                                inline_box: None,
                             },
                         ],
                     })],
@@ -4419,6 +4483,7 @@ fn slide_latin_math_symbols_preserve_word_and_hyphen_breaks() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
             )],
@@ -4491,6 +4556,7 @@ fn slide_text_wraps_on_powerpoints_one_eighth_point_advance_grid() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -4570,6 +4636,7 @@ fn a_short_box_without_autofit_does_not_scale_its_text() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 padding: Insets::default(),
@@ -4635,6 +4702,7 @@ fn tracked_slide_line_source(
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
         )],
@@ -4759,6 +4827,7 @@ fn tracked_two_line_title_source(
         },
         href: None,
         footnote: None,
+        inline_box: None,
     };
     let paragraph = |runs: Vec<Run>| {
         Block::Paragraph(Paragraph {
@@ -4955,6 +5024,7 @@ fn turned_slide_text_box(
                 style: TextStyle::default(),
                 href: None,
                 footnote: None,
+                inline_box: None,
             }],
         })],
     );
@@ -5114,13 +5184,20 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
     let mut runs: Vec<Run> = Vec::new();
     for (index, size_pt) in sizes_pt.iter().enumerate() {
         if index > 0 {
-            // What the parser emits for `<a:br/>`: the break marker on its
-            // own run, with no run properties of its own.
+            // What the parser emits for `<a:br/>`: the break marker typed as
+            // the run it follows (issue #1666). The sizes still differ from
+            // line to line, so the paragraph states no size every run agrees
+            // on — which is the case this helper is here to build.
             runs.push(Run {
                 text: "\u{000B}".to_string(),
-                style: TextStyle::default(),
+                style: TextStyle {
+                    font_size: Some(sizes_pt[index - 1]),
+                    font_family: Some(family.to_string()),
+                    ..TextStyle::default()
+                },
                 href: None,
                 footnote: None,
+                inline_box: None,
             });
         }
         runs.push(Run {
@@ -5132,6 +5209,7 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
             },
             href: None,
             footnote: None,
+            inline_box: None,
         });
     }
 
@@ -5174,8 +5252,10 @@ fn hard_broken_slide_baselines(family: &str, sizes_pt: &[f64], wraps: bool) -> V
 /// A slide's hard-broken lines advance by the run's own 1.2em box, whatever
 /// the size — in a box that wraps and in one that does not.
 ///
-/// `<a:br/>` reaches the IR as a run carrying no size of its own, so the
-/// paragraph has no size every run agrees on and emits no `#set text(size:)`.
+/// Each line here declares its own size, so the paragraph has no size every
+/// run agrees on and emits no `#set text(size:)` — a `<a:br/>` cannot create
+/// that state by itself any more, since it is typed as the run it follows
+/// (issue #1666), but a mixed-size column still reaches it.
 /// The line box's `em` edges then resolved against Typst's 11pt default rather
 /// than against the size they were computed from, pinning every hard-broken
 /// line under 11pt to a flat `1.2 x 11pt` = 13.20pt — 89% too far apart for a
@@ -5292,6 +5372,7 @@ fn a_zero_baseline_shift_keeps_wrapped_lines_on_the_story_grid() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })
             })
@@ -5345,5 +5426,333 @@ fn a_zero_baseline_shift_keeps_wrapped_lines_on_the_story_grid() {
                 );
             }
         }
+    }
+}
+
+// A text frame whose vertical insets are deeper than its own height has a
+// content region of zero or negative height. PowerPoint collapses that region
+// to the single line at its own middle, `tIns + (height - tIns - bIns) / 2`
+// below the frame's top, and seats the block's natural height on it as the
+// anchor asks — so the block overflows the frame, and the slide, in both
+// directions.
+//
+// Typst drops or truncates content laid out inside a container that short, so
+// the frame has to stop constraining it (issue #1706). Every anchor is
+// affected: the frame's height caps the layout region whether the block is
+// seated at its top, its middle or its bottom. The tests below pin that rule.
+
+/// Enough paragraphs that the block is several times deeper than the frame,
+/// which is what the degenerate region truncates.
+#[cfg(not(target_arch = "wasm32"))]
+const OVERFLOWING_FRAME_LINES: [&str; 12] = [
+    "Footnote appears here",
+    "Bold italic underline",
+    "Here is a list:",
+    "Bullet 1",
+    "Bullet 2",
+    "Bullet 3",
+    "Subject is here",
+    "Here is a citation",
+    "(Kramer)",
+    "Row 1 column 1",
+    "Row 2 column 1",
+    "Row 2 column 2",
+];
+
+#[cfg(not(target_arch = "wasm32"))]
+const OVERFLOWING_FRAME_ANCHORS: [crate::ir::TextBoxVerticalAlign; 3] = [
+    crate::ir::TextBoxVerticalAlign::Top,
+    crate::ir::TextBoxVerticalAlign::Center,
+    crate::ir::TextBoxVerticalAlign::Bottom,
+];
+
+#[cfg(not(target_arch = "wasm32"))]
+fn overflowing_inset_frame_runs(
+    frame_height_pt: f64,
+    top_inset_pt: f64,
+    bottom_inset_pt: f64,
+    vertical_align: crate::ir::TextBoxVerticalAlign,
+) -> Vec<crate::render::pdf::PlacedTextRun> {
+    let content: Vec<Block> = OVERFLOWING_FRAME_LINES
+        .into_iter()
+        .map(make_paragraph)
+        .collect();
+    let document: Document = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_fixed_text_box(
+            0.0,
+            200.0,
+            400.0,
+            frame_height_pt,
+            Insets {
+                top: top_inset_pt,
+                right: 20.0,
+                bottom: bottom_inset_pt,
+                left: 20.0,
+            },
+            vertical_align,
+            content,
+        )],
+    )]);
+    let source = generate_typst(&document).unwrap();
+    crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap()
+}
+
+/// The vertical distance every run moved between two frames, which must be one
+/// number: the whole block travels together.
+#[cfg(not(target_arch = "wasm32"))]
+fn overflowing_frame_block_shift(
+    before: &[crate::render::pdf::PlacedTextRun],
+    after: &[crate::render::pdf::PlacedTextRun],
+    context: &str,
+) -> f64 {
+    assert_eq!(before.len(), after.len(), "{context}");
+    assert!(!before.is_empty(), "{context}");
+    let shift: f64 = after[0].baseline_pt - before[0].baseline_pt;
+    for (before_run, after_run) in before.iter().zip(after) {
+        assert_eq!(before_run.text, after_run.text, "{context}");
+        assert!(
+            (after_run.baseline_pt - before_run.baseline_pt - shift).abs() < 0.01,
+            "{context}: {:?} moved {}pt where the block moved {shift}pt",
+            before_run.text,
+            after_run.baseline_pt - before_run.baseline_pt,
+        );
+    }
+    shift
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_frame_shorter_than_its_insets_keeps_every_line() {
+    for vertical_align in OVERFLOWING_FRAME_ANCHORS {
+        for (frame_height_pt, top_inset_pt, bottom_inset_pt) in
+            [(0.0, 60.0, 60.0), (24.0, 70.0, 18.0), (5.0, 2.5, 2.5)]
+        {
+            let runs = overflowing_inset_frame_runs(
+                frame_height_pt,
+                top_inset_pt,
+                bottom_inset_pt,
+                vertical_align,
+            );
+            // Typst splits a line into one run per word, so the drawn text is
+            // the concatenation rather than any single run.
+            let drawn: String = runs.iter().map(|run| run.text.as_str()).collect();
+            for expected in OVERFLOWING_FRAME_LINES {
+                let squashed: String = expected.chars().filter(|c| !c.is_whitespace()).collect();
+                assert!(
+                    drawn.replace(' ', "").contains(&squashed),
+                    "{vertical_align:?}, frame {frame_height_pt}pt, insets \
+                     {top_inset_pt}/{bottom_inset_pt}: lost {expected:?} — drew {drawn:?}"
+                );
+            }
+            // The frame's paragraphs are one block: a degenerate content
+            // region must not break them into regions stacked a whole inset
+            // sum apart. Default text is under 20pt, so no honest advance
+            // between two of these single-line paragraphs reaches 40pt.
+            let mut baselines: Vec<f64> = runs.iter().map(|run| run.baseline_pt).collect();
+            baselines.sort_by(f64::total_cmp);
+            baselines.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+            assert_eq!(baselines.len(), OVERFLOWING_FRAME_LINES.len());
+            for pair in baselines.windows(2) {
+                assert!(
+                    pair[1] - pair[0] < 40.0,
+                    "{vertical_align:?}, frame {frame_height_pt}pt, insets \
+                     {top_inset_pt}/{bottom_inset_pt}: the block broke apart: {baselines:?}"
+                );
+            }
+        }
+    }
+}
+
+/// The seat line is the collapsed region's middle, so each inset carries half
+/// of its own change into it — whatever the anchor. Measured on native
+/// PowerPoint for Mac exports of `tests/fixtures/pptx/poi/with_japanese.pptx`:
+/// dropping the frame's 71.98pt `bIns` to zero lowered the centred block
+/// 35.98pt and the top-anchored one 35.98pt, and dropping its `tIns` instead
+/// raised the top-anchored block 35.78pt. Seating the block on the top inset,
+/// or centring it on the frame, makes both `bIns` figures zero.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn each_inset_moves_an_overflowing_block_half_its_own_change() {
+    for vertical_align in OVERFLOWING_FRAME_ANCHORS {
+        let deep_bottom = overflowing_inset_frame_runs(0.0, 60.0, 60.0, vertical_align);
+        let shallow_bottom = overflowing_inset_frame_runs(0.0, 60.0, 20.0, vertical_align);
+        let bottom_shift: f64 = overflowing_frame_block_shift(
+            &deep_bottom,
+            &shallow_bottom,
+            &format!("{vertical_align:?}: bottom inset 60pt -> 20pt"),
+        );
+        assert!(
+            (bottom_shift - 20.0).abs() < 0.01,
+            "{vertical_align:?}: a 40pt shallower bottom inset must lower the block 20pt, \
+             moved {bottom_shift}pt"
+        );
+
+        let deep_top = overflowing_inset_frame_runs(0.0, 60.0, 60.0, vertical_align);
+        let shallow_top = overflowing_inset_frame_runs(0.0, 20.0, 60.0, vertical_align);
+        let top_shift: f64 = overflowing_frame_block_shift(
+            &deep_top,
+            &shallow_top,
+            &format!("{vertical_align:?}: top inset 60pt -> 20pt"),
+        );
+        assert!(
+            (top_shift + 20.0).abs() < 0.01,
+            "{vertical_align:?}: a 40pt shallower top inset must raise the block 20pt, \
+             moved {top_shift}pt"
+        );
+    }
+}
+
+/// `t`, `ctr` and `b` put the block's top, middle and bottom on the same seat
+/// line, so consecutive anchors step by exactly half the block's own height.
+/// A native PowerPoint for Mac export of the reported frame places the block's
+/// top 0.02pt below the seat line under `t` and 440.42pt above it under `b`,
+/// against a block measured at 440.44pt.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_three_anchors_of_an_overflowing_block_step_by_half_its_height() {
+    let top = overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Top);
+    let centre =
+        overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Center);
+    let bottom =
+        overflowing_inset_frame_runs(0.0, 60.0, 60.0, crate::ir::TextBoxVerticalAlign::Bottom);
+    let to_centre: f64 = overflowing_frame_block_shift(&top, &centre, "top -> centre");
+    let to_bottom: f64 = overflowing_frame_block_shift(&centre, &bottom, "centre -> bottom");
+    assert!(
+        to_centre < -1.0,
+        "centring must lift the block off the seat line, moved {to_centre}pt"
+    );
+    assert!(
+        (to_bottom - to_centre).abs() < 0.01,
+        "the anchors must step evenly: top -> centre {to_centre}pt, centre -> bottom {to_bottom}pt"
+    );
+}
+
+/// A frame whose insets still leave a content region keeps the measured-slack
+/// path: only the degenerate frame changes shape.
+#[test]
+fn a_frame_taller_than_its_insets_keeps_the_measured_slack_path() {
+    let document: Document = make_doc(vec![make_fixed_page(
+        720.0,
+        540.0,
+        vec![make_fixed_text_box(
+            0.0,
+            200.0,
+            400.0,
+            200.0,
+            Insets {
+                top: 60.0,
+                right: 20.0,
+                bottom: 60.0,
+                left: 20.0,
+            },
+            crate::ir::TextBoxVerticalAlign::Center,
+            vec![make_paragraph("Subject is here")],
+        )],
+    )]);
+    let source = generate_typst(&document).unwrap().source;
+    assert!(
+        source.contains("text_box_slack_"),
+        "a frame with a positive content region keeps its slack spacer: {source}"
+    );
+}
+
+/// The reported package: `tests/fixtures/pptx/poi/with_japanese.pptx` slide 1
+/// holds a `p:sp` at `<a:off y="457200"/>` with `<a:ext cy="0"/>` and
+/// `914112` EMU — 71.98pt, just under an inch — of inset on all four sides,
+/// anchored `ctr`. Its content region is 143.95pt tall in the negative, and
+/// office2pdf drew the paragraphs in separate Typst
+/// regions stacked thousands of points above the slide, so none of them was
+/// visible (issue #1706).
+///
+/// Equal top and bottom insets put the inner region's centre on the frame's
+/// own origin, y = 36pt, whatever the block's natural height turns out to be.
+/// That midpoint is what the native PowerPoint for Mac export shows, and it is
+/// the one quantity this fixture pins independently of our line-height model.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_reported_zero_height_frame_centres_its_block_on_the_frame() {
+    use crate::config::ConvertOptions;
+    use crate::parser::Parser;
+    use crate::parser::pptx::PptxParser;
+
+    const FIXTURE: &[u8] = include_bytes!("../../../../tests/fixtures/pptx/poi/with_japanese.pptx");
+
+    let (document, _warnings) = PptxParser
+        .parse(FIXTURE, &ConvertOptions::default())
+        .expect("fixture should parse");
+    let source = generate_typst(&document).unwrap();
+    let runs = crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap();
+
+    // `Footnote` opens the frame's first paragraph and `column` appears only in
+    // its last four; the slide's other text uses neither spelling.
+    let first: f64 = runs
+        .iter()
+        .filter(|run| run.text == "Footnote")
+        .map(|run| run.baseline_pt)
+        .fold(f64::INFINITY, f64::min);
+    let last: f64 = runs
+        .iter()
+        .filter(|run| run.text == "column")
+        .map(|run| run.baseline_pt)
+        .fold(f64::NEG_INFINITY, f64::max);
+    assert!(
+        first.is_finite() && last.is_finite(),
+        "the frame's first and last paragraphs must be drawn: {runs:?}"
+    );
+    // Baselines sit an ascender below the block's top and a descender above its
+    // bottom, so their midpoint trails the block's by a few points.
+    let midpoint: f64 = (first + last) / 2.0;
+    assert!(
+        (midpoint - 36.0).abs() < 15.0,
+        "the block must stay centred on the frame at 36pt, drawn {first}pt to {last}pt"
+    );
+}
+
+/// A `ctr` or `b` frame holding a single wrapping paragraph takes the
+/// shrink-to-fit path, whose scale is the content region over the block's own
+/// height. With no region left there is nothing to fit, and scaling by it
+/// collapses the text to a point: every word lands on the same origin and none
+/// of it is visible. PowerPoint does not shrink a block it cannot fit either
+/// way — the reported frame's block overflows the slide at its natural size
+/// (issue #1706).
+///
+/// `t` never reaches that path: `wrapped_fit_paragraph` excludes a
+/// top-anchored box for its own reasons, and a box that did not ask for
+/// `<a:normAutofit/>` is excluded from the single-line path. It is here as a
+/// regression guard on the plain branch it does take.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_single_paragraph_in_a_frame_shorter_than_its_insets_keeps_its_natural_width() {
+    for vertical_align in OVERFLOWING_FRAME_ANCHORS {
+        let document: Document = make_doc(vec![make_fixed_page(
+            720.0,
+            540.0,
+            vec![make_fixed_text_box(
+                0.0,
+                200.0,
+                400.0,
+                0.0,
+                Insets {
+                    top: 60.0,
+                    right: 20.0,
+                    bottom: 60.0,
+                    left: 20.0,
+                },
+                vertical_align,
+                vec![make_paragraph("Subject is here")],
+            )],
+        )]);
+        let source = generate_typst(&document).unwrap();
+        let runs = crate::render::pdf::compiled_text_runs(&source.source, 0).unwrap();
+        let left_edges: Vec<f64> = runs.iter().map(|run| run.left_pt).collect();
+        let first: f64 = left_edges.first().copied().unwrap_or(f64::NAN);
+        let last: f64 = left_edges.last().copied().unwrap_or(f64::NAN);
+        assert!(
+            last - first > 20.0,
+            "{vertical_align:?}: the line must keep its own width, drew every run \
+             between {first}pt and {last}pt: {runs:?}"
+        );
     }
 }

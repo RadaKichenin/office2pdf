@@ -298,6 +298,7 @@ fn only_office_poster_requests_select_the_bundled_noto_serif() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             header: None,
@@ -744,6 +745,7 @@ fn test_detect_missing_font_fallbacks_with_context_prefers_office_font() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             header: None,
@@ -834,6 +836,7 @@ fn test_detect_missing_font_fallbacks_reports_each_script_separately() {
             },
             href: None,
             footnote: None,
+            inline_box: None,
         }],
     }));
 
@@ -868,6 +871,7 @@ fn korean_document_requesting(font_family: &str, text: &str) -> Document {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             header: None,
@@ -897,6 +901,7 @@ fn test_document_requests_font_families_false_when_all_runs_use_defaults() {
                     style: crate::ir::TextStyle::default(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             header: None,
@@ -940,6 +945,7 @@ fn test_document_requests_font_families_false_for_context_free_families() {
                         },
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     }],
                 })],
                 header: None,
@@ -978,6 +984,7 @@ fn test_document_requests_font_families_true_when_any_run_sets_family() {
                     },
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }],
             })],
             header: None,
@@ -1711,6 +1718,44 @@ fn a_variable_font_request_paints_and_measures_through_its_trimmed_family() {
 }
 
 #[test]
+fn a_weight_suffixed_request_reaches_its_base_family_for_metrics_too() {
+    // The book files `segoeuisb.ttf` under `Segoe UI` at 600 and never under
+    // `Segoe UI Semibold`, so a chain keyed on the untrimmed name resolves no
+    // face at all and every metric answers `None`. Native Word measures the
+    // member the name denotes — twelve single-spaced 20pt `Arial Black`
+    // paragraphs advance 28.189pt against Arial's 22.996pt, which is Arial
+    // Black's own 1.4102em `hhea` sum and not Arial's 1.1499em — so the
+    // metrics chain has to reach the base family too (issue #1643).
+    for purpose in [ChainPurpose::Paint, ChainPurpose::Metrics] {
+        for (requested, base_family) in [
+            ("Segoe UI Semibold", "Segoe UI"),
+            ("Arial Black", "Arial"),
+            ("Calibri Light", "Calibri"),
+        ] {
+            let candidates: Vec<String> = fallback_candidates(requested, None, purpose);
+            assert_eq!(
+                candidates.first().map(String::as_str),
+                Some(base_family),
+                "{purpose:?} chain for {requested:?}: {candidates:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_family_name_stating_no_weight_keeps_its_base_family_out_of_both_chains() {
+    // A stretch suffix names a family of its own — `Arial Narrow` is not a
+    // member of Arial — so neither chain may fall back on the base family.
+    for purpose in [ChainPurpose::Paint, ChainPurpose::Metrics] {
+        let candidates: Vec<String> = fallback_candidates("Arial Narrow", None, purpose);
+        assert!(
+            !candidates.iter().any(|candidate| candidate == "Arial"),
+            "{purpose:?} chain for Arial Narrow must not reach Arial: {candidates:?}"
+        );
+    }
+}
+
+#[test]
 fn a_weight_suffix_states_the_weight_of_the_member_it_names() {
     use typst::text::FontWeight;
     assert_eq!(
@@ -1793,4 +1838,87 @@ fn a_suffixed_request_paints_through_its_base_family() {
         chain.starts_with("(\"Noto Serif Light\", \"Noto Serif\""),
         "the base family must follow the suffixed request, got {chain}"
     );
+}
+
+/// A LibreOffice-authored document names `Liberation Serif` constantly, and
+/// the table did not list it: `substitutes` returned `None`, so the family
+/// contributed nothing at all to its own paint chain. Times New Roman leads
+/// because Liberation Serif was designed as its metric twin, which is the
+/// same relationship the `times new roman` entry states the other way round
+/// (issue #1707).
+#[test]
+fn liberation_serif_substitutes_lead_with_its_metric_twin() {
+    let subs = substitutes("Liberation Serif").expect("Liberation Serif should have substitutes");
+    assert_eq!(
+        subs[0], "Times New Roman",
+        "the metric twin leads Liberation Serif's chain: {subs:?}"
+    );
+}
+
+/// Word shapes a run's Latin codepoints with `w:ascii`, so the Latin family
+/// owns a run that holds no East Asian character. Ranking the East Asian
+/// family and its substitutes first painted the `fr-FR` body of a
+/// LibreOffice-authored fixture in SimSun, where Word uses Times New Roman
+/// (issue #1707).
+#[test]
+fn latin_text_resolves_through_the_latin_family_before_any_east_asian_face() {
+    let list = font_with_east_asian_fallbacks("Liberation Serif", "Noto Serif CJK SC", "Un texte");
+
+    let latin_substitute = list
+        .find("\"Times New Roman\"")
+        .unwrap_or_else(|| panic!("Liberation Serif's metric twin is offered: {list}"));
+    for east_asian in [
+        "\"Noto Serif CJK SC\"",
+        "\"Noto Serif SC\"",
+        "\"STSong\"",
+        "\"SimSun\"",
+    ] {
+        let Some(index) = list.find(east_asian) else {
+            continue;
+        };
+        assert!(
+            latin_substitute < index,
+            "{east_asian} must follow the Latin substitutes: {list}"
+        );
+    }
+}
+
+/// Triangulation for the rule above with an unrelated family pair: the rule
+/// is "the run's script decides which declared family resolves first", not
+/// anything specific to Liberation Serif.
+#[test]
+fn latin_text_ranks_a_latin_substitute_ahead_of_a_korean_one() {
+    let list = font_with_east_asian_fallbacks("Cambria", "Batang", "Introduction");
+
+    let latin_substitute = list
+        .find("\"Caladea\"")
+        .unwrap_or_else(|| panic!("Cambria's metric twin is offered: {list}"));
+    let east_asian = list
+        .find("\"Batang\"")
+        .unwrap_or_else(|| panic!("the declared East Asian family is offered: {list}"));
+    assert!(
+        latin_substitute < east_asian,
+        "a Latin run resolves the Latin family first: {list}"
+    );
+}
+
+/// The gate on the rule above: East Asian text still reaches the East Asian
+/// family and its substitutes before any Latin stand-in, which is what issues
+/// #537 and #575 established.
+#[test]
+fn east_asian_text_still_resolves_through_the_east_asian_family_first() {
+    let list = font_with_east_asian_fallbacks("Liberation Serif", "Noto Serif CJK SC", "中文文書");
+
+    let east_asian = list
+        .find("\"Noto Serif CJK SC\"")
+        .unwrap_or_else(|| panic!("the declared East Asian family is offered: {list}"));
+    for latin in ["\"Times New Roman\"", "\"Tinos\"", "\"DejaVu Serif\""] {
+        let Some(index) = list.find(latin) else {
+            continue;
+        };
+        assert!(
+            east_asian < index,
+            "{latin} must follow the East Asian faces over East Asian text: {list}"
+        );
+    }
 }

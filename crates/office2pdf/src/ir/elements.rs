@@ -567,6 +567,13 @@ pub struct ChartTextStyle {
     pub letter_spacing_hundredths: Option<i32>,
     /// `a:defRPr/a:solidFill` — the colour the runs are set in (issue #916).
     pub color: Option<Color>,
+    /// Opacity from the `<a:alpha>` inside that colour: 0.0 is transparent and
+    /// 1.0 is opaque. `None` paints [`Self::color`] opaque.
+    ///
+    /// DrawingML writes it as a child of the colour element, so it travels
+    /// with [`Self::color`] through inheritance instead of resolving on its
+    /// own (issue #1677).
+    pub alpha: Option<f64>,
     /// `a:bodyPr@vertOverflow="ellipsis"`. This body property is kept beside
     /// the run properties because every chart text scope already owns one
     /// `ChartTextStyle` (issue #1012).
@@ -597,8 +604,26 @@ impl ChartTextStyle {
     }
 
     /// This style's colour where `override_style` states none.
+    ///
+    /// Half of [`Self::resolved_fill`], and not the value to paint with: a
+    /// caller that drops the opacity beside it prints a translucent chart
+    /// string fully opaque (issue #1677).
     pub fn resolved_color(self, override_style: Self) -> Option<Color> {
-        override_style.color.or(self.color)
+        self.resolved_fill(override_style).0
+    }
+
+    /// The colour and opacity that win, resolved as one unit.
+    ///
+    /// `<a:alpha>` is a child of the colour element rather than a sibling
+    /// property, so the two cannot be inherited independently: an axis that
+    /// restates an opaque colour over a translucent chart-space default must
+    /// print opaque rather than keep the default's opacity (issue #1677).
+    pub fn resolved_fill(self, override_style: Self) -> (Option<Color>, Option<f64>) {
+        if override_style.color.is_some() {
+            (override_style.color, override_style.alpha)
+        } else {
+            (self.color, self.alpha)
+        }
     }
 
     /// This style with every property `override_style` states replacing it.
@@ -609,13 +634,15 @@ impl ChartTextStyle {
     /// one style per scope, so the more specific element is merged in as it is
     /// read rather than at the rendering edge (issue #1424).
     pub fn overridden_by(self, override_style: Self) -> Self {
+        let (color, alpha) = self.resolved_fill(override_style);
         Self {
             size_pt: self.resolved_size_pt(override_style),
             bold: self.resolved_bold(override_style),
             letter_spacing_hundredths: override_style
                 .letter_spacing_hundredths
                 .or(self.letter_spacing_hundredths),
-            color: self.resolved_color(override_style),
+            color,
+            alpha,
             ellipsis_overflow: self.ellipsis_overflow || override_style.ellipsis_overflow,
         }
     }
@@ -954,8 +981,14 @@ pub struct ChartMarkerStyle {
 }
 
 /// DrawingML's geometry at the endpoint of an open stroke.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// `a:ln/@cap` spells this, and omitting the attribute selects `Flat`, which is
+/// why that is the default here. A native macOS PowerPoint export of a 3.5pt
+/// straight connector traces as PDF `linecap="0,0,0"` both with `cap="flat"`
+/// and with the attribute absent (issue #1682).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LineCap {
+    #[default]
     Flat,
     Round,
     Square,
@@ -1133,6 +1166,32 @@ pub struct FloatingTextBox {
     pub offset_y: f64,
 }
 
+/// A DrawingML text box anchored inline in a paragraph (`wp:inline`).
+///
+/// Word lays this out as one item on the anchor paragraph's line: the line
+/// grows to hold the box, the box's bottom edge sits on the baseline, and the
+/// box's own paragraphs flow inside it. Emitting those paragraphs into the
+/// body instead gives the box's text a line of its own, draws no outline, and
+/// moves every line below the anchor (issue #1690), so the box travels with
+/// the run it was anchored to.
+#[derive(Debug, Clone)]
+pub struct InlineTextBox {
+    /// The box's own paragraphs. Typed as paragraphs rather than blocks so the
+    /// renderer has no unreachable case to drop silently: the parser keeps a box
+    /// holding anything else on the flattened path instead.
+    pub content: Vec<Paragraph>,
+    /// On-page width in points, from `wp:extent`.
+    pub width: f64,
+    /// On-page height in points, from `wp:extent`.
+    pub height: f64,
+    /// Content insets from `wps:bodyPr` (`lIns`/`tIns`/`rIns`/`bIns`).
+    pub padding: Insets,
+    /// Outline from the shape's `a:ln`.
+    pub stroke: Option<BorderSide>,
+    /// Background fill from the shape's `a:solidFill`.
+    pub fill: Option<Color>,
+}
+
 /// A floating geometric shape (rectangle, line/arrow, ellipse, …) positioned
 /// with an anchor offset. Used for DrawingML word-processing shapes (`wps:wsp`)
 /// that carry geometry but no text box — these have no docx-rs representation
@@ -1249,6 +1308,9 @@ pub struct Run {
     /// Optional footnote/endnote content. When present, a footnote marker is emitted and
     /// the content is rendered at the bottom of the page.
     pub footnote: Option<Vec<Run>>,
+    /// A DrawingML text box anchored inline at this run (`wp:inline`). Boxed
+    /// because every run carries the field while almost none carries a box.
+    pub inline_box: Option<Box<InlineTextBox>>,
 }
 
 /// A table.
@@ -1428,6 +1490,53 @@ pub struct Insets {
     pub left: f64,
 }
 
+/// How far an unwrapped worksheet line reaches, and what priced it.
+///
+/// Excel for Mac advances every sheet glyph a whole point, so a line's true
+/// extent is the sum of its glyph advances each rounded to one — the quantity
+/// that decides whether the line crosses a page-column boundary and continues
+/// on the next (issue #1659). Where every run's face resolves on this host the
+/// parser prices exactly that sum; where one does not it falls back to a
+/// face-independent estimate, which cannot settle a boundary case on its own
+/// and is marked so its reader can grant it the slack it needs (issue #1714).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SheetLineExtent {
+    /// The whole-point advance sum of the faces the line's runs resolve to.
+    Measured(f64),
+    /// The face-independent ASCII-ratio estimate, which runs under the
+    /// resolved face's own advances.
+    Estimated(f64),
+}
+
+/// Slack, in points, an [`SheetLineExtent::Estimated`] extent is granted
+/// before it is taken to reach a point. The ASCII-ratio estimate runs
+/// 0.6–9.1pt under the face's own advances on the 1,000 occupation strings of
+/// `1000-customers.xlsx` (mean 4.7pt at Malgun Gothic 12); with 6pt of slack
+/// no line the native export continues is taken for one that ends before the
+/// boundary on that corpus, while a line ending well inside its reach — row
+/// 1001's `Direct Creative Liaison`, 26pt short of it — still counts as
+/// reaching nothing (issue #1714).
+const ESTIMATED_LINE_REACH_TOLERANCE_PT: f64 = 6.0;
+
+impl SheetLineExtent {
+    /// How far the line may be taken to paint from its cell's own left
+    /// gridline.
+    ///
+    /// A measured extent is that distance outright: Excel's whole-point
+    /// advance grid ends the line exactly where the native export does, down
+    /// to a page-column boundary that grants no slack at all (issue #1659).
+    /// An estimate cannot settle such a case on its own, so it carries
+    /// [`ESTIMATED_LINE_REACH_TOLERANCE_PT`] for the width it is known to be
+    /// missing.
+    #[must_use]
+    pub fn reach_pt(self) -> f64 {
+        match self {
+            Self::Measured(width_pt) => width_pt,
+            Self::Estimated(width_pt) => width_pt + ESTIMATED_LINE_REACH_TOLERANCE_PT,
+        }
+    }
+}
+
 /// A table cell.
 #[derive(Debug, Clone)]
 pub struct TableCell {
@@ -1470,15 +1579,15 @@ pub struct TableCell {
     /// printed, and clips it at the page-column's edge (issue #1381). `None`
     /// on every cell that paints its own line.
     pub spill_continuation_offset_pt: Option<f64>,
-    /// Estimated width in points of the unwrapped line itself, from the
-    /// cell's own left gridline to the end of its text, inset included. Set
-    /// together with `spill_width`, which is the *reach* the line may paint
-    /// across — whole columns, so a short line in a wide reach ends well
-    /// before the reach does. Column pagination reads this to decide whether
-    /// the line actually crosses a page-column boundary and continues there;
-    /// `None` on a cell that paints no unwrapped line, and on table formats
-    /// that never spill.
-    pub spill_line_width_pt: Option<f64>,
+    /// How far the unwrapped line itself extends, in points, from the cell's
+    /// own left gridline to the end of its text, inset included. Set together
+    /// with `spill_width`, which is the *reach* the line may paint across —
+    /// whole columns, so a short line in a wide reach ends well before the
+    /// reach does. Column pagination reads this to decide whether the line
+    /// actually crosses a page-column boundary and continues there; `None` on
+    /// a cell that paints no unwrapped line, and on table formats that never
+    /// spill.
+    pub spill_line_extent: Option<SheetLineExtent>,
     /// Vertical alignment of cell content.
     pub vertical_align: Option<CellVerticalAlign>,
     /// Optional cell padding override in points.
@@ -1514,7 +1623,7 @@ impl Default for TableCell {
             icon_shading: None,
             spill_width: None,
             spill_continuation_offset_pt: None,
-            spill_line_width_pt: None,
+            spill_line_extent: None,
             vertical_align: None,
             padding: None,
             row_has_thick_bottom: false,
@@ -1585,15 +1694,20 @@ pub enum LineJoin {
 
 /// A single border side.
 ///
-/// `join` describes a DrawingML `a:ln` and only shape and picture outlines
-/// render it; Word and Excel have no corresponding border property, so their
-/// sides leave it at the default and their codegen never writes it out.
+/// `join` and `cap` describe a DrawingML `a:ln` and only shape and picture
+/// outlines render them; Word and Excel have no corresponding border property,
+/// so their sides leave both at the default and their codegen never writes
+/// them out.
 #[derive(Debug, Clone)]
 pub struct BorderSide {
     pub width: f64,
     pub color: Color,
     pub style: BorderLineStyle,
     pub join: LineJoin,
+    /// End geometry from `a:ln/@cap`, resolved against the `<a:lnRef>` theme
+    /// line. `Flat` is both DrawingML's own default and Typst's, so it is the
+    /// only value the codegen leaves unwritten (issue #1682).
+    pub cap: LineCap,
 }
 
 /// Fractions of the source image cropped away from each edge.

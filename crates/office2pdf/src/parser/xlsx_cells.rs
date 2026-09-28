@@ -8,7 +8,7 @@ use super::xlsx_style::{
     apply_rich_run_font, extract_cell_alignment, extract_cell_background, extract_cell_borders,
     extract_cell_text_style, extract_style_background, resolve_style_color,
 };
-use crate::ir::{BorderSide, CellBorder, Color, Insets, TableCell, TextStyle};
+use crate::ir::{BorderSide, CellBorder, Color, Insets, SheetLineExtent, TableCell, TextStyle};
 
 /// The last addressable spreadsheet column (XFD), bounding how far a text
 /// overflow may extend the printed range.
@@ -285,6 +285,80 @@ pub(crate) fn literal_number_format_text(format: &str, value: f64) -> Option<Str
     }
 
     (!in_quotes).then_some(literal)
+}
+
+/// The ink a number-format section's bracketed colour control names.
+///
+/// Excel's number-format grammar lets each section name one of eight colours,
+/// and the name wins over the colour the cell's own font declares. Measured on
+/// a native Excel 16 for Mac export (2026-09-28) of a one-factor probe
+/// workbook — ten cells differing only in their selected section's colour
+/// control — whose traces print every name as the fully saturated primary and
+/// not a palette tint: Red `1 0 0`, Green `0 1 0`, Blue `0 0 1`, Cyan
+/// `0 1 1`, Magenta `1 0 1`, Yellow `1 1 0`, White `1 1 1`, Black `0 0 0`.
+/// The same probe prints `[Red]` over an explicit `FF0000FF` font as `1 0 0`
+/// and `[Black]` over it as `0 0 0`, so `[Black]` sets black outright rather
+/// than deferring to the font (issue #1776).
+///
+/// Quoted text and escaped/skip-width arguments are literal, matching
+/// [`number_format_skip_width_glyphs`]: a `"[Red]"` section prints the name
+/// and names no colour.
+///
+/// TODO(#1923): the indexed `[Color N]` form is a separate palette lookup —
+/// measured as `indexedColors[N + 7]` — and is not applied here, so such a
+/// section still paints the cell's own ink.
+fn number_format_section_color(section: &str) -> Option<Color> {
+    let mut chars = section.chars();
+    let mut in_quotes = false;
+    while let Some(ch) = chars.next() {
+        if in_quotes {
+            if ch == '"' {
+                in_quotes = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_quotes = true,
+            '\\' | '_' | '*' => {
+                chars.next();
+            }
+            '[' => {
+                let control: String = chars.by_ref().take_while(|ch| *ch != ']').collect();
+                if let Some(color) = named_number_format_color(&control) {
+                    return Some(color);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The primary a number-format colour name paints, or `None` for any other
+/// bracketed control (a locale, a condition, an elapsed-time unit).
+fn named_number_format_color(control: &str) -> Option<Color> {
+    match control.to_ascii_lowercase().as_str() {
+        "black" => Some(Color::new(0, 0, 0)),
+        "blue" => Some(Color::new(0, 0, 255)),
+        "cyan" => Some(Color::new(0, 255, 255)),
+        "green" => Some(Color::new(0, 255, 0)),
+        "magenta" => Some(Color::new(255, 0, 255)),
+        "red" => Some(Color::new(255, 0, 0)),
+        "white" => Some(Color::new(255, 255, 255)),
+        "yellow" => Some(Color::new(255, 255, 0)),
+        _ => None,
+    }
+}
+
+/// The ink the section Excel selects for `value` paints, or `None` when that
+/// section names no colour.
+///
+/// A format carrying a conditional section stays on the cell's own ink:
+/// [`selected_number_format_section`] cannot pick one without a complete
+/// predicate evaluator, and guessing the wrong section would paint the wrong
+/// colour rather than merely mis-measure a width.
+fn number_format_text_color(format_code: &str, value: f64) -> Option<Color> {
+    number_format_section_color(selected_number_format_section(format_code, value)?)
 }
 
 fn section_has_condition(section: &str) -> bool {
@@ -736,7 +810,18 @@ pub(super) fn column_unit_pt(family: &str, size_pt: f64, bold: bool) -> f64 {
 /// and size. [`aligned_cell_padding`] rebalances that asymmetric pair into
 /// equal sides for a centred cell while preserving its total width.
 pub(super) fn cell_right_inset_pt(family: &str, size_pt: f64, bold: bool) -> f64 {
-    (column_unit_pt(family, size_pt, bold) / 4.0).ceil()
+    right_inset_for_unit_pt(column_unit_pt(family, size_pt, bold))
+}
+
+/// [`cell_right_inset_pt`] priced straight on a column unit, for the callers
+/// that hold the unit rather than the font that produced it.
+fn right_inset_for_unit_pt(column_unit_pt: f64) -> f64 {
+    (column_unit_pt / 4.0).ceil()
+}
+
+/// [`cell_left_inset_pt`] priced straight on a column unit.
+fn left_inset_for_unit_pt(column_unit_pt: f64) -> f64 {
+    right_inset_for_unit_pt(column_unit_pt) + 1.0
 }
 
 /// Points Excel starts a cell's text right of the cell's own left gridline.
@@ -799,7 +884,7 @@ pub(super) fn cell_right_inset_pt(family: &str, size_pt: f64, bold: bool) -> f64
 /// where the rounded whole-point unit happens to land in the same
 /// `ceil(unit / 4)` bracket either way.
 pub(super) fn cell_left_inset_pt(family: &str, size_pt: f64, bold: bool) -> f64 {
-    cell_right_inset_pt(family, size_pt, bold) + 1.0
+    left_inset_for_unit_pt(column_unit_pt(family, size_pt, bold))
 }
 
 /// The box of a cell laid out in `style`: the font the cell states, else the
@@ -933,10 +1018,12 @@ const EXCEL_MAC_BASE_COLUMN_WIDTH_CHARS: u32 = 10;
 /// worksheet wrote `<sheetFormatPr>` at all, which umya's model cannot tell
 /// apart. Measured one factor per native Excel-for-Mac export of
 /// `100-customers.xlsx` (issue #1656): with no element the default column
-/// prints 75pt on a 7pt unit (`10 × 7 + 5`), adding
-/// `<sheetFormatPr defaultRowHeight="15"/>` alone drops it to 61pt
-/// (`8 × 7 + 5`), and `baseColWidth="10"` restores 75pt; the same
-/// `base × unit + 5` held at the 6pt and 8pt units (65/85pt).
+/// prints 75pt on a 7pt unit, adding `<sheetFormatPr defaultRowHeight="15"/>`
+/// alone drops it to 61pt, and `baseColWidth="10"` restores 75pt; the 6pt and
+/// 8pt units answered 65 and 85pt. Those readings all sit in the bracket
+/// where the padding [`default_column_width_pt`] adds is 5pt, so they
+/// identify the base and not the padding — that function's doc comment
+/// carries the padding rule.
 pub(super) fn base_column_width_chars(
     declared_base_col_width_chars: Option<u32>,
     has_sheet_format_properties: bool,
@@ -951,9 +1038,11 @@ pub(super) fn base_column_width_chars(
 /// Width in points of a column with no `<col>` entry.
 ///
 /// With no declared `defaultColWidth` either, Excel prints
-/// `baseColWidth × unit + 5` points — not 8.43 character units — with the
-/// base from `base_column_width_chars`. Measured by the issue #621 probes:
-/// base-8 workbooks print 45/53/61pt at unit 5/6/7, and the round-3 probes
+/// `baseColWidth × unit` points — not 8.43 character units — with the base
+/// from `base_column_width_chars`, plus the Normal font's own horizontal
+/// inset pair ([`cell_left_inset_pt`] + [`cell_right_inset_pt`], i.e.
+/// `2 × ceil(unit / 4) + 1`). Measured by the issue #621 probes: base-8
+/// workbooks print 45/53/61pt at unit 5/6/7, and the round-3 probes
 /// calibri11base10/calibri11base12 (`<sheetFormatPr baseColWidth="10|12"/>`,
 /// no defaultColWidth, 6pt Calibri-11 unit) print 65pt and 77pt default
 /// columns — killing the ignore-baseColWidth model (53pt). When the sheet
@@ -961,8 +1050,35 @@ pub(super) fn base_column_width_chars(
 /// §18.3.1.81) and quantizes like any declared width: the issue #1656 probe
 /// declaring `defaultColWidth="8.43"` printed `round_half_up(8.43 × 7) = 59pt`.
 ///
-/// TODO(#1657): the flat 5pt padding is the Normal font's inset pair, which
-/// steps to 7pt at a 9pt unit; a units 9–12 sweep is needed before it moves.
+/// The padding reads as a constant 5pt only between the 5pt and 8pt units,
+/// which is all the #621 probes covered. The issue #1657 sweep — 17
+/// one-factor native Excel-for-Mac exports of
+/// `issue_1657_default_column_padding_probe.xlsx`, a base-8 sheet with no
+/// `<cols>` varying only the Normal font, each column pitch read from the
+/// five row-1 pen origins and identical across the page — carries it over
+/// all three brackets:
+///
+/// | Normal font | unit | default column | `8 × unit` | padding |
+/// | --- | ---: | ---: | ---: | ---: |
+/// | Arial 6 | 3 | 27 | 24 | 3 |
+/// | Arial 7, Calibri 8 | 4 | 35 | 32 | 3 |
+/// | Arial 9, Calibri 9 | 5 | 45 | 40 | 5 |
+/// | Arial 10, Arial 11 | 6 | 53 | 48 | 5 |
+/// | Arial 12, Courier New 11 | 7 | 61 | 56 | 5 |
+/// | Arial 14, Calibri 16 | 8 | 69 | 64 | 5 |
+/// | Arial 16, Malgun Gothic 16 | 9 | 79 | 72 | 7 |
+/// | Arial 18 | 10 | 87 | 80 | 7 |
+/// | Arial 20 | 11 | 95 | 88 | 7 |
+/// | Arial 22 | 12 | 103 | 96 | 7 |
+/// | Arial 24 | 13 | 113 | 104 | 9 |
+/// | Courier New 24 | 14 | 121 | 112 | 9 |
+///
+/// The unit drives it, not the point size: Calibri 16 and Arial 14 share the
+/// 8pt unit and both print 69pt, while Arial 16 and Malgun Gothic 16 share
+/// the 9pt unit and both print 79pt. The same exports step the first
+/// column's own text origin 52 → 53 → 54 → 55pt across the three bracket
+/// boundaries, which is [`cell_left_inset_pt`] itself (2 → 3 → 4 → 5) on a
+/// 50pt grid origin.
 pub(super) fn default_column_width_pt(
     declared_width_chars: Option<f64>,
     base_col_width_chars: u32,
@@ -970,7 +1086,11 @@ pub(super) fn default_column_width_pt(
 ) -> f64 {
     match declared_width_chars {
         Some(width_chars) => round_half_up_pt(width_chars * column_unit_pt),
-        None => f64::from(base_col_width_chars) * column_unit_pt + 5.0,
+        None => {
+            f64::from(base_col_width_chars) * column_unit_pt
+                + left_inset_for_unit_pt(column_unit_pt)
+                + right_inset_for_unit_pt(column_unit_pt)
+        }
     }
 }
 
@@ -1484,6 +1604,76 @@ const ASCII_ADVANCE_RATIO: [f64; 95] = [
     0.7749, // U+007D '}'
     1.1632, // U+007E '~'
 ];
+
+/// How far an unwrapped sheet line reaches from its cell's own left gridline,
+/// `start_pt` being the inset and indent its text begins after.
+///
+/// Excel paces a sheet glyph on a whole point, so the line ends at the sum of
+/// its glyph advances each rounded to one — the quantity that decides whether
+/// it crosses a page-column boundary. `Customer Group Developer` in
+/// `tests/fixtures/xlsx/customers_overflow_strip.xlsx` is the case that needs
+/// the exact figure: its whole-point advances sum to 147.0pt against the
+/// 147.0pt its page-column leaves, and the native Excel for Mac export stops
+/// it there while continuing every longer line of the same column (issue
+/// #1659).
+///
+/// A run whose face this host cannot resolve leaves nothing to round, so the
+/// line falls back to the face-independent estimate for the whole line rather
+/// than mixing the two: the estimate runs under the real advances, and the
+/// reader grants it slack for that (issue #1714).
+pub(super) fn sheet_line_extent(
+    runs: &[Run],
+    normal_font: Option<&NormalFont>,
+    start_pt: f64,
+) -> SheetLineExtent {
+    measured_text_width_pt(runs, normal_font).map_or_else(
+        || SheetLineExtent::Estimated(start_pt + estimate_text_width_pt(runs)),
+        |width_pt| SheetLineExtent::Measured(start_pt + width_pt),
+    )
+}
+
+/// The runs' width on Excel's whole-point advance grid, or `None` when any
+/// run's face does not resolve here.
+///
+/// The advances come from the same lookup codegen reserves the run's rounding
+/// against, so the decision this feeds and the line the renderer paints agree
+/// on where the text ends.
+fn measured_text_width_pt(runs: &[Run], normal_font: Option<&NormalFont>) -> Option<f64> {
+    runs.iter()
+        .map(|run| measured_run_width_pt(run, normal_font))
+        .sum()
+}
+
+/// One run's width on the whole-point advance grid, at the family and size it
+/// prints with.
+fn measured_run_width_pt(run: &Run, normal_font: Option<&NormalFont>) -> Option<f64> {
+    let style: &TextStyle = &run.style;
+    let family: &str = style
+        .font_family
+        .as_deref()
+        .or_else(|| normal_font.map(NormalFont::resolved_family))
+        .unwrap_or("Calibri");
+    let size_pt: f64 = style
+        .font_size
+        .or_else(|| normal_font.map(|font| font.size_pt))
+        .unwrap_or(11.0);
+    let bold: bool = style.bold.unwrap_or(false);
+    // A run that carries a separate East Asian family is measured on the face
+    // its glyphs actually come from; the Latin one reports nothing for them.
+    let advances: Vec<f64> = crate::render::pdf::glyph_advances_em(family, bold, &run.text)
+        .or_else(|| {
+            let east_asian: &str = style.east_asian_font_family.as_deref()?;
+            (!east_asian.eq_ignore_ascii_case(family))
+                .then(|| crate::render::pdf::glyph_advances_em(east_asian, bold, &run.text))
+                .flatten()
+        })?;
+    Some(
+        advances
+            .into_iter()
+            .map(|advance_em| round_half_up_pt(advance_em * size_pt))
+            .sum(),
+    )
+}
 
 /// Single-line text width estimate in points, summed over the runs' own
 /// families and sizes.
@@ -2427,9 +2617,10 @@ const ICON_SET_VALUE_RESERVE_PT: f64 = 9.6;
 /// case, where Excel's own export puts the edge a whole point further out
 /// (issue #1157).
 ///
-/// The 5pt total is also the `+5` the default column-width formula carries at
-/// the Calibri 11 workbook default — the column formula and the text box are
-/// the same padding seen from two sides.
+/// The 5pt total is also the padding [`default_column_width_pt`] adds at the
+/// Calibri 11 workbook default, whose 6pt unit falls in the 5-8pt bracket
+/// where the pair is 5 — the column formula and the text box are the same
+/// padding seen from two sides, at every unit and not only this one.
 ///
 /// Neither side is a constant of Excel's: both step with the cell font's
 /// whole-point digit advance, and this pair is what that step gives a Calibri
@@ -2972,6 +3163,19 @@ pub(super) fn build_rows_for_range(
             {
                 text_style.color = Some(header_ink);
             }
+            // A number format's selected section may name the ink it paints,
+            // and that name wins over the colour the cell's font declares —
+            // the `[Red]` negative section of built-in format 8 reddens a
+            // negative currency value whatever the font says (issue #1776).
+            // Conditional formatting below still overrides it, as Excel does.
+            if let Some(cell) = umya_cell
+                && let Some(number) = cell.get_value_number()
+                && let Some(number_format) = cell.get_style().get_number_format()
+                && let Some(section_ink) =
+                    number_format_text_color(number_format.get_format_code(), number)
+            {
+                text_style.color = Some(section_ink);
+            }
             // Excel prices both horizontal sides of the cell's text box from
             // the cell's own font. Read before the runs take the style, and
             // use the same box for the width the line has and where either
@@ -3049,6 +3253,7 @@ pub(super) fn build_rows_for_range(
                             .unwrap_or_else(|| text_style.clone()),
                         href: None,
                         footnote: None,
+                        inline_box: None,
                     })
                     .collect()
             } else if value.is_empty() {
@@ -3059,6 +3264,7 @@ pub(super) fn build_rows_for_range(
                     style: text_style.clone(),
                     href: None,
                     footnote: None,
+                    inline_box: None,
                 }]
             };
 
@@ -3132,11 +3338,14 @@ pub(super) fn build_rows_for_range(
             );
             // The line's own extent from the cell's left gridline, so
             // pagination can tell a line that crosses a page-column boundary
-            // from one that merely has the reach to (issue #1714).
-            let spill_line_width_pt: Option<f64> = spill_width.map(|_| {
-                cell_padding.left
-                    + ctx.cell_indent_pt(col_idx, row_idx)
-                    + estimate_text_width_pt(&runs)
+            // from one that merely has the reach to (issue #1714), priced on
+            // the advance grid Excel paces the line with (issue #1659).
+            let spill_line_extent: Option<SheetLineExtent> = spill_width.map(|_| {
+                sheet_line_extent(
+                    &runs,
+                    ctx.normal_font.as_ref(),
+                    cell_padding.left + ctx.cell_indent_pt(col_idx, row_idx),
+                )
             });
 
             row_wraps_past_one_line |= cell_wraps_past_one_line(
@@ -3205,7 +3414,7 @@ pub(super) fn build_rows_for_range(
                 icon_shading,
                 spill_width,
                 spill_continuation_offset_pt: None,
-                spill_line_width_pt,
+                spill_line_extent,
                 vertical_align: cell_vertical_align,
                 row_has_thick_bottom,
                 wraps_text: cell_wraps_text(umya_cell),
@@ -3522,10 +3731,51 @@ pub(super) fn prepare_sheet_context(
 #[cfg(test)]
 mod number_format_tests {
     use super::{
-        literal_zero_section_text, numeric_overflow_replacement,
+        literal_zero_section_text, number_format_text_color, numeric_overflow_replacement,
         right_aligned_number_format_reserve_glyphs,
     };
-    use crate::ir::{Insets, TextStyle};
+    use crate::ir::{Color, Insets, TextStyle};
+
+    /// A colour name only counts as a control where Excel reads one: outside
+    /// quotes and not consumed as an escape or skip-width argument. The
+    /// built-in currency formats put a locale control ahead of the colour, so
+    /// the scan must keep looking past a bracket it does not recognise
+    /// (issue #1776).
+    #[test]
+    fn a_colour_control_is_read_only_where_excel_reads_one() {
+        let red = Some(Color::new(255, 0, 0));
+        // The reported built-in format 8, and `picture.xlsx`'s locale-prefixed
+        // negative section.
+        assert_eq!(
+            number_format_text_color(r##""$"#,##0.00_);[Red]\("$"#,##0.00\)"##, -123.0),
+            red
+        );
+        assert_eq!(
+            number_format_text_color("[$$-409]#,##0.00;[$$-409][Red]-#,##0.00", -123.0),
+            red
+        );
+        // The same formats leave a positive value on the cell's own ink.
+        assert_eq!(
+            number_format_text_color(r##""$"#,##0.00_);[Red]\("$"#,##0.00\)"##, 123.0),
+            None
+        );
+        // A quoted name is literal text, and an escaped bracket is a literal
+        // bracket, so neither names a colour.
+        assert_eq!(
+            number_format_text_color(r#"0.00;"[Red]"0.00"#, -123.0),
+            None
+        );
+        assert_eq!(number_format_text_color(r"0.00;\[Red\]0.00", -123.0), None);
+        // A skip-width argument consumes the character after it, so the
+        // bracket it swallows opens no control.
+        assert_eq!(number_format_text_color("0.00;_[Red]0.00", -123.0), None);
+        // A conditional format stays on the cell's own ink: the section a
+        // predicate selects is not resolved here.
+        assert_eq!(
+            number_format_text_color("[>100][Red]0.00;0.00", -123.0),
+            None
+        );
+    }
 
     fn issue_1263_style() -> TextStyle {
         TextStyle {
