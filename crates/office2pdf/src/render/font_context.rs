@@ -149,15 +149,31 @@ impl FontSearchContext {
         self
     }
 
+    /// The conversion-local face registered under `family`.
+    ///
+    /// A face carrying `family` as its own `name` table family leads, because
+    /// the book stores only the trimmed family name and a face whose declared
+    /// weight class disagrees with its own name cannot be reached by weight —
+    /// see
+    /// [`member_carrying_requested_name`](super::font_subst::member_carrying_requested_name)
+    /// (issue #1836).
     pub(crate) fn in_memory_font(
         &self,
         family: &str,
         variant: typst::text::FontVariant,
     ) -> Option<typst::text::Font> {
-        self.in_memory_book
-            .select(&normalize_family_name(family), variant)
-            .and_then(|index| self.in_memory_fonts.get(index))
-            .cloned()
+        super::font_subst::member_carrying_requested_name(
+            &self.in_memory_book,
+            family,
+            variant,
+            |index| self.in_memory_fonts.get(index).cloned(),
+        )
+        .or_else(|| {
+            self.in_memory_book
+                .select(&normalize_family_name(family), variant)
+        })
+        .and_then(|index| self.in_memory_fonts.get(index))
+        .cloned()
     }
 
     /// Conversion-local faces in the order they precede the compiler's
@@ -505,6 +521,72 @@ pub(crate) mod test_faces {
         rewritten_noto_serif(weight_class, Some(ascender))
     }
 
+    /// [`noto_serif_at_weight_with_ascender`] with the `name` table family
+    /// (ID 1) rewritten too, so the face's own name disagrees with the weight
+    /// class it declares.
+    ///
+    /// That disagreement is the whole of issue #1836: Word's
+    /// `GillSansUltraBold.ttf` is named `Gill Sans Ultra Bold` and declares
+    /// `usWeightClass` 400, so no nearest-weight search for the EXTRABOLD its
+    /// name states can reach it — the family's Bold member always scores
+    /// closer. Only the name identifies it.
+    ///
+    /// `family` must encode to the same byte length as the tracked face's own
+    /// `Noto Serif`, because the record is patched in place: ten ASCII
+    /// characters.
+    pub(crate) fn noto_serif_named(family: &str, weight_class: u16, ascender: i16) -> Font {
+        const TRACKED_FAMILY_NAME: &str = "Noto Serif";
+        assert_eq!(
+            family.len(),
+            TRACKED_FAMILY_NAME.len(),
+            "an in-place name patch cannot change the record's byte length"
+        );
+        let mut bytes: Vec<u8> = rewritten_noto_serif_bytes(weight_class, Some(ascender));
+        rewrite_family_name(&mut bytes, family);
+        Font::new(Bytes::new(bytes), 0).expect("the renamed face parses")
+    }
+
+    /// Overwrite every `name` table family record (ID 1) with `family`.
+    ///
+    /// Every record is rewritten rather than the first, because Typst reads
+    /// whichever one decodes first and a face can carry both a Macintosh and a
+    /// Windows copy.
+    fn rewrite_family_name(bytes: &mut [u8], family: &str) {
+        /// `name` table record for the family name.
+        const FAMILY_NAME_ID: u16 = 1;
+        let name_offset: usize = table_offset(bytes, b"name");
+        let read_u16 = |at: usize| u16::from_be_bytes([bytes[at], bytes[at + 1]]);
+        let record_count: usize = usize::from(read_u16(name_offset + 2));
+        let storage: usize = name_offset + usize::from(read_u16(name_offset + 4));
+        let utf16: Vec<u8> = family
+            .encode_utf16()
+            .flat_map(|unit| unit.to_be_bytes())
+            .collect();
+        let patches: Vec<(usize, &[u8])> = (0..record_count)
+            .map(|record| name_offset + 6 + record * 12)
+            .filter(|&record| read_u16(record + 6) == FAMILY_NAME_ID)
+            .map(|record| {
+                let length: usize = usize::from(read_u16(record + 8));
+                let at: usize = storage + usize::from(read_u16(record + 10));
+                let replacement: &[u8] = if length == utf16.len() {
+                    &utf16
+                } else if length == family.len() {
+                    family.as_bytes()
+                } else {
+                    panic!("the tracked face's family record is neither ASCII nor UTF-16")
+                };
+                (at, replacement)
+            })
+            .collect();
+        assert!(
+            !patches.is_empty(),
+            "the tracked face declares a family name"
+        );
+        for (at, replacement) in patches {
+            bytes[at..at + replacement.len()].copy_from_slice(replacement);
+        }
+    }
+
     /// Offset of `tag`'s table in a TrueType face's table directory.
     fn table_offset(bytes: &[u8], tag: &[u8; 4]) -> usize {
         let table_count = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
@@ -528,6 +610,16 @@ pub(crate) mod test_faces {
     /// Neither `ttf-parser` nor Typst verifies a table checksum, so patching
     /// the fixed-layout fields in place needs no rebuild of the directory.
     fn rewritten_noto_serif(weight_class: u16, ascender: Option<i16>) -> Font {
+        Font::new(
+            Bytes::new(rewritten_noto_serif_bytes(weight_class, ascender)),
+            0,
+        )
+        .expect("the rewritten face parses")
+    }
+
+    /// The patched bytes [`rewritten_noto_serif`] parses, so a caller that
+    /// rewrites further fields does it before the face is built once.
+    fn rewritten_noto_serif_bytes(weight_class: u16, ascender: Option<i16>) -> Vec<u8> {
         /// Byte offset of `sTypoAscender` within an OS/2 table of any version.
         const TYPO_ASCENDER_OFFSET: usize = 68;
         let mut bytes: Vec<u8> = include_bytes!("../../fonts/NotoSerif-Regular.ttf").to_vec();
@@ -541,7 +633,7 @@ pub(crate) mod test_faces {
             let typo_ascender: usize = os2_offset + TYPO_ASCENDER_OFFSET;
             bytes[typo_ascender..typo_ascender + 2].copy_from_slice(&ascender.to_be_bytes());
         }
-        Font::new(Bytes::new(bytes), 0).expect("the rewritten face parses")
+        bytes
     }
 }
 

@@ -1425,8 +1425,10 @@ fn best_face(family: &str) -> Option<typst::text::Font> {
 /// A family name can state a weight in its style suffix — `Calibri Light`,
 /// `Segoe UI Semibold`, `Arial Black` — and the font book files that face
 /// under the base family with the suffix trimmed, so the chain reaches it only
-/// through the base family, and only the weight tells the member apart from
-/// the family's regular one. Their vertical metrics need not agree: Arial
+/// through the base family, where the weight tells the member apart from the
+/// family's regular one — or, where a member's declared weight class disagrees
+/// with its own name, that name does (see [`select_face_index`], issue
+/// #1836). Their vertical metrics need not agree: Arial
 /// Black declares an `hhea` ascender of 2254/2048 against Arial's 1854/2048,
 /// and twelve single-spaced 20pt `Arial Black` paragraphs advance 28.189pt in
 /// a native Word export — Arial Black's own 1.4102em sum, not Arial's
@@ -1471,9 +1473,10 @@ fn chain_variant(
 /// block two points high (issue #1629).
 ///
 /// `on_disk` must itself resolve `candidate` at `variant`'s weight — this
-/// only fixes the in-memory step's weight, since the disk step's lookup
-/// (a plain book `select`, or the shadowed-system-face walk in
-/// [`line_metric_face`]) differs by caller.
+/// only fixes the in-memory step's weight, since the disk step's lookup —
+/// [`select_face_index`]'s name-first selection with its nearest-weight
+/// fallback, alone or followed by the shadowed-system-face walk in
+/// [`line_metric_face`] — differs by caller.
 #[cfg(not(target_arch = "wasm32"))]
 fn first_face_in_chain(
     family: &str,
@@ -1488,15 +1491,25 @@ fn first_face_in_chain(
         })
 }
 
-/// Index into `data` of the face registered under exactly `candidate` that
-/// sits nearest `variant`'s weight.
+/// Index into `data` of the face `candidate` resolves to: the one carrying
+/// `candidate` as its own name, else the face registered under exactly
+/// `candidate` that sits nearest `variant`'s weight.
+///
+/// The name comes first because the book stores only a *trimmed* family name,
+/// and a face whose declared weight class disagrees with its own name is then
+/// unreachable by weight alone — see
+/// [`member_carrying_requested_name`](super::font_subst::member_carrying_requested_name)
+/// (issue #1836).
 #[cfg(not(target_arch = "wasm32"))]
 fn select_face_index(
     data: &CachedFontData,
     candidate: &str,
     variant: typst::text::FontVariant,
 ) -> Option<usize> {
-    data.book.select(&candidate.to_lowercase(), variant)
+    super::font_subst::member_carrying_requested_name(&data.book, candidate, variant, |index| {
+        data.fonts.get(index).and_then(|slot| slot.get())
+    })
+    .or_else(|| data.book.select(&candidate.to_lowercase(), variant))
 }
 
 /// The font set the compiler shapes with: the caller's search paths when a
@@ -1627,7 +1640,8 @@ fn macos_system_font_dirs() -> &'static [PathBuf] {
 fn best_face(family: &str) -> Option<typst::text::Font> {
     // Mirrors the native arm's weight rule: a weight-suffixed name reaches its
     // member only through the base family, at the weight the name states
-    // (issue #1643).
+    // (issue #1643). The name-first step of issue #1836 arrives here through
+    // `in_memory_font`, which this arm's chain walk already goes through.
     let weight: typst::text::FontWeight = super::font_subst::weight_stated_by_family_name(family)
         .unwrap_or_else(|| typst::text::FontVariant::default().weight);
     super::font_subst::active_in_memory_font(

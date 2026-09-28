@@ -578,6 +578,89 @@ fn a_weight_suffixed_family_measures_the_member_its_name_denotes() {
 }
 
 #[test]
+fn a_weight_suffixed_family_measures_the_face_carrying_its_name() {
+    // Nearest-weight selection can only reach the member a name denotes while
+    // the member agrees with its own name. Word's `GillSansUltraBold.ttf` is
+    // named `Gill Sans Ultra Bold` and declares `usWeightClass` 400, and the
+    // book files it under `Gill Sans` beside a Bold member at 700: against the
+    // EXTRABOLD its name states, Bold scores distance 100 and the face the
+    // name actually denotes scores 400, so every weight search picks Bold.
+    // Twelve single-spaced 20pt `Gill Sans Ultra Bold` paragraphs then advance
+    // 23.154pt — Gill Sans Bold's 1.157715em `hhea` sum — against a native
+    // Word 16 export's 24.916pt, which is Gill Sans UltraBold's own 1.246094em
+    // (issue #1836).
+    //
+    // The name is the only thing that identifies such a face, so both
+    // directions are pinned here: neither request may be answered by the
+    // member that sits nearer the weight its name states.
+    use crate::render::font_context::test_faces::noto_serif_named;
+
+    /// The tracked face's own `hhea` ascender, left alone on one member so the
+    /// two declare different line boxes.
+    const TRACKED_ASCENDER: i16 = 1069;
+    /// A rewritten ascender, far enough away to be unmistakable at 1000 upem.
+    const RAISED_ASCENDER: i16 = 1500;
+
+    // `Noto Light` declares BOLD and `Noto Black` declares LIGHT, so for either
+    // request the *other* face is the nearer one by weight.
+    let light_named: typst::text::Font = noto_serif_named("Noto Light", 700, RAISED_ASCENDER);
+    let black_named: typst::text::Font = noto_serif_named("Noto Black", 300, TRACKED_ASCENDER);
+    assert_eq!(
+        light_named.info().family,
+        "Noto",
+        "the trimmer must file both rewritten faces under one base family"
+    );
+    assert_eq!(black_named.info().family, "Noto");
+
+    let expected_light = declared_line_box_em(&light_named);
+    let expected_black = declared_line_box_em(&black_named);
+    assert_ne!(
+        expected_light.2, expected_black.2,
+        "the rewritten members must declare different line boxes for the test to discriminate"
+    );
+
+    let context = crate::render::font_context::resolve_font_search_context_from_fonts(&[
+        black_named.clone(),
+        light_named.clone(),
+    ]);
+    let (light, black, unnamed) =
+        crate::render::font_subst::with_font_search_context(Some(&context), || {
+            (
+                font_line_metrics_em("Noto Light"),
+                font_line_metrics_em("Noto Black"),
+                font_line_metrics_em("Noto Thin"),
+            )
+        });
+
+    let close = |actual: (f64, f64, f64), expected: (f64, f64, f64)| {
+        (actual.0 - expected.0).abs() < 1e-12
+            && (actual.1 - expected.1).abs() < 1e-12
+            && (actual.2 - expected.2).abs() < 1e-12
+    };
+    let light = light.expect("a weight-suffixed request resolves through its base family");
+    assert!(
+        close(light, expected_light),
+        "`Noto Light` must measure the face declaring that name even though it \
+         declares BOLD: {light:?} against {expected_light:?}"
+    );
+    let black = black.expect("a weight-suffixed request resolves through its base family");
+    assert!(
+        close(black, expected_black),
+        "`Noto Black` must measure the face declaring that name even though it \
+         declares LIGHT: {black:?} against {expected_black:?}"
+    );
+
+    // A suffix no face carries keeps the nearest-weight answer: THIN is 200
+    // from the 300 member and 600 from the 700 one.
+    let unnamed = unnamed.expect("an unmatched weight suffix still resolves its base family");
+    assert!(
+        close(unnamed, expected_black),
+        "an unnamed weight suffix must stay on the base family's nearest member: \
+         {unnamed:?} against {expected_black:?}"
+    );
+}
+
+#[test]
 fn a_stretch_suffixed_family_does_not_borrow_its_base_family_metrics() {
     // `Arial Narrow` is its own family, not a member of Arial, and the trimmer
     // that files `Arial Black` under `Arial` files it there too. Only a weight
