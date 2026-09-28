@@ -23,11 +23,22 @@ use crate::ir::{
 /// on the last page (clipped, the pre-pagination behavior).
 const MAX_COLUMN_GROUPS: usize = 12;
 
-/// What one sheet's `<pageSetUpPr fitToPage="1"/>` asks pagination to scale it
-/// onto. Both directions are bounded separately and Excel obeys the tighter of
-/// the two.
+/// Worksheet print scaling: an explicit percentage, or fit-to-page bounds.
+/// Fit-to-page takes precedence; among its two bounds Excel obeys the tighter.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(super) struct SheetFit {
+    /// Whether `<sheetPr><pageSetUpPr fitToPage="1"/>` selects fit-to-page.
+    ///
+    /// This is not implied by the two bounds below: a sheet can select
+    /// fit-to-page and still leave both directions unbounded
+    /// (`fitToWidth="0" fitToHeight="0"`), which scales nothing but does
+    /// suppress [`Self::print_percentage`] (issue #1817).
+    pub(super) fits_to_page: bool,
+    /// `<pageSetup scale>` as the sheet declares it — Excel's "Adjust to: N%
+    /// normal size". Already filtered to a percentage that changes a
+    /// dimension, so it always scales once it is the selected mode
+    /// (issue #1817).
+    pub(super) print_percentage: Option<u32>,
     /// `fitToWidth` when it binds; `None` leaves the column direction free.
     pub(super) pages_wide: Option<u32>,
     /// `fitToHeight` when it binds; `None` leaves the row direction free.
@@ -283,8 +294,7 @@ fn end_sequence_at_last_inked_row(pages: &mut Vec<SheetPage>, last_inked_row_cou
     last.table.rows.truncate(kept);
 }
 
-/// Shrink a sheet until it fits the pages `fitToWidth` and `fitToHeight`
-/// allow.
+/// Apply an explicit print percentage, or shrink to the selected fit bounds.
 ///
 /// A sheet with `<pageSetUpPr fitToPage="1"/>` and `fitToWidth="1"` asks Excel
 /// to scale it onto one page wide rather than to spill the overflow onto a
@@ -302,13 +312,35 @@ fn end_sequence_at_last_inked_row(pages: &mut Vec<SheetPage>, last_inked_row_cou
 /// the type scale with the widths — the audited sheet's 10pt body text prints
 /// at 7.50pt, the same 0.75 the columns take.
 ///
-/// Excel never scales *up* to fill a page, so a sheet that already fits is
-/// left alone.
+/// An explicit percentage is a different instruction: it is not a bound to be
+/// satisfied but a factor to apply, so it multiplies the sheet outright and
+/// enlarges it when it names more than 100%. Fit-to-page, by contrast, never
+/// scales *up* to fill a page, so a sheet that already fits is left alone.
+/// Retaining 100% dimensions for a sheet declaring `scale="85"` left adjacent
+/// row-6 label origins 108pt apart against native Excel's 91.8pt (issue
+/// #1817).
+///
+/// Scaling happens before the column groups are packed, so a shrunk sheet fits
+/// correspondingly more columns and rows on each page, as Excel's does.
 fn fit_page_to_pages(
     page: SheetPage,
     fit: SheetFit,
     header_footer_scales_with_doc: bool,
 ) -> SheetPage {
+    // The two modes are alternatives, and this is where the sheet's choice is
+    // resolved: Excel greys the "Adjust to" box out while "Fit to" is
+    // selected but keeps whatever percentage the file last carried rather
+    // than clearing it, so a real workbook can declare both. Applying both
+    // would scale the sheet twice.
+    if !fit.fits_to_page
+        && let Some(percentage) = fit.print_percentage
+    {
+        return scale_sheet_page(
+            page,
+            f64::from(percentage) / 100.0,
+            header_footer_scales_with_doc,
+        );
+    }
     let printable_width: f64 = page.size.width - page.margins.left - page.margins.right;
     let total_width: f64 = page.table.column_widths.iter().sum();
     let printable_height: f64 = page.size.height - page.margins.top - page.margins.bottom;

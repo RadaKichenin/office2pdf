@@ -1,0 +1,13 @@
+{
+  "filing_commit": "bd443885328819da53a321c65174d77703f97110",
+  "before_commit": "e5040555",
+  "native_exporter": "Microsoft Excel for Mac, Quartz PDF",
+  "native_control": "Unchanged base.xlsx re-zip passed; scale85 and 78 are one-factor variants of base100. source.xlsx is the scale85 variant.",
+  "hashes": {
+    "source.xlsx": "afbf187d3c12c87b732cf4b43301456899de6d9d2a973d84a3f3ec61a7b9707d",
+    "base.xlsx": "d295c488c05004d9e022db0f759b7a95c3c609e10968b9251d6f1e723fb57dd2",
+    "gt.pdf": "acf1c75209ed6327cf97b13914e0ff32dd4f930a27d1d61cb3b82cf3f1caa5a2",
+    "before.pdf": "ef20e1c6bef33a1c7e49e7f6650889a77e5e3d68b6f0374ca49ced8a447cb390",
+    "after.pdf": "83036582feb18cd0884da4d42d0e81e2eff44fb039d0771b870cb47d7cf09830"
+  }
+}
