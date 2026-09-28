@@ -177,13 +177,21 @@ jobs:
       - run: cargo check --locked --workspace
 
   test:
-    name: Test
+    name: Test (${{ matrix.os }}${{ matrix.part != 'all' && format(', {0}', matrix.part) || '' }})
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - { os: ubuntu-latest, part: all }
+          - { os: macos-latest, part: all }
+          # Windows spent 3.2 of its 5.8 min running the test binaries one
+          # after another (lib 80s, xlsx 65s, pptx 34s), so its unit and
+          # integration targets run as two legs. Examples, which a bare
+          # `cargo test` also builds, stay covered by the Linux and macOS legs.
+          - { os: windows-latest, part: units }
+          - { os: windows-latest, part: integration }
     steps:
       # No fixture fetch: every fixture the default suite reads is tracked in git.
       # Only the #[ignore]d bulk gate needs the full corpus, and it runs in bulk-test.
@@ -199,9 +207,22 @@ jobs:
       - name: Install qpdf
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y qpdf
-      - run: cargo test --locked --workspace --profile ci
+      - name: Run tests
+        shell: bash
         env:
           OFFICE2PDF_VALIDATE_PDF: "1"
+        run: |
+          case "${{ matrix.part }}" in
+            all)
+              cargo test --locked --workspace --profile ci ;;
+            units)
+              cargo test --locked --workspace --profile ci --lib --bins
+              cargo test --locked --workspace --profile ci --doc ;;
+            integration)
+              # The quoted wildcard picks up every integration target,
+              # including ones added later.
+              cargo test --locked --workspace --profile ci --test '*' ;;
+          esac
 
   no-embedded-fonts:
     # A different feature set rebuilds the crate, so it runs beside Test
