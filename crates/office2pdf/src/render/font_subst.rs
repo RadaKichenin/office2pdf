@@ -25,10 +25,11 @@
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 #[cfg(target_arch = "wasm32")]
 use std::path::PathBuf;
+use tracing::debug;
 use typst::text::FontWeight;
 
 use crate::ir::{
@@ -348,18 +349,206 @@ fn scoped_info(info: &typst::text::FontInfo) -> typst::text::FontInfo {
 ///
 /// Every family record is read rather than the first, because a face can carry
 /// both a Macintosh and a Windows copy and only one of them may decode. A
-/// Macintosh-only record in a legacy encoding stays unreadable here, and the
-/// caller then falls back to the nearest-weight search.
+/// record in a legacy code page that carries a non-ASCII byte stays unreadable
+/// — see [`declared_family_names`] — and the caller then falls back to the
+/// nearest-weight search.
 fn declares_family_name(font: &typst::text::Font, family_name: &str) -> bool {
+    declared_family_names_of_font(font)
+        .iter()
+        .any(|name| name.to_lowercase() == family_name)
+}
+
+/// The family a face declares in its own `name` table (ID 1), trimmed.
+///
+/// The first record that decodes is taken, because that is the record Typst
+/// itself read to derive the face's family — the two answers are then the same
+/// string, one trimmed of its style suffixes and one not.
+pub(crate) fn declared_family_name(font: &typst::text::Font) -> Option<String> {
+    declared_family_names_of_font(font).into_iter().next()
+}
+
+/// Every `name` table family (ID 1) a face declares, trimmed, in table order.
+///
+/// Read straight off the face rather than through
+/// [`super::pdf::measured_instance`], because instantiating a face builds a
+/// rustybuzz face and memoizes it. Answering this for every installed font, as
+/// [`refile_faces_shadowing_their_family`] does, cost 5.3 seconds a process
+/// and pinned every one of those faces in the memo cache.
+pub(crate) fn declared_family_names(names: ttf_parser::name::Names<'_>) -> Vec<String> {
     /// `name` table record holding the font family name.
     const FAMILY_NAME_ID: u16 = 1;
-    super::pdf::measured_instance(font)
-        .ttf()
-        .names()
+    names
         .into_iter()
         .filter(|name| name.name_id == FAMILY_NAME_ID)
-        .filter_map(|name| name.to_string())
-        .any(|name| name.trim().to_lowercase() == family_name)
+        .filter_map(|name| {
+            // A face can carry both a Macintosh and a Windows copy of its
+            // name, and `ttf_parser` decodes only the Unicode encodings.
+            // `GillSans.ttc`'s members carry the Macintosh record alone, so
+            // without a fallback the family that owns the `Gill Sans` key
+            // reads as nameless and the intruder filed beside it cannot be
+            // told apart from it (issue #1837).
+            //
+            // The fallback reads an undecodable record only while every byte
+            // is ASCII, where Mac OS Roman and the legacy Windows code pages
+            // all agree with it. A family name that needs one of those code
+            // pages stays unreadable, and its face is then left exactly where
+            // the book filed it.
+            name.to_string()
+                .or_else(|| name.name.is_ascii().then(|| ascii_string(name.name)))
+        })
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect()
+}
+
+/// [`declared_family_names`] for a loaded face.
+pub(crate) fn declared_family_names_of_font(font: &typst::text::Font) -> Vec<String> {
+    ttf_parser::Face::parse(font.data(), font.index())
+        .map(|face| declared_family_names(face.names()))
+        .unwrap_or_default()
+}
+
+/// `bytes`, every one of which is ASCII, as a string.
+fn ascii_string(bytes: &[u8]) -> String {
+    bytes.iter().map(|&byte| byte as char).collect()
+}
+
+/// Refile every face the book filed under a family another design owns, under
+/// the name it declares itself. Answers how many faces moved.
+///
+/// Typst keys its book on `name` ID 1 with style suffixes trimmed, so Word's
+/// `GillSansUltraBold.ttf` — whose own name is `Gill Sans Ultra Bold` — is
+/// filed under `Gill Sans` beside the `GillSans.ttc` members that carry that
+/// name themselves. It declares `usWeightClass` 400, the class Gill Sans
+/// Regular declares, so the two score an identical weight distance and
+/// [`typst::text::FontBook`] keeps whichever the scan pushed first. Book order
+/// alone then decided which of two unrelated designs a document got: twelve
+/// single-spaced 20pt paragraphs naming plain `Gill Sans` were painted and
+/// paced in Ultra Bold, 24.922pt lines against a native Word 16 export's
+/// 22.975pt (issue #1837).
+///
+/// A face is moved only when all four hold:
+///
+/// 1. its own name is not the family key it was filed under, so the key was
+///    reached by trimming a suffix rather than declared;
+/// 2. trimming that name does reach the key, so the two are the same reading of
+///    the same string and not a Typst name-table exception;
+/// 3. another face under that key declares the key as its own name, so the
+///    family has an owner the key rightfully belongs to;
+/// 4. some face sharing the intruder's own name sits at a
+///    [`typst::text::FontVariant`] the owner also occupies, so the key plus a
+///    variant cannot tell the two designs apart.
+///
+/// Without (3) nothing is moved: `Arial Rounded MT Bold` and the three
+/// `Franklin Gothic` members declare no `Arial Rounded MT` or `Franklin Gothic`
+/// between them, so emptying their key would leave those requests with no face
+/// at all rather than the wrong weight of the right one.
+///
+/// Without (4) nothing is moved either: `calibril.ttf` is filed as `Calibri` at
+/// 300 against Calibri's own 400, and a nearest-weight search tells those two
+/// apart perfectly well — which is how `Calibri Light` has reached its member
+/// since issue #1286.
+///
+/// The whole name group moves together, not just the tied face. A family whose
+/// upright intruder ties and whose italic sibling does not would otherwise be
+/// split, and a request for the intruder's name would land on the italic as its
+/// only member.
+///
+/// `declared_family` reads a face's own name by index; the book alone cannot
+/// answer, because it stores only the trimmed family.
+pub(crate) fn refile_faces_shadowing_their_family(
+    infos: &mut [typst::text::FontInfo],
+    declared_family: impl Fn(usize) -> Option<String>,
+) -> usize {
+    let mut members_by_key: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (index, info) in infos.iter().enumerate() {
+        members_by_key
+            .entry(info.family.trim().to_lowercase())
+            .or_default()
+            .push(index);
+    }
+
+    let mut moves: Vec<(usize, String)> = Vec::new();
+    for (family_key, members) in &members_by_key {
+        // Reading a face's name means reading its file, so the collision the
+        // rule is about — two members one key and one variant cannot tell
+        // apart — gates the expensive step. A family whose members all sit at
+        // distinct variants is answered by nearest-weight selection already.
+        if members.len() < 2 || !holds_repeated_variant(infos, members) {
+            continue;
+        }
+
+        let declared: Vec<Option<String>> = members
+            .iter()
+            .map(|&index| declared_family(index))
+            .collect();
+        let owned_variants: HashSet<typst::text::FontVariant> = members
+            .iter()
+            .zip(&declared)
+            .filter(|(_, name)| {
+                name.as_deref()
+                    .is_some_and(|name| name.to_lowercase() == *family_key)
+            })
+            .map(|(&index, _)| infos[index].variant)
+            .collect();
+        if owned_variants.is_empty() {
+            continue;
+        }
+
+        let mut group_members: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        let mut group_name: BTreeMap<String, String> = BTreeMap::new();
+        for (&index, name) in members.iter().zip(&declared) {
+            let Some(name) = name else { continue };
+            let key: String = name.to_lowercase();
+            // A name that does not trim back to the key was filed under it by
+            // Typst's PostScript-name exception table rather than by the
+            // trimmer, and refiling would undo that deliberate override.
+            if key == *family_key || typographic_family(name).to_lowercase() != *family_key {
+                continue;
+            }
+            group_name
+                .entry(key.clone())
+                .or_insert_with(|| name.clone());
+            group_members.entry(key).or_default().push(index);
+        }
+
+        for (key, group) in group_members {
+            if !group
+                .iter()
+                .any(|&index| owned_variants.contains(&infos[index].variant))
+            {
+                continue;
+            }
+            let name: &String = &group_name[&key];
+            moves.extend(group.into_iter().map(|index| (index, name.clone())));
+        }
+    }
+
+    let moved: usize = moves.len();
+    for (index, family) in moves {
+        debug!(
+            face = index,
+            from = %infos[index].family,
+            to = %family,
+            "refiled a face shadowing another design's family",
+        );
+        infos[index].family = family;
+    }
+    moved
+}
+
+/// Whether two of `members` sit at the very same variant, so the family key
+/// and a variant together cannot tell them apart.
+fn holds_repeated_variant(infos: &[typst::text::FontInfo], members: &[usize]) -> bool {
+    let mut seen: Vec<typst::text::FontVariant> = Vec::with_capacity(members.len());
+    for &index in members {
+        let variant: typst::text::FontVariant = infos[index].variant;
+        if seen.contains(&variant) {
+            return true;
+        }
+        seen.push(variant);
+    }
+    false
 }
 
 /// The base family a weight-suffixed request has to reach for its member:

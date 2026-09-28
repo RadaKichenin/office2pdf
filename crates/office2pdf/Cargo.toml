@@ -32,6 +32,11 @@ typst-kit = { version = "0.15", default-features = false, features = [
     "scan-fonts",
 ] }
 comemo = "0.5"
+# Already in the tree through typst; declared directly because a face's own
+# `name` table is not reachable through typst's public API without building a
+# rustybuzz face, which the family-refiling pass must not pay for every
+# installed font (issue #1837).
+ttf-parser = "0.25"
 docx-rs = "0.4.22"
 serde = "1"
 serde_json = "1"

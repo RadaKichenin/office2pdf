@@ -2434,6 +2434,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "ts-rs",
+ "ttf-parser",
  "typst",
  "typst-kit",
  "typst-layout",
