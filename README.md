@@ -28,25 +28,24 @@ DOCX packages with conflicting ASCII ZIP part names are rejected.
 
 ```toml
 [dependencies]
-office2pdf = "0.7.0"
+office2pdf = "0.8.0"
 ```
 
 ### Native builds without Typst's bundled fonts
 
 The default `embedded-fonts` Cargo feature includes Typst's bundled font set.
 To omit that set (including `NewCM10-Regular.otf`) from a native build, disable
-default features. This option is available from the repository; it is not in
-0.7.0:
+default features (available since 0.8.0):
 
 ```toml
 [dependencies]
-office2pdf = { git = "https://github.com/developer0hye/office2pdf", default-features = false }
+office2pdf = { version = "0.8.0", default-features = false }
 ```
 
-For the CLI, build from a checkout:
+For the CLI:
 
 ```sh
-cargo install --path crates/office2pdf-cli --locked --no-default-features
+cargo install office2pdf-cli --locked --no-default-features
 ```
 
 Native font discovery, document-embedded fonts, caller-provided fonts, and
@@ -82,7 +81,7 @@ Every [GitHub release](https://github.com/developer0hye/office2pdf/releases) shi
 On Linux and macOS, download, extract, and place the binary on your `PATH`:
 
 ```sh
-VERSION=v0.7.0
+VERSION=v0.8.0
 TARGET=x86_64-unknown-linux-gnu  # pick your platform's target from the table above
 curl -L "https://github.com/developer0hye/office2pdf/releases/download/${VERSION}/office2pdf-${VERSION}-${TARGET}.tar.gz" | tar xz
 sudo install "office2pdf-${VERSION}-${TARGET}/office2pdf" /usr/local/bin/
